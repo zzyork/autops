@@ -6,6 +6,7 @@ import {
 } from 'element-plus'
 import { createSSHKey, deleteSSHKey, getSSHKey, getSSHKeyReferences, listSSHKeys, updateSSHKey } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import { showSystemError } from '@/components/feedback'
 import type { SSHKey, SSHKeyReferences, SSHKeyUpdateInput } from '@/types/api'
 import '@/styles/assets.css'
 
@@ -15,7 +16,7 @@ const search = ref('')
 const loading = ref(false)
 const opening = ref(false)
 const saving = ref(false)
-const error = ref('')
+const loadFailed = ref(false)
 const dialog = ref(false)
 const dialogError = ref('')
 const editing = ref<SSHKey | null>(null)
@@ -40,12 +41,11 @@ const publicKey = ref<string | null>(null)
 const publicName = ref('')
 const publicKeyId = ref<number | null>(null)
 const publicLoading = ref(false)
-const publicError = ref('')
+const publicLoadFailed = ref(false)
 const referencesDialog = ref(false)
 const references = ref<SSHKeyReferences | null>(null)
 const referencesName = ref('')
 const referencesLoading = ref(false)
-const referencesError = ref('')
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let requestId = 0
@@ -58,14 +58,15 @@ let editId = 0
 async function refresh() {
   const current = ++requestId
   loading.value = true
-  error.value = ''
+  loadFailed.value = false
   try {
     const result = await listSSHKeys(search.value.trim())
     if (current === requestId) keys.value = result
   } catch {
     if (current === requestId) {
       keys.value = []
-      error.value = '系统异常'
+      loadFailed.value = true
+      showSystemError()
     }
   } finally {
     if (current === requestId) loading.value = false
@@ -114,7 +115,7 @@ watch(publicDialog, (visible) => {
     publicKey.value = null
     publicKeyId.value = null
     publicName.value = ''
-    publicError.value = ''
+    publicLoadFailed.value = false
     publicLoading.value = false
   }
 }, { flush: 'sync' })
@@ -149,7 +150,6 @@ function openNew() {
 async function openEdit(id: number) {
   const current = ++editId
   opening.value = true
-  error.value = ''
   try {
     const item = await getSSHKey(id)
     if (current !== editId) return
@@ -165,7 +165,7 @@ async function openEdit(id: number) {
     clearPublicKey()
     dialog.value = true
   } catch {
-    if (current === editId) error.value = '系统异常'
+    if (current === editId) showSystemError()
   } finally {
     if (current === editId) opening.value = false
   }
@@ -293,7 +293,7 @@ async function save() {
     dialog.value = false
     await refresh()
   } catch {
-    dialogError.value = '系统异常'
+    showSystemError()
   } finally {
     saving.value = false
   }
@@ -304,14 +304,17 @@ async function showPublicKey(item: SSHKey) {
   publicName.value = item.name
   publicKeyId.value = item.id
   publicKey.value = null
-  publicError.value = ''
+  publicLoadFailed.value = false
   publicLoading.value = true
   publicDialog.value = true
   try {
     const detail = await getSSHKey(item.id)
     if (current === publicViewId) publicKey.value = detail.public_key
   } catch {
-    if (current === publicViewId) publicError.value = '系统异常'
+    if (current === publicViewId) {
+      publicLoadFailed.value = true
+      showSystemError()
+    }
   } finally {
     if (current === publicViewId) publicLoading.value = false
   }
@@ -328,14 +331,13 @@ async function showReferences(item: SSHKey) {
   const current = ++referenceId
   referencesName.value = item.name
   references.value = null
-  referencesError.value = ''
   referencesLoading.value = true
   referencesDialog.value = true
   try {
     const result = await getSSHKeyReferences(item.id)
     if (current === referenceId) references.value = result
   } catch {
-    if (current === referenceId) referencesError.value = '系统异常'
+    if (current === referenceId) showSystemError()
   } finally {
     if (current === referenceId) referencesLoading.value = false
   }
@@ -348,12 +350,11 @@ async function remove(item: SSHKey) {
       confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { return }
-  error.value = ''
   try {
     await deleteSSHKey(item.id)
     await refresh()
   } catch {
-    error.value = '系统异常'
+    showSystemError()
   }
 }
 
@@ -368,9 +369,8 @@ function dateLabel(value: string) {
       <div class="assets-heading"><h1>SSH 密钥管理</h1></div>
       <section class="host-section" aria-label="SSH 密钥列表">
         <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增密钥</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索密钥名称" aria-label="搜索密钥名称" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
-        <ElAlert v-if="error" :title="error" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading || opening" :data="keys" row-key="id" class="host-table" :empty-text="error ? '系统异常' : loading ? '加载中' : '暂无 SSH 密钥'">
+          <ElTable v-loading="loading || opening" :data="keys" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无 SSH 密钥'">
             <ElTableColumn label="密钥名称" min-width="170"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="key_type" label="类型" min-width="100" />
             <ElTableColumn label="指纹" min-width="270"><template #default="{ row }"><span class="ssh-fingerprint">{{ row.fingerprint }}</span></template></ElTableColumn>
@@ -380,7 +380,7 @@ function dateLabel(value: string) {
             <ElTableColumn label="操作" width="220" fixed="right"><template #default="{ row }"><ElButton link type="primary" :disabled="opening" @click="showPublicKey(row as SSHKey)">查看公钥</ElButton><ElButton link type="primary" :disabled="opening" @click="openEdit(row.id)">编辑</ElButton><span :title="row.host_count || row.jump_host_count ? '请先解除主机和跳板机的关联' : undefined"><ElButton link type="danger" :disabled="opening || row.host_count > 0 || row.jump_host_count > 0" @click="remove(row as SSHKey)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
-        <ElEmpty v-if="!loading && !error && !keys.length" :description="search ? '暂无符合条件的密钥' : '暂无 SSH 密钥，请新增密钥'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增密钥</ElButton></ElEmpty>
+        <ElEmpty v-if="!loading && !loadFailed && !keys.length" :description="search ? '暂无符合条件的密钥' : '暂无 SSH 密钥，请新增密钥'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增密钥</ElButton></ElEmpty>
       </section>
     </main>
 
@@ -409,18 +409,16 @@ function dateLabel(value: string) {
 
     <ElDialog v-model="publicDialog" align-center :title="`公钥：${publicName}`" width="min(720px, 94vw)">
       <div v-loading="publicLoading" class="ssh-public-view">
-        <ElAlert v-if="publicError" :title="publicError" type="error" :closable="false" show-icon />
-        <template v-else-if="!publicLoading">
+        <template v-if="!publicLoading && !publicLoadFailed">
           <ElInput v-if="publicKey !== null" :model-value="publicKey" type="textarea" :rows="10" readonly aria-label="公钥内容" />
           <div v-else class="ssh-field-hint">尚未上传公钥，请编辑密钥补传。</div>
         </template>
       </div>
-      <template #footer><ElButton v-if="!publicLoading && !publicError && publicKey === null" type="primary" @click="editMissingPublicKey">编辑补传</ElButton><ElButton @click="publicDialog = false">关闭</ElButton></template>
+      <template #footer><ElButton v-if="!publicLoading && !publicLoadFailed && publicKey === null" type="primary" @click="editMissingPublicKey">编辑补传</ElButton><ElButton @click="publicDialog = false">关闭</ElButton></template>
     </ElDialog>
 
     <ElDialog v-model="referencesDialog" align-center :title="`密钥引用：${referencesName}`" width="min(440px, 92vw)">
       <div v-loading="referencesLoading" class="ssh-references">
-        <ElAlert v-if="referencesError" :title="referencesError" type="error" :closable="false" show-icon />
         <template v-if="references"><h2>主机</h2><div v-if="!references.hosts.length" class="ssh-field-hint">无关联主机</div><RouterLink v-for="host in references.hosts" :key="host.id" to="/assets/hosts" class="ssh-reference-link" @click="referencesDialog = false">{{ host.name }}</RouterLink><h2>跳板机</h2><div v-if="!references.jump_hosts.length" class="ssh-field-hint">无关联跳板机</div><RouterLink v-for="jumpHost in references.jump_hosts" :key="jumpHost.id" to="/assets/jump-hosts" class="ssh-reference-link" @click="referencesDialog = false">{{ jumpHost.name }}</RouterLink></template>
       </div>
       <template #footer><ElButton @click="referencesDialog = false">关闭</ElButton></template>

@@ -3,12 +3,14 @@ import { onMounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDialog, ElInput, ElLoading, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
 import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/assets'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import { showSystemError } from '@/components/feedback'
 import type { HostGroup } from '@/types/api'
 
 const vLoading = ElLoading.directive
 const groups = ref<HostGroup[]>([])
 const loading = ref(false)
-const error = ref('')
+const loadFailed = ref(false)
+const localError = ref('')
 const dialog = ref(false)
 const dialogError = ref('')
 const saving = ref(false)
@@ -19,11 +21,13 @@ watch(() => form.value.name, () => { nameError.value = false })
 
 async function refreshGroups() {
   loading.value = true
-  error.value = ''
+  loadFailed.value = false
+  localError.value = ''
   try {
     groups.value = await listGroups()
   } catch {
-    error.value = '系统异常'
+    loadFailed.value = true
+    showSystemError()
   } finally {
     loading.value = false
   }
@@ -49,25 +53,25 @@ async function saveGroup() {
     dialog.value = false
     await refreshGroups()
   } catch {
-    dialogError.value = '系统异常'
+    showSystemError()
   } finally {
     saving.value = false
   }
 }
 
 async function removeGroup(group: HostGroup) {
-  if (group.host_count > 0) { error.value = '请先移动或删除该分组内的主机。'; return }
+  if (group.host_count > 0) { localError.value = '请先移动或删除该分组内的主机。'; return }
   try {
     await ElMessageBox.confirm(`确定删除分组“${group.name}”吗？此操作不可撤销。`, '删除分组', {
       confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { return }
-  error.value = ''
+  localError.value = ''
   try {
     await deleteGroup(group.id)
     await refreshGroups()
   } catch {
-    error.value = '系统异常'
+    showSystemError()
   }
 }
 </script>
@@ -78,9 +82,9 @@ async function removeGroup(group: HostGroup) {
       <div class="assets-heading"><h1>分组管理</h1></div>
       <section class="host-section" aria-label="分组列表">
         <div class="host-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
-        <ElAlert v-if="error" :title="error" type="error" :closable="false" show-icon class="assets-alert" />
+        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="error === '系统异常' ? '系统异常' : loading ? '加载中' : '暂无分组，请新增分组'">
+          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
             <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="主机数量" width="120" />
             <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>

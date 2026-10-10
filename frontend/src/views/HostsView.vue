@@ -8,6 +8,7 @@ import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } fr
 import { listJumpHosts } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import { showSystemError } from '@/components/feedback'
 import type { AuthType, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
@@ -37,11 +38,9 @@ const jumpHostsLoading = ref(false)
 const jumpHostsLoaded = ref(false)
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
-const sshKeysError = ref('')
 const hostsLoading = ref(false)
-const groupsError = ref('')
-const jumpHostsError = ref('')
-const hostsError = ref('')
+const groupsLoadFailed = ref(false)
+const hostsLoadFailed = ref(false)
 const dialogError = ref('')
 const saving = ref(false)
 const openingHost = ref(false)
@@ -72,11 +71,12 @@ watch(() => hostForm.value.auth_type, (next, previous) => {
 }, { flush: 'sync' })
 async function refreshGroups() {
   groupsLoading.value = true
-  groupsError.value = ''
+  groupsLoadFailed.value = false
   try {
     groups.value = await listGroups()
   } catch {
-    groupsError.value = '系统异常'
+    groupsLoadFailed.value = true
+    showSystemError()
   } finally {
     groupsLoading.value = false
   }
@@ -88,7 +88,6 @@ async function refreshSSHKeys() {
   const current = ++sshKeyRequest
   sshKeysLoading.value = true
   sshKeysLoaded.value = false
-  sshKeysError.value = ''
   sshKeys.value = []
   try {
     const result = await listSSHKeys()
@@ -97,7 +96,9 @@ async function refreshSSHKeys() {
       sshKeysLoaded.value = true
     }
   } catch {
-    if (current === sshKeyRequest) sshKeysError.value = '系统异常'
+    if (current === sshKeyRequest) {
+      showSystemError()
+    }
   } finally {
     if (current === sshKeyRequest) sshKeysLoading.value = false
   }
@@ -106,7 +107,6 @@ async function refreshJumpHosts() {
   const current = ++jumpHostRequest
   jumpHostsLoading.value = true
   jumpHostsLoaded.value = false
-  jumpHostsError.value = ''
   try {
     const result = await listJumpHosts()
     if (current === jumpHostRequest) {
@@ -116,7 +116,7 @@ async function refreshJumpHosts() {
   } catch {
     if (current === jumpHostRequest) {
       jumpHosts.value = []
-      jumpHostsError.value = '系统异常'
+      showSystemError()
     }
   } finally {
     if (current === jumpHostRequest) jumpHostsLoading.value = false
@@ -128,14 +128,15 @@ let hostRequest = 0
 async function refreshHosts() {
   const current = ++hostRequest
   hostsLoading.value = true
-  hostsError.value = ''
+  hostsLoadFailed.value = false
   try {
     const result = await listHosts(search.value.trim(), selectedGroup.value)
     if (current === hostRequest) hosts.value = result
   } catch {
     if (current === hostRequest) {
       hosts.value = []
-      hostsError.value = '系统异常'
+      hostsLoadFailed.value = true
+      showSystemError()
     }
   } finally {
     if (current === hostRequest) hostsLoading.value = false
@@ -162,6 +163,7 @@ onUnmounted(() => {
 
 function openNewHost() {
   if (groupsLoading.value) { ElMessage.info('分组加载中，请稍后重试。'); return }
+  if (groupsLoadFailed.value) { showSystemError(); return }
   if (!groups.value.length) { ElMessage.warning('请先新增分组，再新增主机。'); return }
   editingHost.value = null
   hostAuthChanged.value = false
@@ -175,7 +177,6 @@ function openNewHost() {
 
 async function openEditHost(id: number) {
   openingHost.value = true
-  hostsError.value = ''
   try {
     const host = await getHost(id)
     editingHost.value = host
@@ -192,7 +193,7 @@ async function openEditHost(id: number) {
     void refreshJumpHosts()
     void refreshSSHKeys()
   } catch {
-    hostsError.value = '系统异常'
+    showSystemError()
   } finally {
     openingHost.value = false
   }
@@ -213,7 +214,7 @@ function isIpAddress(value: string): boolean {
   }
 }
 
-function validateHost(): string {
+function validateHost(): string | false {
   const form = hostForm.value
   hostInvalidFields.value.clear()
   if (!form.name.trim() || !form.address.trim() || !form.username.trim()) {
@@ -231,7 +232,7 @@ function validateHost(): string {
     return '主机端口须在 1 到 65535 之间。'
   }
   if (sshKeysLoading.value) return '密钥列表加载中。'
-  if (!sshKeysLoaded.value || sshKeysError.value) return '系统异常'
+  if (!sshKeysLoaded.value) return false
   if (form.auth_type === 'key' && form.ssh_key_id === null) {
     hostInvalidFields.value.add('ssh_key_id')
     return editingHost.value?.auth_type === 'key' && editingHost.value.ssh_key_id === null
@@ -239,7 +240,7 @@ function validateHost(): string {
   }
   if (form.auth_type === 'key' && !sshKeys.value.some((item) => item.id === form.ssh_key_id)) {
     hostInvalidFields.value.add('ssh_key_id')
-    return '系统异常'
+    return false
   }
   if (form.auth_type === 'password' && !form.password &&
     !(editingHost.value?.auth_type === 'password' && editingHost.value.has_password && !hostAuthChanged.value)) {
@@ -255,13 +256,13 @@ function validateHost(): string {
     hostInvalidFields.value.add('jump_host_id')
     return '跳板机列表加载中。'
   }
-  if (!jumpHostsLoaded.value || jumpHostsError.value) {
+  if (!jumpHostsLoaded.value) {
     hostInvalidFields.value.add('jump_host_id')
-    return '系统异常'
+    return false
   }
   if (form.jump_host_id !== null && !jumpHosts.value.some((item) => item.id === form.jump_host_id)) {
     hostInvalidFields.value.add('jump_host_id')
-    return '系统异常'
+    return false
   }
   return ''
 }
@@ -274,6 +275,7 @@ async function saveHost() {
     return
   }
   const validation = validateHost()
+  if (validation === false) { dialogError.value = ''; showSystemError(); return }
   if (validation) { dialogError.value = validation; return }
   const form = hostForm.value
   const previous = editingHost.value
@@ -295,7 +297,7 @@ async function saveHost() {
     hostDialog.value = false
     await Promise.all([refreshHosts(), refreshGroups()])
   } catch {
-    dialogError.value = '系统异常'
+    showSystemError()
   } finally {
     saving.value = false
   }
@@ -307,12 +309,11 @@ async function removeHost(id: number, name: string) {
       confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { return }
-  hostsError.value = ''
   try {
     await deleteHost(id)
     await Promise.all([refreshHosts(), refreshGroups()])
   } catch {
-    hostsError.value = '系统异常'
+    showSystemError()
   }
 }
 
@@ -323,7 +324,7 @@ function groupName(id: number) {
 function jumpHostName(id: number | null) {
   if (id === null) return '未关联'
   const jumpHost = jumpHosts.value.find((item) => item.id === id)
-  return jumpHost ? `${jumpHost.name} · ${jumpHost.address}` : '系统异常'
+  return jumpHost ? `${jumpHost.name} · ${jumpHost.address}` : undefined
 }
 
 function dateLabel(value: string) {
@@ -335,11 +336,10 @@ function dateLabel(value: string) {
   <AssetsLayout title="主机管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>主机管理</h1></div>
-      <ElAlert v-if="!groupsLoading && !groupsError && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
+      <ElAlert v-if="!groupsLoading && !groupsLoadFailed && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
           <div class="section-header"><h2>分组筛选</h2><RouterLink to="/assets/groups">管理分组</RouterLink></div>
-          <div v-if="groupsError" class="group-error"><ElAlert :title="groupsError" type="error" :closable="false" show-icon /></div>
           <div v-loading="groupsLoading" class="group-list">
             <button type="button" class="group-item" :class="{ active: selectedGroup === null }" @click="selectedGroup = null"><span>全部主机</span></button>
             <div v-for="group in groups" :key="group.id" class="group-row" :class="{ active: selectedGroup === group.id }">
@@ -350,19 +350,17 @@ function dateLabel(value: string) {
         <section class="host-section" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span class="host-total">{{ hosts.length }} 台</span></div></div>
           <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton></div></div>
-          <ElAlert v-if="hostsError" :title="hostsError" type="error" :closable="false" show-icon class="assets-alert" />
-          <ElAlert v-if="jumpHostsError" :title="jumpHostsError" type="error" :closable="false" show-icon class="assets-alert" />
           <div class="host-table-wrap">
-            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsError ? '系统异常' : hostsLoading ? '加载中' : '暂无主机'">
+            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'">
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
-              <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '系统异常' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
+              <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
           </div>
-          <ElEmpty v-if="!hostsLoading && !hostsError && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
+          <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
         </section>
       </div>
     </main>
@@ -376,11 +374,8 @@ function dateLabel(value: string) {
         <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
         <label v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" /></label>
         <template v-else><label class="field" :class="{ 'is-error': hostInvalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="hostForm.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="hostInvalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editingHost?.auth_type === 'key' && editingHost.ssh_key_id === null && hostForm.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
-        <ElAlert v-if="sshKeysError" :title="sshKeysError" type="error" :closable="false" show-icon />
         <div class="form-section-title">跳板机</div>
         <label class="field" :class="{ 'is-error': hostInvalidFields.has('jump_host_id') }"><span>关联跳板机</span><ElSelect v-model="hostForm.jump_host_id" clearable :value-on-clear="null" :disabled="jumpHostsLoading || !jumpHostsLoaded" placeholder="不使用跳板机" class="full-width" :aria-invalid="hostInvalidFields.has('jump_host_id') ? 'true' : undefined"><ElOption v-for="jumpHost in jumpHosts" :key="jumpHost.id" :label="`${jumpHost.name} · ${jumpHost.address}`" :value="jumpHost.id" /></ElSelect></label>
-        <ElAlert v-if="jumpHostsError" :title="jumpHostsError" type="error" :closable="false" show-icon />
-        <ElAlert v-if="jumpHostsLoaded && hostForm.jump_host_id !== null && !jumpHosts.some((item) => item.id === hostForm.jump_host_id)" title="系统异常" type="error" :closable="false" show-icon />
         <label class="field"><span>备注</span><ElInput v-model="hostForm.remark" type="textarea" :rows="3" placeholder="可选" /></label>
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>

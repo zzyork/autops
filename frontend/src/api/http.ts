@@ -1,6 +1,13 @@
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
-export class HttpError extends Error {}
+export const SYSTEM_ERROR_MESSAGE = '系统异常'
+
+export class HttpError extends Error {
+  constructor() {
+    super(SYSTEM_ERROR_MESSAGE)
+    this.name = 'HttpError'
+  }
+}
 
 export async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   let response: Response
@@ -15,11 +22,15 @@ export async function request<T>(path: string, options: { method?: string; body?
       signal: AbortSignal.timeout(8000),
     })
   } catch {
-    throw new HttpError('系统异常')
+    throw new HttpError()
   }
-  if (!response.ok) throw new HttpError('系统异常')
+  if (!response.ok) throw new HttpError()
   if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
+  try {
+    return await response.json() as T
+  } catch {
+    throw new HttpError()
+  }
 }
 
 export const get = <T>(path: string) => request<T>(path)

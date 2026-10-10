@@ -7,6 +7,7 @@ import {
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import { showSystemError } from '@/components/feedback'
 import type { AuthType, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 
 interface JumpHostForm {
@@ -25,12 +26,12 @@ const jumpHosts = ref<JumpHost[]>([])
 const sshKeys = ref<SSHKey[]>([])
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
-const sshKeysError = ref('')
 const search = ref('')
 const loading = ref(false)
 const opening = ref(false)
 const saving = ref(false)
-const error = ref('')
+const loadFailed = ref(false)
+const localError = ref('')
 const dialogError = ref('')
 const dialog = ref(false)
 const editing = ref<JumpHost | null>(null)
@@ -58,7 +59,6 @@ async function refreshSSHKeys() {
   const current = ++sshKeyRequest
   sshKeysLoading.value = true
   sshKeysLoaded.value = false
-  sshKeysError.value = ''
   sshKeys.value = []
   try {
     const result = await listSSHKeys()
@@ -67,7 +67,9 @@ async function refreshSSHKeys() {
       sshKeysLoaded.value = true
     }
   } catch {
-    if (current === sshKeyRequest) sshKeysError.value = '系统异常'
+    if (current === sshKeyRequest) {
+      showSystemError()
+    }
   } finally {
     if (current === sshKeyRequest) sshKeysLoading.value = false
   }
@@ -75,14 +77,15 @@ async function refreshSSHKeys() {
 async function refresh() {
   const current = ++requestId
   loading.value = true
-  error.value = ''
+  loadFailed.value = false
   try {
     const result = await listJumpHosts(search.value.trim())
     if (current === requestId) jumpHosts.value = result
   } catch {
     if (current === requestId) {
       jumpHosts.value = []
-      error.value = '系统异常'
+      loadFailed.value = true
+      showSystemError()
     }
   } finally {
     if (current === requestId) loading.value = false
@@ -114,7 +117,6 @@ function openNew() {
 
 async function openEdit(id: number) {
   opening.value = true
-  error.value = ''
   try {
     const item = await getJumpHost(id)
     editing.value = item
@@ -128,13 +130,13 @@ async function openEdit(id: number) {
     dialog.value = true
     void refreshSSHKeys()
   } catch {
-    error.value = '系统异常'
+    showSystemError()
   } finally {
     opening.value = false
   }
 }
 
-function validate(): string {
+function validate(): string | false {
   const value = form.value
   invalidFields.value.clear()
   if (!value.name.trim() || !value.address.trim() || !value.username.trim()) {
@@ -148,7 +150,7 @@ function validate(): string {
     return '端口须在 1 到 65535 之间。'
   }
   if (sshKeysLoading.value) return '密钥列表加载中。'
-  if (!sshKeysLoaded.value || sshKeysError.value) return '系统异常'
+  if (!sshKeysLoaded.value) return false
   if (value.auth_type === 'key' && value.ssh_key_id === null) {
     invalidFields.value.add('ssh_key_id')
     return editing.value?.auth_type === 'key' && editing.value.ssh_key_id === null
@@ -156,7 +158,7 @@ function validate(): string {
   }
   if (value.auth_type === 'key' && !sshKeys.value.some((item) => item.id === value.ssh_key_id)) {
     invalidFields.value.add('ssh_key_id')
-    return '系统异常'
+    return false
   }
   if (value.auth_type === 'password' && !value.password &&
     !(editing.value?.auth_type === 'password' && editing.value.has_password && !authChanged.value)) {
@@ -173,6 +175,7 @@ function validate(): string {
 
 async function save() {
   const validation = validate()
+  if (validation === false) { dialogError.value = ''; showSystemError(); return }
   if (validation) { dialogError.value = validation; return }
   const value = form.value
   const previous = editing.value
@@ -191,25 +194,25 @@ async function save() {
     dialog.value = false
     void refresh()
   } catch {
-    dialogError.value = '系统异常'
+    showSystemError()
   } finally {
     saving.value = false
   }
 }
 
 async function remove(item: JumpHost) {
-  if (item.host_count > 0) { error.value = '请先解除该跳板机与主机的关联。'; return }
+  if (item.host_count > 0) { localError.value = '请先解除该跳板机与主机的关联。'; return }
   try {
     await ElMessageBox.confirm(`确定删除跳板机“${item.name}”吗？此操作不可撤销。`, '删除跳板机', {
       confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { return }
-  error.value = ''
+  localError.value = ''
   try {
     await deleteJumpHost(item.id)
     await refresh()
   } catch {
-    error.value = '系统异常'
+    showSystemError()
   }
 }
 
@@ -224,9 +227,9 @@ function dateLabel(value: string) {
       <div class="assets-heading"><h1>跳板机管理</h1></div>
       <section class="host-section" aria-label="跳板机列表">
         <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
-        <ElAlert v-if="error" :title="error" type="error" :closable="false" show-icon class="assets-alert" />
+        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="host-table" :empty-text="error === '系统异常' ? '系统异常' : loading ? '加载中' : '暂无跳板机'">
+          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
             <ElTableColumn label="跳板机" min-width="200"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
@@ -235,7 +238,7 @@ function dateLabel(value: string) {
             <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
-        <ElEmpty v-if="!loading && !error && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
+        <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
       </section>
     </main>
 
@@ -254,7 +257,6 @@ function dateLabel(value: string) {
         <div class="field"><span>认证方式</span><ElRadioGroup v-model="form.auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
         <label v-if="form.auth_type === 'password'" class="field" :class="{ 'is-error': invalidFields.has('password') }"><span>密码 <em v-if="!editing || editing.auth_type !== 'password' || !editing.has_password || authChanged || (form.address.trim() !== editing.address || form.username.trim() !== editing.username || form.port !== editing.port)">*</em></span><ElInput v-model="form.password" type="password" show-password autocomplete="new-password" :placeholder="editing?.auth_type === 'password' && editing.has_password && !authChanged ? '连接信息不变时留空保留原密码' : '请输入密码'" :aria-invalid="invalidFields.has('password') ? 'true' : undefined" /></label>
         <template v-else><label class="field" :class="{ 'is-error': invalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="form.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="invalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editing?.auth_type === 'key' && editing.ssh_key_id === null && form.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
-        <ElAlert v-if="sshKeysError" :title="sshKeysError" type="error" :closable="false" show-icon />
         <label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" maxlength="2000" placeholder="可选" /></label>
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>

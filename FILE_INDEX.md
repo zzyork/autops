@@ -98,6 +98,7 @@
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
+| `frontend/src/components/feedback.ts` | 共用消息提示。 |
 | `frontend/src/components/AssetsLayout.vue` | 资产页面共用控制台布局、导航和面包屑。最后同步：2026-10-10。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
