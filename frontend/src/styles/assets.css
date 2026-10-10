@@ -3,7 +3,6 @@
 .console-topbar { position: fixed; z-index: 20; inset: 0 0 auto; height: 40px; padding: 0 20px; display: flex; align-items: center; gap: 16px; background: var(--ui-header-bg); color: var(--ui-header-text); }
 .console-topbar .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; width: 164px; }
 .console-topbar .brand:hover { color: var(--ui-header-text); }
-.console-topbar :focus-visible { outline-color: var(--ui-header-text); }
 .console-topbar .brand-mark { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid currentColor; border-radius: 2px; font-size: 15px; }
 .console-title { font-size: 13px; }
 .console-version { margin-left: auto; font-size: 12px; }
