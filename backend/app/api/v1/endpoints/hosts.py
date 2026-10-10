@@ -1,42 +1,12 @@
-from collections.abc import Iterator
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.exc import StaleDataError
 
-from ....models import Host, HostGroup
-from ....schemas.assets import GroupInput, GroupResponse, HostInput, HostResponse, HostUpdate
+from ...dependencies import Database, commit, find_group
+from ....models import Host
+from ....schemas.assets import HostInput, HostResponse, HostUpdate
 
 router = APIRouter(tags=["资产管理"])
-
-
-def get_session(request: Request) -> Iterator[Session]:
-    with request.app.state.sessions() as session:
-        yield session
-
-
-Database = Annotated[Session, Depends(get_session)]
-
-
-def commit(session: Session) -> None:
-    try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise HTTPException(409, "记录重复或关联数据已变更，请检查后重试") from None
-    except StaleDataError:
-        session.rollback()
-        raise HTTPException(409, "主机已被修改，请重新打开编辑页面") from None
-
-
-def find_group(session: Session, group_id: int) -> HostGroup:
-    group = session.get(HostGroup, group_id)
-    if group is None:
-        raise HTTPException(404, "分组不存在")
-    return group
 
 
 def find_host(session: Session, host_id: int) -> Host:
@@ -44,42 +14,6 @@ def find_host(session: Session, host_id: int) -> Host:
     if host is None:
         raise HTTPException(404, "主机不存在")
     return host
-
-
-def group_response(session: Session, group: HostGroup) -> GroupResponse:
-    count = session.scalar(select(func.count()).select_from(Host).where(Host.group_id == group.id))
-    return GroupResponse(id=group.id, name=group.name, remark=group.remark, host_count=count)
-
-
-@router.get("/host-groups", response_model=list[GroupResponse])
-def list_groups(session: Database) -> list[GroupResponse]:
-    return [group_response(session, group) for group in session.scalars(select(HostGroup).order_by(HostGroup.id))]
-
-
-@router.post("/host-groups", response_model=GroupResponse, status_code=201)
-def create_group(data: GroupInput, session: Database) -> GroupResponse:
-    group = HostGroup(**data.model_dump())
-    session.add(group)
-    commit(session)
-    return group_response(session, group)
-
-
-@router.put("/host-groups/{group_id}", response_model=GroupResponse)
-def update_group(group_id: int, data: GroupInput, session: Database) -> GroupResponse:
-    group = find_group(session, group_id)
-    group.name, group.remark = data.name, data.remark
-    commit(session)
-    return group_response(session, group)
-
-
-@router.delete("/host-groups/{group_id}", status_code=204)
-def delete_group(group_id: int, session: Database) -> Response:
-    group = find_group(session, group_id)
-    if session.scalar(select(Host.id).where(Host.group_id == group_id).limit(1)) is not None:
-        raise HTTPException(409, "分组中仍有主机，请先移动或删除主机")
-    session.delete(group)
-    commit(session)
-    return Response(status_code=204)
 
 
 @router.get("/hosts", response_model=list[HostResponse])

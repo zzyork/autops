@@ -4,7 +4,8 @@ import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
   ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn,
 } from 'element-plus'
-import { createGroup, createHost, deleteGroup, deleteHost, getHost, listGroups, listHosts, updateGroup, updateHost } from '@/api/assets'
+import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } from '@/api/assets'
+import AssetsLayout from '@/components/AssetsLayout.vue'
 import { HttpError } from '@/api/http'
 import type { AuthType, Host, HostGroup, HostInput } from '@/types/api'
 import '@/styles/assets.css'
@@ -29,7 +30,6 @@ interface HostForm {
 }
 
 const groups = ref<HostGroup[]>([])
-const menuCollapsed = ref(false)
 const vLoading = ElLoading.directive
 const hosts = ref<Host[]>([])
 const selectedGroup = ref<number | null>(null)
@@ -41,12 +41,8 @@ const hostsError = ref('')
 const dialogError = ref('')
 const saving = ref(false)
 const openingHost = ref(false)
-const groupDialog = ref(false)
 const hostDialog = ref(false)
-const editingGroup = ref<HostGroup | null>(null)
 const editingHost = ref<Host | null>(null)
-const groupForm = ref({ name: '', remark: '' })
-const groupNameError = ref(false)
 const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
 const proxyEnabled = ref(false)
 const hostAuthChanged = ref(false)
@@ -62,7 +58,6 @@ function emptyHost(groupId: number | null): HostForm {
 }
 
 const hostForm = ref<HostForm>(emptyHost(null))
-watch(() => groupForm.value.name, () => { groupNameError.value = false })
 watch(() => ({ ...hostForm.value }), (next, previous) => {
   for (const key of Object.keys(next) as (keyof HostForm)[]) {
     if (next[key] !== previous[key]) hostInvalidFields.value.delete(key)
@@ -131,52 +126,6 @@ onUnmounted(() => {
   clearTimeout(searchTimer)
   hostRequest++
 })
-
-function openGroup(group: HostGroup | null = null) {
-  editingGroup.value = group
-  groupForm.value = { name: group?.name ?? '', remark: group?.remark ?? '' }
-  groupNameError.value = false
-  dialogError.value = ''
-  groupDialog.value = true
-}
-
-async function saveGroup() {
-  const body = { name: groupForm.value.name.trim(), remark: groupForm.value.remark.trim() }
-  if (!body.name) { groupNameError.value = true; dialogError.value = '请输入分组名称。'; return }
-  saving.value = true
-  dialogError.value = ''
-  try {
-    if (editingGroup.value) await updateGroup(editingGroup.value.id, body)
-    else await createGroup(body)
-    groupDialog.value = false
-    await refreshGroups()
-  } catch (cause) {
-    dialogError.value = errorText(cause)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function removeGroup(group: HostGroup) {
-  if (group.host_count > 0) {
-    groupsError.value = '请先移动或删除该分组内的主机。'
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      `确定删除分组“${group.name}”吗？`,
-      '删除分组', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button' },
-    )
-  } catch { return }
-  groupsError.value = ''
-  try {
-    await deleteGroup(group.id)
-    if (selectedGroup.value === group.id) selectedGroup.value = null
-    await Promise.all([refreshGroups(), refreshHosts()])
-  } catch (cause) {
-    groupsError.value = errorText(cause)
-  }
-}
 
 function openNewHost() {
   if (groupsLoading.value) { ElMessage.info('分组加载中，请稍后重试。'); return }
@@ -354,31 +303,18 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-  <div class="workspace assets-page" :class="{ 'menu-collapsed': menuCollapsed }">
-    <header class="topbar console-topbar">
-      <RouterLink to="/assets" class="brand" aria-label="autops 资产管理"><span class="brand-mark">a.</span>autops</RouterLink>
-      <span class="console-title">运维控制台</span>
-      <span class="console-version">v0.1</span>
-    </header>
-    <aside class="console-sidebar" aria-label="主导航">
-      <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>
-      <div v-if="!menuCollapsed" class="console-menu-label">资产管理</div>
-      <RouterLink to="/assets" class="console-menu-item" aria-current="page" aria-label="资产列表" title="资产列表"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 21h8M12 16v5M3 12h18" /></svg><span v-if="!menuCollapsed">资产列表</span></RouterLink>
-    </aside>
-    <div class="console-content">
-    <div class="console-breadcrumb"><span>资产管理</span><span class="breadcrumb-separator">/</span><strong>资产列表</strong></div>
+  <AssetsLayout title="主机管理">
     <main class="assets-main">
-      <div class="assets-heading"><h1>资产管理</h1></div>
-      <ElAlert v-if="!groupsLoading && !groupsError && !groups.length" title="暂无分组，请先新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
+      <div class="assets-heading"><h1>主机管理</h1></div>
+      <ElAlert v-if="!groupsLoading && !groupsError && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
-          <div class="section-header"><h2>分组</h2><ElButton text type="primary" @click="openGroup()">新增分组</ElButton></div>
+          <div class="section-header"><h2>分组筛选</h2><RouterLink to="/assets/groups">管理分组</RouterLink></div>
           <div v-if="groupsError" class="group-error"><ElAlert :title="groupsError" type="error" :closable="false" show-icon /><ElButton @click="refreshGroups()">重试</ElButton></div>
           <div v-loading="groupsLoading" class="group-list">
             <button type="button" class="group-item" :class="{ active: selectedGroup === null }" @click="selectedGroup = null"><span>全部主机</span></button>
             <div v-for="group in groups" :key="group.id" class="group-row" :class="{ active: selectedGroup === group.id }">
               <button type="button" class="group-choice" :title="group.remark ? `${group.name}：${group.remark}` : group.name" :aria-pressed="selectedGroup === group.id" @click="selectedGroup = group.id"><span class="group-name">{{ group.name }}</span><span class="group-count">{{ group.host_count }}</span></button>
-              <div class="group-actions"><ElButton text size="small" :aria-label="`编辑分组${group.name}`" @click="openGroup(group)">编辑</ElButton><span :title="group.host_count ? '请先移动或删除组内主机' : undefined"><ElButton text size="small" type="danger" :disabled="group.host_count > 0" :aria-label="`删除分组${group.name}`" @click="removeGroup(group)">删除</ElButton></span></div>
             </div>
           </div>
         </aside>
@@ -400,12 +336,6 @@ function dateLabel(value: string) {
         </section>
       </div>
     </main>
-    </div>
-
-    <ElDialog v-model="groupDialog" align-center :title="editingGroup ? '编辑分组' : '新增分组'" width="min(440px, 92vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div class="asset-form"><label class="field" :class="{ 'is-error': groupNameError }"><span>分组名称 <em>*</em></span><ElInput v-model="groupForm.name" maxlength="100" placeholder="输入分组名称" :aria-invalid="groupNameError ? 'true' : undefined" /></label><label class="field"><span>备注</span><ElInput v-model="groupForm.remark" type="textarea" :rows="3" placeholder="可选" /></label><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon /></div>
-      <template #footer><ElButton :disabled="saving" @click="groupDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveGroup">保存</ElButton></template>
-    </ElDialog>
 
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
@@ -423,5 +353,5 @@ function dateLabel(value: string) {
       </div>
       <template #footer><ElButton :disabled="saving" @click="hostDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveHost">保存</ElButton></template>
     </ElDialog>
-  </div>
+  </AssetsLayout>
 </template>
