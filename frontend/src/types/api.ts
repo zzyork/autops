@@ -22,6 +22,7 @@ export interface SSHKey {
   remark: string
   key_type: string
   fingerprint: string
+  public_key: string | null
   created_at: string
   updated_at: string
   version: number
@@ -38,6 +39,7 @@ export interface SSHKeyInput {
   name: string
   remark: string
   private_key: string
+  public_key: string
 }
 
 export interface SSHKeyUpdateInput {
@@ -45,6 +47,7 @@ export interface SSHKeyUpdateInput {
   remark: string
   version: number
   private_key?: string
+  public_key?: string
 }
 
 export interface JumpHost {

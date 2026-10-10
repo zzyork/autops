@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit
-from ....core.ssh_keys import parse_private_key
+from ....core.ssh_keys import parse_private_key, validate_public_key
 from ....models import Host, JumpHost, SSHKey
 from ....schemas.ssh_keys import SSHKeyInput, SSHKeyReference, SSHKeyReferences, SSHKeyResponse, SSHKeyUpdate
 
@@ -23,7 +23,7 @@ def find_key(session: Session, key_id: int) -> SSHKey:
 def key_response(session: Session, key: SSHKey) -> SSHKeyResponse:
     return SSHKeyResponse(
         id=key.id, name=key.name, remark=key.remark, key_type=key.key_type,
-        fingerprint=key.fingerprint, version=key.version,
+        fingerprint=key.fingerprint, public_key=key.public_key, version=key.version,
         created_at=key.created_at.replace(tzinfo=timezone.utc), updated_at=key.updated_at.replace(tzinfo=timezone.utc),
         host_count=session.scalar(select(func.count()).select_from(Host).where(Host.ssh_key_id == key.id)),
         jump_host_count=session.scalar(select(func.count()).select_from(JumpHost).where(JumpHost.ssh_key_id == key.id)),
@@ -54,9 +54,10 @@ def get_references(key_id: int, session: Database) -> SSHKeyReferences:
 
 @router.post("/ssh-keys", response_model=SSHKeyResponse, status_code=201)
 def create_key(data: SSHKeyInput, request: Request, session: Database) -> SSHKeyResponse:
-    raw, algorithm, fingerprint = parse_private_key(data.private_key.get_secret_value())
+    raw, algorithm, fingerprint, public = parse_private_key(data.private_key.get_secret_value())
+    public_key = validate_public_key(data.public_key, public)
     key = SSHKey(name=data.name, remark=data.remark, key_type=algorithm, fingerprint=fingerprint,
-                 private_key_encrypted=request.app.state.cipher.encrypt(raw).decode())
+                 public_key=public_key, private_key_encrypted=request.app.state.cipher.encrypt(raw).decode())
     session.add(key)
     commit(session, STALE_MESSAGE)
     return key_response(session, key)
@@ -70,9 +71,19 @@ def update_key(key_id: int, data: SSHKeyUpdate, request: Request, session: Datab
     if "private_key" in data.model_fields_set:
         if data.private_key is None:
             raise HTTPException(422, "替换私钥时不能为空")
-        raw, algorithm, fingerprint = parse_private_key(data.private_key.get_secret_value())
+        if data.public_key is None:
+            raise HTTPException(422, "替换私钥时须同时提供公钥")
+        raw, algorithm, fingerprint, public = parse_private_key(data.private_key.get_secret_value())
+        public_key = validate_public_key(data.public_key, public)
         key.private_key_encrypted = request.app.state.cipher.encrypt(raw).decode()
         key.key_type, key.fingerprint = algorithm, fingerprint
+        key.public_key = public_key
+    elif "public_key" in data.model_fields_set:
+        if data.public_key is None:
+            raise HTTPException(422, "上传公钥时不能为空")
+        raw = request.app.state.cipher.decrypt(key.private_key_encrypted.encode())
+        _, _, _, public = parse_private_key(raw.decode())
+        key.public_key = validate_public_key(data.public_key, public)
     key.name, key.remark = data.name, data.remark
     commit(session, STALE_MESSAGE)
     return key_response(session, key)

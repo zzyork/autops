@@ -88,6 +88,9 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
         with engine.begin() as connection:
             # sqlite3 不会在 SQLAlchemy 的逻辑事务开始时立即发出 BEGIN；先开启真实写事务以覆盖 DDL。
             connection.exec_driver_sql("BEGIN IMMEDIATE")
+            key_columns = {column["name"] for column in inspect(connection).get_columns("ssh_keys")}
+            if "public_key" not in key_columns:
+                connection.execute(text("ALTER TABLE ssh_keys ADD COLUMN public_key TEXT"))
             for table in ("hosts", "jump_hosts"):
                 table_columns = {column["name"] for column in inspect(connection).get_columns(table)}
                 if "ssh_key_id" not in table_columns:

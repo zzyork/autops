@@ -10,7 +10,7 @@ const menuCollapsed = ref(false)
   <div class="workspace assets-page" :class="{ 'menu-collapsed': menuCollapsed }">
     <header class="topbar console-topbar">
       <RouterLink to="/assets/hosts" class="brand" aria-label="autops 资产管理"><span class="brand-mark">a.</span>autops</RouterLink>
-      <span class="console-title">运维控制台</span><span class="console-version">v0.1</span>
+      <span class="console-version">v0.1</span>
     </header>
     <aside class="console-sidebar" aria-label="主导航">
       <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>

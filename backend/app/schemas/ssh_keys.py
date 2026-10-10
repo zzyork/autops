@@ -19,17 +19,20 @@ class SSHKeyMetadata(BaseModel):
 
 class SSHKeyInput(SSHKeyMetadata):
     private_key: SecretStr
+    public_key: str
 
 
 class SSHKeyUpdate(SSHKeyMetadata):
     version: int = Field(gt=0)
     private_key: SecretStr | None = None
+    public_key: str | None = None
 
 
 class SSHKeyResponse(SSHKeyMetadata):
     id: int
     key_type: str
     fingerprint: str
+    public_key: str | None
     created_at: datetime
     updated_at: datetime
     version: int

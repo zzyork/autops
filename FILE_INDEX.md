@@ -73,7 +73,7 @@
 | `backend/app/core/__init__.py` | 声明配置及公共基础设施包。 |
 | `backend/app/core/config.py` | 后端应用配置。最后同步：2026-10-10。 |
 | `backend/app/core/storage.py` | 资产数据库、凭据密钥管理及旧配置迁移。最后同步：2026-10-10。 |
-| `backend/app/core/ssh_keys.py` | SSH 私钥内容校验与指纹生成。 |
+| `backend/app/core/ssh_keys.py` | SSH 公私钥内容与配对校验、指纹生成。最后同步：2026-10-10。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
 | `backend/app/schemas/assets.py` | 资产管理接口数据模型。最后同步：2026-10-10。 |
