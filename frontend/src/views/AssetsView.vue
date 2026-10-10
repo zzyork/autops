@@ -46,6 +46,8 @@ const hostDialog = ref(false)
 const editingGroup = ref<HostGroup | null>(null)
 const editingHost = ref<Host | null>(null)
 const groupForm = ref({ name: '', remark: '' })
+const groupNameError = ref(false)
+const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
 const proxyEnabled = ref(false)
 const hostAuthChanged = ref(false)
 const proxyAuthChanged = ref(false)
@@ -60,6 +62,12 @@ function emptyHost(groupId: number | null): HostForm {
 }
 
 const hostForm = ref<HostForm>(emptyHost(null))
+watch(() => groupForm.value.name, () => { groupNameError.value = false })
+watch(() => ({ ...hostForm.value }), (next, previous) => {
+  for (const key of Object.keys(next) as (keyof HostForm)[]) {
+    if (next[key] !== previous[key]) hostInvalidFields.value.delete(key)
+  }
+}, { flush: 'sync' })
 watch(() => hostForm.value.auth_type, (next, previous) => {
   if (hostDialog.value && next !== previous) {
     hostAuthChanged.value = true
@@ -115,19 +123,26 @@ watch([search, selectedGroup], () => {
   hostsLoading.value = true
   searchTimer = setTimeout(refreshHosts, search.value ? 250 : 0)
 })
-onMounted(() => { void refreshGroups(); void refreshHosts() })
-onUnmounted(() => { clearTimeout(searchTimer); hostRequest++ })
+onMounted(() => {
+  void refreshGroups()
+  void refreshHosts()
+})
+onUnmounted(() => {
+  clearTimeout(searchTimer)
+  hostRequest++
+})
 
 function openGroup(group: HostGroup | null = null) {
   editingGroup.value = group
   groupForm.value = { name: group?.name ?? '', remark: group?.remark ?? '' }
+  groupNameError.value = false
   dialogError.value = ''
   groupDialog.value = true
 }
 
 async function saveGroup() {
   const body = { name: groupForm.value.name.trim(), remark: groupForm.value.remark.trim() }
-  if (!body.name) { dialogError.value = '请输入分组名称。'; return }
+  if (!body.name) { groupNameError.value = true; dialogError.value = '请输入分组名称。'; return }
   saving.value = true
   dialogError.value = ''
   try {
@@ -150,7 +165,7 @@ async function removeGroup(group: HostGroup) {
   try {
     await ElMessageBox.confirm(
       `确定删除分组“${group.name}”吗？`,
-      '删除分组', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+      '删除分组', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button' },
     )
   } catch { return }
   groupsError.value = ''
@@ -170,6 +185,7 @@ function openNewHost() {
   hostAuthChanged.value = false
   proxyAuthChanged.value = false
   hostForm.value = emptyHost(selectedGroup.value)
+  hostInvalidFields.value.clear()
   proxyEnabled.value = false
   dialogError.value = ''
   hostDialog.value = true
@@ -191,6 +207,7 @@ async function openEditHost(id: number) {
       proxy_port: host.proxy_port ?? 22, proxy_auth_type: host.proxy_auth_type ?? 'password',
       proxy_key_path: host.proxy_key_path ?? '', proxy_password: '', remark: host.remark,
     }
+    hostInvalidFields.value.clear()
     proxyEnabled.value = host.proxy_address !== null
     dialogError.value = ''
     hostDialog.value = true
@@ -217,23 +234,53 @@ function toggleProxy(value: string | number | boolean) {
 
 function validateHost(): string {
   const form = hostForm.value
-  if (!form.name.trim() || !form.address.trim() || !form.username.trim()) return '请填写主机名称、地址和用户名。'
-  if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) return '主机端口须在 1 到 65535 之间。'
-  if (form.auth_type === 'key' && !form.key_path.trim()) return '请输入主机密钥路径。'
+  hostInvalidFields.value.clear()
+  if (!form.name.trim() || !form.address.trim() || !form.username.trim()) {
+    if (!form.name.trim()) hostInvalidFields.value.add('name')
+    if (!form.address.trim()) hostInvalidFields.value.add('address')
+    if (!form.username.trim()) hostInvalidFields.value.add('username')
+    return '请填写主机名称、地址和用户名。'
+  }
+  if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
+    hostInvalidFields.value.add('port')
+    return '主机端口须在 1 到 65535 之间。'
+  }
+  if (form.auth_type === 'key' && !form.key_path.trim()) {
+    hostInvalidFields.value.add('key_path')
+    return '请输入主机密钥路径。'
+  }
   if (form.auth_type === 'password' && !form.password &&
     !(editingHost.value?.auth_type === 'password' && editingHost.value.has_password && !hostAuthChanged.value)) {
+    hostInvalidFields.value.add('password')
     return '请输入主机密码；切换为密码认证时不能沿用原凭据。'
   }
   if (editingHost.value && form.auth_type === 'password' && !form.password &&
-    (form.address.trim() !== editingHost.value.address || form.username.trim() !== editingHost.value.username || form.port !== editingHost.value.port)) return '连接信息已变更，请重新填写主机密码。'
+    (form.address.trim() !== editingHost.value.address || form.username.trim() !== editingHost.value.username || form.port !== editingHost.value.port)) {
+    hostInvalidFields.value.add('password')
+    return '连接信息已变更，请重新填写主机密码。'
+  }
   if (proxyEnabled.value) {
     if (editingHost.value && form.proxy_auth_type === 'password' && !form.proxy_password &&
-      (form.proxy_address.trim() !== editingHost.value.proxy_address || form.proxy_username.trim() !== editingHost.value.proxy_username || form.proxy_port !== editingHost.value.proxy_port)) return '跳板机连接信息已变更，请重新填写跳板机密码。'
-    if (!form.proxy_address.trim() || !form.proxy_username.trim()) return '请填写跳板机地址和用户名。'
-    if (!Number.isInteger(form.proxy_port) || form.proxy_port < 1 || form.proxy_port > 65535) return '跳板机端口须在 1 到 65535 之间。'
-    if (form.proxy_auth_type === 'key' && !form.proxy_key_path.trim()) return '请输入跳板机密钥路径。'
+      (form.proxy_address.trim() !== editingHost.value.proxy_address || form.proxy_username.trim() !== editingHost.value.proxy_username || form.proxy_port !== editingHost.value.proxy_port)) {
+      hostInvalidFields.value.add('proxy_password')
+      return '跳板机连接信息已变更，请重新填写跳板机密码。'
+    }
+    if (!form.proxy_address.trim() || !form.proxy_username.trim()) {
+      if (!form.proxy_address.trim()) hostInvalidFields.value.add('proxy_address')
+      if (!form.proxy_username.trim()) hostInvalidFields.value.add('proxy_username')
+      return '请填写跳板机地址和用户名。'
+    }
+    if (!Number.isInteger(form.proxy_port) || form.proxy_port < 1 || form.proxy_port > 65535) {
+      hostInvalidFields.value.add('proxy_port')
+      return '跳板机端口须在 1 到 65535 之间。'
+    }
+    if (form.proxy_auth_type === 'key' && !form.proxy_key_path.trim()) {
+      hostInvalidFields.value.add('proxy_key_path')
+      return '请输入跳板机密钥路径。'
+    }
     if (form.proxy_auth_type === 'password' && !form.proxy_password &&
       !(editingHost.value?.proxy_auth_type === 'password' && editingHost.value.has_proxy_password && !proxyAuthChanged.value)) {
+      hostInvalidFields.value.add('proxy_password')
       return '请输入跳板机密码；切换为密码认证时不能沿用原凭据。'
     }
   }
@@ -243,6 +290,7 @@ function validateHost(): string {
 async function saveHost() {
   const groupId = hostForm.value.group_id
   if (groupId === '' || !Number.isInteger(groupId) || groupId <= 0) {
+    hostInvalidFields.value.add('group_id')
     dialogError.value = '请选择所属分组。'
     return
   }
@@ -284,7 +332,7 @@ async function saveHost() {
 async function removeHost(id: number, name: string) {
   try {
     await ElMessageBox.confirm(`确定删除主机“${name}”吗？此操作不可撤销。`, '删除主机', {
-      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { return }
   hostsError.value = ''
@@ -315,20 +363,21 @@ function dateLabel(value: string) {
     <aside class="console-sidebar" aria-label="主导航">
       <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>
       <div v-if="!menuCollapsed" class="console-menu-label">资产管理</div>
-      <RouterLink to="/assets" class="console-menu-item" aria-current="page" title="资产列表"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 21h8M12 16v5M3 12h18" /></svg><span v-if="!menuCollapsed">资产列表</span></RouterLink>
+      <RouterLink to="/assets" class="console-menu-item" aria-current="page" aria-label="资产列表" title="资产列表"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 21h8M12 16v5M3 12h18" /></svg><span v-if="!menuCollapsed">资产列表</span></RouterLink>
     </aside>
     <div class="console-content">
     <div class="console-breadcrumb"><span>资产管理</span><span class="breadcrumb-separator">/</span><strong>资产列表</strong></div>
     <main class="assets-main">
+      <div class="assets-heading"><h1>资产管理</h1></div>
       <ElAlert v-if="!groupsLoading && !groupsError && !groups.length" title="暂无分组，请先新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
           <div class="section-header"><h2>分组</h2><ElButton text type="primary" @click="openGroup()">新增分组</ElButton></div>
-          <ElAlert v-if="groupsError" :title="groupsError" type="error" :closable="false" show-icon />
+          <div v-if="groupsError" class="group-error"><ElAlert :title="groupsError" type="error" :closable="false" show-icon /><ElButton @click="refreshGroups()">重试</ElButton></div>
           <div v-loading="groupsLoading" class="group-list">
             <button type="button" class="group-item" :class="{ active: selectedGroup === null }" @click="selectedGroup = null"><span>全部主机</span></button>
             <div v-for="group in groups" :key="group.id" class="group-row" :class="{ active: selectedGroup === group.id }">
-              <button type="button" class="group-choice" :title="group.remark || group.name" @click="selectedGroup = group.id"><span class="group-name">{{ group.name }}</span><span class="group-count">{{ group.host_count }}</span></button>
+              <button type="button" class="group-choice" :title="group.remark ? `${group.name}：${group.remark}` : group.name" :aria-pressed="selectedGroup === group.id" @click="selectedGroup = group.id"><span class="group-name">{{ group.name }}</span><span class="group-count">{{ group.host_count }}</span></button>
               <div class="group-actions"><ElButton text size="small" :aria-label="`编辑分组${group.name}`" @click="openGroup(group)">编辑</ElButton><span :title="group.host_count ? '请先移动或删除组内主机' : undefined"><ElButton text size="small" type="danger" :disabled="group.host_count > 0" :aria-label="`删除分组${group.name}`" @click="removeGroup(group)">删除</ElButton></span></div>
             </div>
           </div>
@@ -338,7 +387,7 @@ function dateLabel(value: string) {
           <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading" @click="refreshGroups(); refreshHosts()">刷新</ElButton></div></div>
           <ElAlert v-if="hostsError" :title="hostsError" type="error" :closable="false" show-icon class="assets-alert" />
           <div class="host-table-wrap">
-            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsError ? '加载失败' : '暂无主机'">
+            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsError ? '加载失败，请点击刷新重试' : hostsLoading ? '加载中' : '暂无主机'">
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
@@ -347,28 +396,28 @@ function dateLabel(value: string) {
               <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
           </div>
-          <ElEmpty v-if="!hostsLoading && !hostsError && !hosts.length" description="暂无符合条件的主机" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
+          <ElEmpty v-if="!hostsLoading && !hostsError && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
         </section>
       </div>
     </main>
     </div>
 
-    <ElDialog v-model="groupDialog" :title="editingGroup ? '编辑分组' : '新增分组'" width="min(440px, 92vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div class="asset-form"><label class="field"><span>分组名称 <em>*</em></span><ElInput v-model="groupForm.name" maxlength="100" placeholder="输入分组名称" /></label><label class="field"><span>备注</span><ElInput v-model="groupForm.remark" type="textarea" :rows="3" placeholder="可选" /></label><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon /></div>
+    <ElDialog v-model="groupDialog" align-center :title="editingGroup ? '编辑分组' : '新增分组'" width="min(440px, 92vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+      <div class="asset-form"><label class="field" :class="{ 'is-error': groupNameError }"><span>分组名称 <em>*</em></span><ElInput v-model="groupForm.name" maxlength="100" placeholder="输入分组名称" :aria-invalid="groupNameError ? 'true' : undefined" /></label><label class="field"><span>备注</span><ElInput v-model="groupForm.remark" type="textarea" :rows="3" placeholder="可选" /></label><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon /></div>
       <template #footer><ElButton :disabled="saving" @click="groupDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveGroup">保存</ElButton></template>
     </ElDialog>
 
-    <ElDialog v-model="hostDialog" :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+    <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
         <div class="form-section-title">基本信息</div>
-        <div class="field-grid"><label class="field"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" /></label><label class="field"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IP 或域名" /></label><label class="field"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
+        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IP 或域名" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
         <div class="form-section-title">登录信息</div>
-        <div class="field-grid"><label class="field"><span>用户名 <em>*</em></span><ElInput v-model="hostForm.username" autocomplete="off" /></label><label class="field"><span>端口 <em>*</em></span><ElInputNumber v-model="hostForm.port" :min="1" :max="65535" :controls="false" class="full-width" /></label></div>
-        <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div>
-        <label v-if="hostForm.auth_type === 'password'" class="field"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" /></label>
-        <label v-else class="field"><span>密钥路径 <em>*</em></span><ElInput v-model="hostForm.key_path" placeholder="服务端可读取的密钥路径" /></label>
+        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="hostForm.username" autocomplete="off" :aria-invalid="hostInvalidFields.has('username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="hostForm.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('port') ? 'true' : undefined" /></label></div>
+        <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div>
+        <label v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" /></label>
+        <label v-else class="field" :class="{ 'is-error': hostInvalidFields.has('key_path') }"><span>密钥路径 <em>*</em></span><ElInput v-model="hostForm.key_path" placeholder="服务端可读取的密钥路径" :aria-invalid="hostInvalidFields.has('key_path') ? 'true' : undefined" /></label>
         <div class="form-section-title proxy-heading"><span>跳板机</span><ElSwitch :model-value="proxyEnabled" aria-label="启用跳板机" @update:model-value="toggleProxy" /></div>
-        <template v-if="proxyEnabled"><div class="field-grid"><label class="field"><span>跳板机地址 <em>*</em></span><ElInput v-model="hostForm.proxy_address" placeholder="IP 或域名" /></label><label class="field"><span>跳板机用户名 <em>*</em></span><ElInput v-model="hostForm.proxy_username" autocomplete="off" /></label><label class="field"><span>跳板机端口 <em>*</em></span><ElInputNumber v-model="hostForm.proxy_port" :min="1" :max="65535" :controls="false" class="full-width" /></label></div><div class="field"><span>跳板机认证</span><ElRadioGroup v-model="hostForm.proxy_auth_type"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div><label v-if="hostForm.proxy_auth_type === 'password'" class="field"><span>跳板机密码 <em v-if="!editingHost || editingHost.proxy_auth_type !== 'password' || !editingHost.has_proxy_password || proxyAuthChanged">*</em></span><ElInput v-model="hostForm.proxy_password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.proxy_auth_type === 'password' && editingHost.has_proxy_password && !proxyAuthChanged ? '留空保留原密码' : '请输入密码'" /></label><label v-else class="field"><span>跳板机密钥路径 <em>*</em></span><ElInput v-model="hostForm.proxy_key_path" placeholder="服务端可读取的密钥路径" /></label></template>
+        <template v-if="proxyEnabled"><div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_address') }"><span>跳板机地址 <em>*</em></span><ElInput v-model="hostForm.proxy_address" placeholder="IP 或域名" :aria-invalid="hostInvalidFields.has('proxy_address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_username') }"><span>跳板机用户名 <em>*</em></span><ElInput v-model="hostForm.proxy_username" autocomplete="off" :aria-invalid="hostInvalidFields.has('proxy_username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_port') }"><span>跳板机端口 <em>*</em></span><ElInputNumber v-model="hostForm.proxy_port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('proxy_port') ? 'true' : undefined" /></label></div><div class="field"><span>跳板机认证</span><ElRadioGroup v-model="hostForm.proxy_auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div><label v-if="hostForm.proxy_auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_password') }"><span>跳板机密码 <em v-if="!editingHost || editingHost.proxy_auth_type !== 'password' || !editingHost.has_proxy_password || proxyAuthChanged">*</em></span><ElInput v-model="hostForm.proxy_password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.proxy_auth_type === 'password' && editingHost.has_proxy_password && !proxyAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('proxy_password') ? 'true' : undefined" /></label><label v-else class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_key_path') }"><span>跳板机密钥路径 <em>*</em></span><ElInput v-model="hostForm.proxy_key_path" placeholder="服务端可读取的密钥路径" :aria-invalid="hostInvalidFields.has('proxy_key_path') ? 'true' : undefined" /></label></template>
         <label class="field"><span>备注</span><ElInput v-model="hostForm.remark" type="textarea" :rows="3" placeholder="可选" /></label>
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>

@@ -1,31 +1,31 @@
 :root {
-  --ui-primary: #98452F;
-  --ui-primary-hover: #803721;
-  --ui-primary-active: #6B2C1C;
-  --ui-primary-soft: #F5E5DE;
+  --ui-primary: #285FA8;
+  --ui-primary-hover: #214F8D;
+  --ui-primary-active: #1B4073;
+  --ui-primary-soft: #EAF0F9;
   --ui-on-primary: #FFFFFF;
-  --ui-header-bg: #282723;
-  --ui-header-text: #F4F2ED;
-  --ui-canvas: #F4F2ED;
+  --ui-header-bg: #252B34;
+  --ui-header-text: #F1F3F6;
+  --ui-canvas: #F3F4F6;
   --ui-surface: #FFFFFF;
-  --ui-surface-muted: #EEEAE3;
-  --ui-row-hover: #F7F4EF;
-  --ui-text: #282723;
-  --ui-text-secondary: #615D55;
-  --ui-text-muted: #736C61;
-  --ui-border: #D8D1C7;
-  --ui-control-border: #8A8279;
-  --ui-disabled-bg: #E9E5DE;
-  --ui-disabled-text: #736C61;
-  --ui-overlay: rgba(40, 39, 35, 0.38);
-  --ui-success: #28634C;
-  --ui-success-soft: #E8F2EB;
-  --ui-info: #345D7A;
-  --ui-info-soft: #EAF0F5;
-  --ui-warning: #815A18;
-  --ui-warning-soft: #F8F0DE;
-  --ui-danger: #A33349;
-  --ui-danger-soft: #F8E9ED;
+  --ui-surface-muted: #ECEFF3;
+  --ui-row-hover: #F5F7FA;
+  --ui-text: #292F38;
+  --ui-text-secondary: #596371;
+  --ui-text-muted: #697381;
+  --ui-border: #D6DCE4;
+  --ui-control-border: #7D8898;
+  --ui-disabled-bg: #E8ECF1;
+  --ui-disabled-text: #596371;
+  --ui-overlay: rgba(37, 43, 52, 0.38);
+  --ui-success: #287348;
+  --ui-success-soft: #EAF4ED;
+  --ui-info: #315F89;
+  --ui-info-soft: #EAF1F7;
+  --ui-warning: #8A5C10;
+  --ui-warning-soft: #FBF3DF;
+  --ui-danger: #B13737;
+  --ui-danger-soft: #FAECEC;
 
   font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 13px;
@@ -53,28 +53,28 @@
   --el-color-success-light-7: color-mix(in srgb, var(--ui-success), white 70%);
   --el-color-success-light-8: color-mix(in srgb, var(--ui-success), white 80%);
   --el-color-success-light-9: color-mix(in srgb, var(--ui-success), white 90%);
-  --el-color-success-dark-2: var(--ui-success);
+  --el-color-success-dark-2: color-mix(in srgb, var(--ui-success), black 20%);
   --el-color-info: var(--ui-info);
   --el-color-info-light-3: color-mix(in srgb, var(--ui-info), white 30%);
   --el-color-info-light-5: color-mix(in srgb, var(--ui-info), white 50%);
   --el-color-info-light-7: color-mix(in srgb, var(--ui-info), white 70%);
   --el-color-info-light-8: color-mix(in srgb, var(--ui-info), white 80%);
   --el-color-info-light-9: color-mix(in srgb, var(--ui-info), white 90%);
-  --el-color-info-dark-2: var(--ui-info);
+  --el-color-info-dark-2: color-mix(in srgb, var(--ui-info), black 20%);
   --el-color-warning: var(--ui-warning);
   --el-color-warning-light-3: color-mix(in srgb, var(--ui-warning), white 30%);
   --el-color-warning-light-5: color-mix(in srgb, var(--ui-warning), white 50%);
   --el-color-warning-light-7: color-mix(in srgb, var(--ui-warning), white 70%);
   --el-color-warning-light-8: color-mix(in srgb, var(--ui-warning), white 80%);
   --el-color-warning-light-9: color-mix(in srgb, var(--ui-warning), white 90%);
-  --el-color-warning-dark-2: var(--ui-warning);
+  --el-color-warning-dark-2: color-mix(in srgb, var(--ui-warning), black 20%);
   --el-color-danger: var(--ui-danger);
   --el-color-danger-light-3: color-mix(in srgb, var(--ui-danger), white 30%);
   --el-color-danger-light-5: color-mix(in srgb, var(--ui-danger), white 50%);
   --el-color-danger-light-7: color-mix(in srgb, var(--ui-danger), white 70%);
   --el-color-danger-light-8: color-mix(in srgb, var(--ui-danger), white 80%);
   --el-color-danger-light-9: color-mix(in srgb, var(--ui-danger), white 90%);
-  --el-color-danger-dark-2: var(--ui-danger);
+  --el-color-danger-dark-2: color-mix(in srgb, var(--ui-danger), black 20%);
   --el-color-error: var(--ui-danger);
   --el-color-error-light-3: var(--el-color-danger-light-3);
   --el-color-error-light-5: var(--el-color-danger-light-5);
@@ -89,6 +89,8 @@
   --el-fill-color: var(--ui-surface-muted);
   --el-fill-color-light: var(--ui-row-hover);
   --el-fill-color-lighter: var(--ui-row-hover);
+  --el-fill-color-dark: var(--ui-disabled-bg);
+  --el-fill-color-darker: var(--ui-disabled-bg);
   --el-fill-color-blank: var(--ui-surface);
   --el-text-color-primary: var(--ui-text);
   --el-text-color-regular: var(--ui-text);
@@ -99,11 +101,15 @@
   --el-border-color-light: var(--ui-border);
   --el-border-color-lighter: var(--ui-border);
   --el-border-color-extra-light: var(--ui-border);
+  --el-border-color-dark: var(--ui-control-border);
+  --el-border-color-darker: var(--ui-control-border);
   --el-border-color-hover: var(--ui-control-border);
+  --el-border-color-disabled: var(--ui-control-border);
   --el-disabled-bg-color: var(--ui-disabled-bg);
   --el-disabled-text-color: var(--ui-disabled-text);
   --el-disabled-border-color: var(--ui-control-border);
   --el-mask-color: var(--ui-overlay);
+  --el-overlay-color: var(--ui-overlay);
   --el-overlay-color-lighter: var(--ui-overlay);
   --el-table-header-bg-color: var(--ui-surface-muted);
   --el-table-row-hover-bg-color: var(--ui-row-hover);
@@ -133,12 +139,16 @@ p { margin: 0; line-height: 1.43; }
 .panel-footer > span { color: var(--ui-text-muted); font-size: 12px; line-height: 18px; }
 
 .el-button { height: 30px; padding: 8px 12px; border-radius: 2px; font-size: 13px; }
-.el-button:not(.is-text):not(.is-link):not([class*="el-button--"]) { --el-button-bg-color: var(--ui-surface); --el-button-text-color: var(--ui-text); --el-button-border-color: var(--ui-control-border); --el-button-hover-bg-color: var(--ui-surface-muted); --el-button-hover-text-color: var(--ui-text); --el-button-hover-border-color: var(--ui-control-border); }
+.el-button:not(.is-text):not(.is-link):not([class*="el-button--"]) { --el-button-bg-color: var(--ui-surface); --el-button-text-color: var(--ui-text); --el-button-border-color: var(--ui-control-border); --el-button-hover-bg-color: var(--ui-surface-muted); --el-button-hover-text-color: var(--ui-text); --el-button-hover-border-color: var(--ui-control-border); --el-button-active-bg-color: var(--ui-surface-muted); --el-button-active-text-color: var(--ui-text); --el-button-active-border-color: var(--ui-control-border); }
 .el-button--primary:not(.is-plain):not(.is-text):not(.is-link) { --el-button-bg-color: var(--ui-primary); --el-button-border-color: var(--ui-primary); --el-button-text-color: var(--ui-on-primary); --el-button-hover-bg-color: var(--ui-primary-hover); --el-button-hover-border-color: var(--ui-primary-hover); --el-button-hover-text-color: var(--ui-on-primary); --el-button-active-bg-color: var(--ui-primary-active); --el-button-active-border-color: var(--ui-primary-active); --el-button-active-text-color: var(--ui-on-primary); }
-.el-button--danger:not(.is-plain):not(.is-text):not(.is-link) { --el-button-bg-color: var(--ui-danger); --el-button-border-color: var(--ui-danger); --el-button-text-color: var(--ui-on-primary); }
-.el-button--danger.is-text, .el-button--danger.is-link { --el-button-text-color: var(--ui-danger); --el-button-hover-text-color: var(--ui-danger); --el-button-hover-bg-color: var(--ui-danger-soft); }
+.el-button--primary.is-plain { --el-button-bg-color: var(--ui-primary-soft); --el-button-border-color: var(--ui-primary); --el-button-text-color: var(--ui-primary); --el-button-hover-bg-color: var(--ui-primary-hover); --el-button-hover-border-color: var(--ui-primary-hover); --el-button-hover-text-color: var(--ui-on-primary); --el-button-active-bg-color: var(--ui-primary-active); --el-button-active-border-color: var(--ui-primary-active); --el-button-active-text-color: var(--ui-on-primary); }
+.el-button--primary.is-text, .el-button--primary.is-link { --el-button-text-color: var(--ui-primary); --el-button-hover-text-color: var(--ui-primary-hover); --el-button-active-text-color: var(--ui-primary-active); }
+.el-button--danger:not(.is-plain):not(.is-text):not(.is-link) { --el-button-bg-color: var(--ui-danger); --el-button-border-color: var(--ui-danger); --el-button-text-color: var(--ui-on-primary); --el-button-hover-bg-color: var(--el-color-danger-dark-2); --el-button-hover-border-color: var(--el-color-danger-dark-2); --el-button-hover-text-color: var(--ui-on-primary); }
+.el-button--danger.is-text, .el-button--danger.is-link { --el-button-text-color: var(--ui-danger); --el-button-hover-text-color: var(--ui-danger); --el-button-hover-bg-color: var(--ui-danger-soft); --el-button-active-text-color: var(--ui-danger); }
+.el-button.is-link.el-button--danger:hover:not(.is-disabled) { background: var(--ui-danger-soft); }
+.el-message-box .el-button.delete-confirm-button.el-button--primary { --el-button-bg-color: var(--ui-danger); --el-button-border-color: var(--ui-danger); --el-button-text-color: var(--ui-on-primary); --el-button-hover-bg-color: var(--el-color-danger-dark-2); --el-button-hover-border-color: var(--el-color-danger-dark-2); --el-button-hover-text-color: var(--ui-on-primary); --el-button-active-bg-color: var(--el-color-danger-dark-2); --el-button-active-border-color: var(--el-color-danger-dark-2); --el-button-active-text-color: var(--ui-on-primary); }
 .el-button.is-disabled, .el-button.is-disabled:hover { opacity: 1; --el-button-disabled-bg-color: var(--ui-disabled-bg); --el-button-disabled-border-color: var(--ui-control-border); --el-button-disabled-text-color: var(--ui-disabled-text); }
-.el-button.is-text.is-disabled, .el-button.is-link.is-disabled { --el-button-disabled-bg-color: transparent; --el-button-disabled-border-color: transparent; }
+.el-button.is-text.is-disabled, .el-button.is-link.is-disabled { --el-button-disabled-bg-color: var(--ui-disabled-bg); --el-button-disabled-border-color: transparent; }
 
 .el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
   border-radius: 0;
@@ -147,19 +157,23 @@ p { margin: 0; line-height: 1.43; }
   font-size: 13px;
 }
 .el-input__wrapper, .el-select__wrapper { min-height: 30px; }
+.el-textarea__inner { border: 0; }
 .el-input__wrapper:hover, .el-select__wrapper:hover, .el-textarea__inner:hover { box-shadow: inset 0 0 0 1px var(--ui-control-border); }
 .el-input__wrapper.is-focus, .el-select__wrapper.is-focused, .el-textarea__inner:focus { box-shadow: inset 0 0 0 1px var(--ui-primary); }
 .el-input:focus-within .el-input__wrapper, .el-select:focus-within .el-select__wrapper, .el-textarea__inner:focus-visible,
 .el-input-number:focus-within .el-input__wrapper { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.asset-form .field.is-error .el-input__wrapper, .asset-form .field.is-error .el-select__wrapper, .asset-form .field.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
 .el-input.is-disabled .el-input__wrapper, .el-select.is-disabled .el-select__wrapper, .el-textarea.is-disabled .el-textarea__inner,
 .el-input-number.is-disabled .el-input__wrapper { background: var(--ui-disabled-bg); box-shadow: inset 0 0 0 1px var(--ui-control-border); opacity: 1; }
 .el-input.is-disabled .el-input__inner, .el-select.is-disabled .el-select__selected-item, .el-textarea.is-disabled .el-textarea__inner,
 .el-input-number.is-disabled .el-input__inner { color: var(--ui-disabled-text); -webkit-text-fill-color: var(--ui-disabled-text); }
+.el-input.is-disabled, .el-select.is-disabled, .el-input-number.is-disabled { opacity: 1; }
 .el-input__wrapper:has([aria-invalid="true"]), .el-select__wrapper:has([aria-invalid="true"]),
 .el-textarea__inner[aria-invalid="true"], .el-form-item.is-error .el-input__wrapper,
 .el-form-item.is-error .el-select__wrapper, .el-form-item.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
 .el-switch.is-disabled, .el-radio.is-disabled, .el-radio-button.is-disabled { opacity: 1; }
 .el-radio-button__inner { height: 30px; padding: 7px 12px; border-radius: 2px; font-size: 13px; }
+.el-radio-button.is-disabled .el-radio-button__inner { background: var(--ui-disabled-bg); border-color: var(--ui-control-border); color: var(--ui-disabled-text); }
 .el-radio-button:focus-within .el-radio-button__inner, .el-switch:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
 
 .el-table { font-size: 13px; line-height: 1.5; --el-table-header-bg-color: var(--ui-surface-muted); --el-table-row-hover-bg-color: var(--ui-row-hover); --el-table-current-row-bg-color: var(--ui-primary-soft); --el-table-border-color: var(--ui-border); --el-table-bg-color: var(--ui-surface); --el-table-tr-bg-color: var(--ui-surface); }
@@ -169,23 +183,28 @@ p { margin: 0; line-height: 1.43; }
 .el-table .el-table__body tr.current-row > td.el-table__cell { background: var(--ui-primary-soft); }
 
 .el-tag { font-size: 12px; }
-.el-tag--primary { --el-tag-bg-color: var(--ui-primary-soft); --el-tag-text-color: var(--ui-primary); --el-tag-border-color: var(--ui-primary); }
-.el-tag--success { --el-tag-bg-color: var(--ui-success-soft); --el-tag-text-color: var(--ui-success); --el-tag-border-color: var(--ui-success); }
-.el-tag--info { --el-tag-bg-color: var(--ui-info-soft); --el-tag-text-color: var(--ui-info); --el-tag-border-color: var(--ui-info); }
-.el-tag--warning { --el-tag-bg-color: var(--ui-warning-soft); --el-tag-text-color: var(--ui-warning); --el-tag-border-color: var(--ui-warning); }
-.el-tag--danger { --el-tag-bg-color: var(--ui-danger-soft); --el-tag-text-color: var(--ui-danger); --el-tag-border-color: var(--ui-danger); }
-.el-alert--success.is-light, .el-message--success { --el-alert-bg-color: var(--ui-success-soft); --el-alert-text-color: var(--ui-success); --el-message-bg-color: var(--ui-success-soft); }
-.el-alert--info.is-light, .el-message--info { --el-alert-bg-color: var(--ui-info-soft); --el-alert-text-color: var(--ui-info); --el-message-bg-color: var(--ui-info-soft); }
-.el-alert--warning.is-light, .el-message--warning { --el-alert-bg-color: var(--ui-warning-soft); --el-alert-text-color: var(--ui-warning); --el-message-bg-color: var(--ui-warning-soft); }
-.el-alert--error.is-light, .el-message--error { --el-alert-bg-color: var(--ui-danger-soft); --el-alert-text-color: var(--ui-danger); --el-message-bg-color: var(--ui-danger-soft); }
-.el-popper, .el-select-dropdown, .el-message, .el-message-box, .el-dialog { background: var(--ui-surface); color: var(--ui-text); border-color: var(--ui-border); }
+.el-tag.el-tag--primary { --el-tag-bg-color: var(--ui-primary-soft); --el-tag-text-color: var(--ui-primary); --el-tag-border-color: var(--ui-primary); }
+.el-tag.el-tag--success { --el-tag-bg-color: var(--ui-success-soft); --el-tag-text-color: var(--ui-success); --el-tag-border-color: var(--ui-success); }
+.el-tag.el-tag--info { --el-tag-bg-color: var(--ui-info-soft); --el-tag-text-color: var(--ui-info); --el-tag-border-color: var(--ui-info); }
+.el-tag.el-tag--warning { --el-tag-bg-color: var(--ui-warning-soft); --el-tag-text-color: var(--ui-warning); --el-tag-border-color: var(--ui-warning); }
+.el-tag.el-tag--danger { --el-tag-bg-color: var(--ui-danger-soft); --el-tag-text-color: var(--ui-danger); --el-tag-border-color: var(--ui-danger); }
+.el-alert--success.is-light, .el-message--success { --el-alert-bg-color: var(--ui-success-soft); --el-alert-text-color: var(--ui-success); --el-message-bg-color: var(--ui-success-soft); --el-message-text-color: var(--ui-success); }
+.el-alert--info.is-light, .el-message--info { --el-alert-bg-color: var(--ui-info-soft); --el-alert-text-color: var(--ui-info); --el-message-bg-color: var(--ui-info-soft); --el-message-text-color: var(--ui-info); }
+.el-alert--warning.is-light, .el-message--warning { --el-alert-bg-color: var(--ui-warning-soft); --el-alert-text-color: var(--ui-warning); --el-message-bg-color: var(--ui-warning-soft); --el-message-text-color: var(--ui-warning); }
+.el-alert--error.is-light, .el-message--error { --el-alert-bg-color: var(--ui-danger-soft); --el-alert-text-color: var(--ui-danger); --el-message-bg-color: var(--ui-danger-soft); --el-message-text-color: var(--ui-danger); }
+.el-alert.is-light { background-color: var(--el-alert-bg-color); color: var(--el-alert-text-color); }
+.el-alert.is-light .el-alert__title, .el-alert.is-light .el-alert__description { color: var(--el-alert-text-color); }
+.el-message { background: var(--ui-surface); color: var(--ui-text); border-color: var(--ui-border); }
+.el-message.el-message--success, .el-message.el-message--info, .el-message.el-message--warning, .el-message.el-message--error { background: var(--el-message-bg-color); color: var(--el-message-text-color); }
+.el-message--success .el-message__content, .el-message--info .el-message__content, .el-message--warning .el-message__content, .el-message--error .el-message__content { color: var(--el-message-text-color); }
+.el-popper, .el-select-dropdown, .el-message-box, .el-dialog { background: var(--ui-surface); color: var(--ui-text); border-color: var(--ui-border); }
 .el-select-dropdown__item:hover, .el-select-dropdown__item.hover { background: var(--ui-row-hover); }
 .el-select-dropdown__item.is-selected { color: var(--ui-primary); background: var(--ui-primary-soft); }
 .el-select-dropdown__item.is-disabled { opacity: 1; background: var(--ui-disabled-bg); color: var(--ui-disabled-text); }
 .el-popper .el-popper__arrow::before { background: var(--ui-surface); border-color: var(--ui-border); }
 
-.el-overlay, .el-overlay-dialog, .el-overlay-message-box { background-color: var(--ui-overlay); }
-.el-overlay-dialog, .el-overlay-message-box { display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.el-overlay, .el-overlay-message-box { background-color: var(--ui-overlay); }
+.el-overlay-dialog, .el-overlay-message-box { display: flex; align-items: safe center; justify-content: safe center; padding: 16px; overflow: auto; }
 .el-dialog, .el-message-box { width: min(100%, 720px); max-height: calc(100dvh - 32px); margin: auto; display: flex; flex-direction: column; overflow: hidden; border-radius: 2px; }
 .el-message-box { width: min(100%, 440px); }
 .el-dialog__header, .el-message-box__header { flex: none; }
