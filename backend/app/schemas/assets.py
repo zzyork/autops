@@ -36,12 +36,12 @@ class HostInput(BaseModel):
     port: int = Field(default=22, ge=1, le=65535)
     auth_type: Literal["password", "key"]
     password: SecretStr | None = None
-    key_path: str | None = Field(default=None, max_length=4096)
+    ssh_key_id: int | None = Field(default=None, gt=0)
     vip: str | None = Field(default=None, max_length=253)
     jump_host_id: int | None = Field(default=None, gt=0)
     remark: str = Field(default="", max_length=2000)
 
-    @field_validator("name", "address", "username", "key_path", "vip")
+    @field_validator("name", "address", "username", "vip")
     @classmethod
     def clean_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -70,8 +70,10 @@ class HostInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_connection(self) -> "HostInput":
-        if self.auth_type == "key" and not self.key_path:
-            raise ValueError("私钥认证需要私钥路径")
+        if self.auth_type == "key" and self.ssh_key_id is None:
+            raise ValueError("私钥认证需要选择密钥")
+        if self.auth_type == "password" and self.ssh_key_id is not None:
+            raise ValueError("密码认证不能关联密钥")
         if self.password is not None and not 1 <= len(self.password.get_secret_value()) <= 4096:
             raise ValueError("密码长度应为 1 至 4096 个字符")
         return self
@@ -90,7 +92,7 @@ class HostResponse(BaseModel):
     username: str
     port: int
     auth_type: Literal["password", "key"]
-    key_path: str | None
+    ssh_key_id: int | None
     vip: str | None
     jump_host_id: int | None
     remark: str

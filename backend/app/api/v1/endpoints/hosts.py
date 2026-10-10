@@ -36,7 +36,7 @@ def apply_host(data: HostInput, host: Host, request: Request, session: Session) 
     find_group(session, data.group_id)
     if data.jump_host_id is not None and session.get(JumpHost, data.jump_host_id) is None:
         raise HTTPException(404, "跳板机不存在")
-    apply_connection(data, host, request, "请填写 SSH 密码")
+    apply_connection(data, host, request, "请填写 SSH 密码", session)
 
 
 @router.post("/hosts", response_model=HostResponse, status_code=201)

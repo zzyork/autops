@@ -42,7 +42,7 @@ def get_jump_host(jump_host_id: int, session: Database) -> JumpHostResponse:
 @router.post("/jump-hosts", response_model=JumpHostResponse, status_code=201)
 def create_jump_host(data: JumpHostInput, request: Request, session: Database) -> JumpHostResponse:
     jump_host = JumpHost()
-    apply_connection(data, jump_host, request, "请填写跳板机密码")
+    apply_connection(data, jump_host, request, "请填写跳板机密码", session)
     session.add(jump_host)
     commit(session, STALE_MESSAGE)
     return jump_host_response(session, jump_host)
@@ -53,7 +53,7 @@ def update_jump_host(jump_host_id: int, data: JumpHostUpdate, request: Request, 
     jump_host = find_jump_host(session, jump_host_id)
     if jump_host.version != data.version:
         raise HTTPException(409, STALE_MESSAGE)
-    apply_connection(data, jump_host, request, "请填写跳板机密码")
+    apply_connection(data, jump_host, request, "请填写跳板机密码", session)
     commit(session, STALE_MESSAGE)
     return jump_host_response(session, jump_host)
 

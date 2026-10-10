@@ -2,11 +2,12 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessageBox,
-  ElRadioButton, ElRadioGroup, ElTable, ElTableColumn,
+  ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
+import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
-import type { AuthType, JumpHost, JumpHostInput } from '@/types/api'
+import type { AuthType, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 
 interface JumpHostForm {
   name: string
@@ -14,13 +15,17 @@ interface JumpHostForm {
   username: string
   port: number
   auth_type: AuthType
-  key_path: string
+  ssh_key_id: number | null
   password: string
   remark: string
 }
 
 const vLoading = ElLoading.directive
 const jumpHosts = ref<JumpHost[]>([])
+const sshKeys = ref<SSHKey[]>([])
+const sshKeysLoading = ref(false)
+const sshKeysLoaded = ref(false)
+const sshKeysError = ref('')
 const search = ref('')
 const loading = ref(false)
 const opening = ref(false)
@@ -31,7 +36,7 @@ const dialog = ref(false)
 const editing = ref<JumpHost | null>(null)
 const authChanged = ref(false)
 const invalidFields = ref<Set<keyof JumpHostForm>>(new Set())
-const form = ref<JumpHostForm>({ name: '', address: '', username: '', port: 22, auth_type: 'password', key_path: '', password: '', remark: '' })
+const form = ref<JumpHostForm>({ name: '', address: '', username: '', port: 22, auth_type: 'password', ssh_key_id: null, password: '', remark: '' })
 
 watch(() => ({ ...form.value }), (next, previous) => {
   for (const key of Object.keys(next) as (keyof JumpHostForm)[]) {
@@ -42,11 +47,31 @@ watch(() => form.value.auth_type, (next, previous) => {
   if (dialog.value && next !== previous) {
     authChanged.value = true
     form.value.password = ''
+    form.value.ssh_key_id = null
   }
 }, { flush: 'sync' })
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let requestId = 0
+let sshKeyRequest = 0
+async function refreshSSHKeys() {
+  const current = ++sshKeyRequest
+  sshKeysLoading.value = true
+  sshKeysLoaded.value = false
+  sshKeysError.value = ''
+  sshKeys.value = []
+  try {
+    const result = await listSSHKeys()
+    if (current === sshKeyRequest) {
+      sshKeys.value = result
+      sshKeysLoaded.value = true
+    }
+  } catch {
+    if (current === sshKeyRequest) sshKeysError.value = '系统异常'
+  } finally {
+    if (current === sshKeyRequest) sshKeysLoading.value = false
+  }
+}
 async function refresh() {
   const current = ++requestId
   loading.value = true
@@ -74,15 +99,17 @@ onMounted(() => { void refresh() })
 onUnmounted(() => {
   clearTimeout(searchTimer)
   requestId++
+  sshKeyRequest++
 })
 
 function openNew() {
   editing.value = null
   authChanged.value = false
-  form.value = { name: '', address: '', username: '', port: 22, auth_type: 'password', key_path: '', password: '', remark: '' }
+  form.value = { name: '', address: '', username: '', port: 22, auth_type: 'password', ssh_key_id: null, password: '', remark: '' }
   invalidFields.value.clear()
   dialogError.value = ''
   dialog.value = true
+  void refreshSSHKeys()
 }
 
 async function openEdit(id: number) {
@@ -94,11 +121,12 @@ async function openEdit(id: number) {
     authChanged.value = false
     form.value = {
       name: item.name, address: item.address, username: item.username, port: item.port,
-      auth_type: item.auth_type, key_path: item.key_path ?? '', password: '', remark: item.remark,
+      auth_type: item.auth_type, ssh_key_id: item.ssh_key_id, password: '', remark: item.remark,
     }
     invalidFields.value.clear()
     dialogError.value = ''
     dialog.value = true
+    void refreshSSHKeys()
   } catch {
     error.value = '系统异常'
   } finally {
@@ -119,9 +147,16 @@ function validate(): string {
     invalidFields.value.add('port')
     return '端口须在 1 到 65535 之间。'
   }
-  if (value.auth_type === 'key' && !value.key_path.trim()) {
-    invalidFields.value.add('key_path')
-    return '请输入密钥路径。'
+  if (sshKeysLoading.value) return '密钥列表加载中。'
+  if (!sshKeysLoaded.value || sshKeysError.value) return '系统异常'
+  if (value.auth_type === 'key' && value.ssh_key_id === null) {
+    invalidFields.value.add('ssh_key_id')
+    return editing.value?.auth_type === 'key' && editing.value.ssh_key_id === null
+      ? '旧记录尚未关联密钥，请先导入并选择 SSH 密钥。' : '请选择 SSH 密钥。'
+  }
+  if (value.auth_type === 'key' && !sshKeys.value.some((item) => item.id === value.ssh_key_id)) {
+    invalidFields.value.add('ssh_key_id')
+    return '系统异常'
   }
   if (value.auth_type === 'password' && !value.password &&
     !(editing.value?.auth_type === 'password' && editing.value.has_password && !authChanged.value)) {
@@ -144,7 +179,7 @@ async function save() {
   const body: JumpHostInput = {
     name: value.name.trim(), address: value.address.trim(), username: value.username.trim(),
     port: value.port, auth_type: value.auth_type,
-    key_path: value.auth_type === 'key' ? value.key_path.trim() : null,
+    ssh_key_id: value.auth_type === 'key' ? value.ssh_key_id : null,
     remark: value.remark.trim(),
   }
   if (value.auth_type === 'password' && value.password) body.password = value.password
@@ -216,9 +251,10 @@ function dateLabel(value: string) {
           <label class="field" :class="{ 'is-error': invalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="form.username" maxlength="100" autocomplete="off" :aria-invalid="invalidFields.has('username') ? 'true' : undefined" /></label>
           <label class="field" :class="{ 'is-error': invalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="form.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="invalidFields.has('port') ? 'true' : undefined" /></label>
         </div>
-        <div class="field"><span>认证方式</span><ElRadioGroup v-model="form.auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div>
+        <div class="field"><span>认证方式</span><ElRadioGroup v-model="form.auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
         <label v-if="form.auth_type === 'password'" class="field" :class="{ 'is-error': invalidFields.has('password') }"><span>密码 <em v-if="!editing || editing.auth_type !== 'password' || !editing.has_password || authChanged || (form.address.trim() !== editing.address || form.username.trim() !== editing.username || form.port !== editing.port)">*</em></span><ElInput v-model="form.password" type="password" show-password autocomplete="new-password" :placeholder="editing?.auth_type === 'password' && editing.has_password && !authChanged ? '连接信息不变时留空保留原密码' : '请输入密码'" :aria-invalid="invalidFields.has('password') ? 'true' : undefined" /></label>
-        <label v-else class="field" :class="{ 'is-error': invalidFields.has('key_path') }"><span>密钥路径 <em>*</em></span><ElInput v-model="form.key_path" maxlength="4096" placeholder="服务端可读取的密钥路径" :aria-invalid="invalidFields.has('key_path') ? 'true' : undefined" /></label>
+        <template v-else><label class="field" :class="{ 'is-error': invalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="form.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="invalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editing?.auth_type === 'key' && editing.ssh_key_id === null && form.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
+        <ElAlert v-if="sshKeysError" :title="sshKeysError" type="error" :closable="false" show-icon />
         <label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" maxlength="2000" placeholder="可选" /></label>
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>

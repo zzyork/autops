@@ -66,3 +66,16 @@
 .asset-form .full-width { width: 100%; }
 .asset-form .form-section-title { border-top: 1px solid var(--ui-border); padding-top: 20px; font-weight: 600; color: var(--ui-text); font-size: 14px; }
 .asset-form .form-section-title:first-child { border: 0; padding-top: 0; }
+.ssh-fingerprint { overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; }
+.ssh-key-detail { display: grid; gap: 8px; padding: 12px; background: var(--ui-surface-muted); overflow-wrap: anywhere; }
+.ssh-replace { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.ssh-file-input { width: 100%; padding: 5px; border: 1px solid var(--ui-control-border); color: var(--ui-text); }
+.ssh-file-input::file-selector-button { margin-right: 12px; padding: 4px 10px; border: 1px solid var(--ui-control-border); border-radius: 2px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.ssh-file-input::file-selector-button:hover { background: var(--ui-surface-muted); }
+.ssh-file-input[aria-invalid="true"] { border-color: var(--ui-danger); }
+.ssh-file-input:focus-visible { outline: 2px solid var(--ui-primary) !important; outline-offset: 2px !important; }
+.ssh-field-hint { color: var(--ui-text-secondary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.ssh-field-error { color: var(--ui-danger); font-size: 12px; }
+.ssh-references { display: grid; gap: 8px; min-height: 60px; }
+.ssh-references h2:not(:first-child) { margin-top: 12px; }
+.ssh-reference-link { overflow-wrap: anywhere; }

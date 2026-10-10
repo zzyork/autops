@@ -20,6 +20,21 @@ class HostGroup(Base):
     remark: Mapped[str] = mapped_column(default="")
 
 
+class SSHKey(Base):
+    __tablename__ = "ssh_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    private_key_encrypted: Mapped[str]
+    key_type: Mapped[str]
+    fingerprint: Mapped[str]
+    remark: Mapped[str] = mapped_column(default="")
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
+    version: Mapped[int] = mapped_column(default=1)
+    __mapper_args__ = {"version_id_col": version}
+
+
 class JumpHost(Base):
     __tablename__ = "jump_hosts"
 
@@ -30,6 +45,7 @@ class JumpHost(Base):
     port: Mapped[int]
     auth_type: Mapped[str]
     key_path: Mapped[str | None]
+    ssh_key_id: Mapped[int | None] = mapped_column(ForeignKey("ssh_keys.id", ondelete="RESTRICT"))
     password_encrypted: Mapped[str | None]
     remark: Mapped[str] = mapped_column(default="")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
@@ -54,6 +70,7 @@ class Host(Base):
     port: Mapped[int]
     auth_type: Mapped[str]
     key_path: Mapped[str | None]
+    ssh_key_id: Mapped[int | None] = mapped_column(ForeignKey("ssh_keys.id", ondelete="RESTRICT"))
     password_encrypted: Mapped[str | None]
     vip: Mapped[str | None]
     jump_host_id: Mapped[int | None] = mapped_column(ForeignKey("jump_hosts.id", ondelete="RESTRICT"))

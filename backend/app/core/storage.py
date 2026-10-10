@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from ..models import Base, Host, JumpHost, utc_now
+from ..models import Base, Host, JumpHost, SSHKey, utc_now
 
 
 def protect_key(path: Path) -> None:
@@ -59,6 +59,7 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
             columns = {column["name"] for column in inspect(connection).get_columns("hosts")}
             encrypted = list(connection.scalars(select(Host.password_encrypted).where(Host.password_encrypted.is_not(None))))
             encrypted.extend(connection.scalars(select(JumpHost.password_encrypted).where(JumpHost.password_encrypted.is_not(None))))
+            encrypted.extend(connection.scalars(select(SSHKey.private_key_encrypted)))
             if "proxy_password_encrypted" in columns:
                 encrypted.extend(connection.scalars(text("SELECT proxy_password_encrypted FROM hosts WHERE proxy_password_encrypted IS NOT NULL")))
         key_path = data_dir / "secrets" / "fernet.key"
@@ -87,6 +88,10 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
         with engine.begin() as connection:
             # sqlite3 不会在 SQLAlchemy 的逻辑事务开始时立即发出 BEGIN；先开启真实写事务以覆盖 DDL。
             connection.exec_driver_sql("BEGIN IMMEDIATE")
+            for table in ("hosts", "jump_hosts"):
+                table_columns = {column["name"] for column in inspect(connection).get_columns(table)}
+                if "ssh_key_id" not in table_columns:
+                    connection.execute(text(f"ALTER TABLE {table} ADD COLUMN ssh_key_id INTEGER REFERENCES ssh_keys(id) ON DELETE RESTRICT"))
             if "jump_host_id" not in columns:
                 connection.execute(text("ALTER TABLE hosts ADD COLUMN jump_host_id INTEGER REFERENCES jump_hosts(id) ON DELETE RESTRICT"))
             if "proxy_address" in columns:

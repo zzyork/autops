@@ -47,7 +47,6 @@
 | 路径 | 用途 |
 | --- | --- |
 | `docs/frontend-ui-spec.md` | 前端 UI 设计与实现规范。最后同步：2026-10-10。 |
-| `docs/jump-hosts.md` | 跳板机管理与旧数据迁移说明。 |
 
 ## 后端文件
 
@@ -59,7 +58,7 @@
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
 | `backend/app/__init__.py` | 声明后端应用包。 |
 | `backend/app/main.py` | FastAPI 应用入口。最后同步：2026-10-10。 |
-| `backend/app/models.py` | 主机、分组与跳板机数据库模型。最后同步：2026-10-10。 |
+| `backend/app/models.py` | 主机、分组、跳板机与 SSH 密钥数据库模型。最后同步：2026-10-10。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 共用数据库会话依赖、事务提交与分组查询。最后同步：2026-10-10。 |
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
@@ -69,14 +68,17 @@
 | `backend/app/api/v1/endpoints/hosts.py` | 主机管理及跳板机关联接口。最后同步：2026-10-10。 |
 | `backend/app/api/v1/endpoints/jump_hosts.py` | 独立跳板机管理接口。 |
 | `backend/app/api/v1/endpoints/credentials.py` | 主机与跳板机共用凭据处理。 |
+| `backend/app/api/v1/endpoints/ssh_keys.py` | 独立 SSH 密钥管理与引用查询接口。 |
 | `backend/app/api/v1/endpoints/host_groups.py` | 分组管理接口及组内主机计数。最后同步：2026-10-10。 |
 | `backend/app/core/__init__.py` | 声明配置及公共基础设施包。 |
 | `backend/app/core/config.py` | 后端应用配置。最后同步：2026-10-10。 |
 | `backend/app/core/storage.py` | 资产数据库、凭据密钥管理及旧配置迁移。最后同步：2026-10-10。 |
+| `backend/app/core/ssh_keys.py` | SSH 私钥内容校验与指纹生成。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
 | `backend/app/schemas/assets.py` | 资产管理接口数据模型。最后同步：2026-10-10。 |
 | `backend/app/schemas/jump_hosts.py` | 跳板机接口数据模型。 |
+| `backend/app/schemas/ssh_keys.py` | SSH 密钥与引用接口数据模型。 |
 | `backend/tests/test_assets.py` | 使用 TestClient 验证主机、分组的 CRUD、筛选及异常路径。最后同步：2026-10-10。 |
 
 ## 前端文件
@@ -94,14 +96,16 @@
 | `frontend/src/api/http.ts` | 通用 HTTP 请求封装。最后同步：2026-10-10。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
+| `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/AssetsLayout.vue` | 资产页面共用控制台布局、导航和面包屑。最后同步：2026-10-10。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 主机、分组与跳板机独立页面路由。最后同步：2026-10-10。 |
+| `frontend/src/router/index.ts` | 主机、分组、跳板机与 SSH 密钥独立页面路由。最后同步：2026-10-10。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
 | `frontend/src/types/api.ts` | 后端接口 TypeScript 类型定义。最后同步：2026-10-10。 |
 | `frontend/src/views/HostsView.vue` | 主机管理页面与跳板机关联选择。最后同步：2026-10-10。 |
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面。 |
+| `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |

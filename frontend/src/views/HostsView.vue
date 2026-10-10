@@ -6,8 +6,9 @@ import {
 } from 'element-plus'
 import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } from '@/api/assets'
 import { listJumpHosts } from '@/api/jump_hosts'
+import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
-import type { AuthType, Host, HostGroup, HostInput, JumpHost } from '@/types/api'
+import type { AuthType, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
 interface HostForm {
@@ -17,7 +18,7 @@ interface HostForm {
   username: string
   port: number
   auth_type: AuthType
-  key_path: string
+  ssh_key_id: number | null
   password: string
   vip: string
   jump_host_id: number | null
@@ -26,6 +27,7 @@ interface HostForm {
 
 const groups = ref<HostGroup[]>([])
 const jumpHosts = ref<JumpHost[]>([])
+const sshKeys = ref<SSHKey[]>([])
 const vLoading = ElLoading.directive
 const hosts = ref<Host[]>([])
 const selectedGroup = ref<number | null>(null)
@@ -33,6 +35,9 @@ const search = ref('')
 const groupsLoading = ref(false)
 const jumpHostsLoading = ref(false)
 const jumpHostsLoaded = ref(false)
+const sshKeysLoading = ref(false)
+const sshKeysLoaded = ref(false)
+const sshKeysError = ref('')
 const hostsLoading = ref(false)
 const groupsError = ref('')
 const jumpHostsError = ref('')
@@ -48,7 +53,7 @@ const hostAuthChanged = ref(false)
 function emptyHost(groupId: number | null): HostForm {
   return {
     name: '', address: '', group_id: groupId ?? '', username: '', port: 22,
-    auth_type: 'password', key_path: '', password: '', vip: '', jump_host_id: null, remark: '',
+    auth_type: 'password', ssh_key_id: null, password: '', vip: '', jump_host_id: null, remark: '',
   }
 }
 
@@ -62,6 +67,7 @@ watch(() => hostForm.value.auth_type, (next, previous) => {
   if (hostDialog.value && next !== previous) {
     hostAuthChanged.value = true
     hostForm.value.password = ''
+    hostForm.value.ssh_key_id = null
   }
 }, { flush: 'sync' })
 async function refreshGroups() {
@@ -77,6 +83,25 @@ async function refreshGroups() {
 }
 
 let jumpHostRequest = 0
+let sshKeyRequest = 0
+async function refreshSSHKeys() {
+  const current = ++sshKeyRequest
+  sshKeysLoading.value = true
+  sshKeysLoaded.value = false
+  sshKeysError.value = ''
+  sshKeys.value = []
+  try {
+    const result = await listSSHKeys()
+    if (current === sshKeyRequest) {
+      sshKeys.value = result
+      sshKeysLoaded.value = true
+    }
+  } catch {
+    if (current === sshKeyRequest) sshKeysError.value = '系统异常'
+  } finally {
+    if (current === sshKeyRequest) sshKeysLoading.value = false
+  }
+}
 async function refreshJumpHosts() {
   const current = ++jumpHostRequest
   jumpHostsLoading.value = true
@@ -132,6 +157,7 @@ onUnmounted(() => {
   clearTimeout(searchTimer)
   hostRequest++
   jumpHostRequest++
+  sshKeyRequest++
 })
 
 function openNewHost() {
@@ -144,6 +170,7 @@ function openNewHost() {
   dialogError.value = ''
   hostDialog.value = true
   void refreshJumpHosts()
+  void refreshSSHKeys()
 }
 
 async function openEditHost(id: number) {
@@ -156,13 +183,14 @@ async function openEditHost(id: number) {
     hostForm.value = {
       name: host.name, address: host.address, group_id: host.group_id,
       username: host.username, port: host.port, auth_type: host.auth_type,
-      key_path: host.key_path ?? '', password: '', vip: host.vip ?? '',
+      ssh_key_id: host.ssh_key_id, password: '', vip: host.vip ?? '',
       jump_host_id: host.jump_host_id, remark: host.remark,
     }
     hostInvalidFields.value.clear()
     dialogError.value = ''
     hostDialog.value = true
     void refreshJumpHosts()
+    void refreshSSHKeys()
   } catch {
     hostsError.value = '系统异常'
   } finally {
@@ -202,9 +230,16 @@ function validateHost(): string {
     hostInvalidFields.value.add('port')
     return '主机端口须在 1 到 65535 之间。'
   }
-  if (form.auth_type === 'key' && !form.key_path.trim()) {
-    hostInvalidFields.value.add('key_path')
-    return '请输入主机密钥路径。'
+  if (sshKeysLoading.value) return '密钥列表加载中。'
+  if (!sshKeysLoaded.value || sshKeysError.value) return '系统异常'
+  if (form.auth_type === 'key' && form.ssh_key_id === null) {
+    hostInvalidFields.value.add('ssh_key_id')
+    return editingHost.value?.auth_type === 'key' && editingHost.value.ssh_key_id === null
+      ? '旧记录尚未关联密钥，请先导入并选择 SSH 密钥。' : '请选择 SSH 密钥。'
+  }
+  if (form.auth_type === 'key' && !sshKeys.value.some((item) => item.id === form.ssh_key_id)) {
+    hostInvalidFields.value.add('ssh_key_id')
+    return '系统异常'
   }
   if (form.auth_type === 'password' && !form.password &&
     !(editingHost.value?.auth_type === 'password' && editingHost.value.has_password && !hostAuthChanged.value)) {
@@ -245,7 +280,7 @@ async function saveHost() {
   const body: HostInput = {
     name: form.name.trim(), address: form.address.trim(), group_id: groupId,
     username: form.username.trim(), port: form.port, auth_type: form.auth_type,
-    key_path: form.auth_type === 'key' ? form.key_path.trim() : null,
+    ssh_key_id: form.auth_type === 'key' ? form.ssh_key_id : null,
     vip: form.vip.trim() || null,
     jump_host_id: form.jump_host_id,
     remark: form.remark.trim(),
@@ -338,9 +373,10 @@ function dateLabel(value: string) {
         <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IPv4 或 IPv6 地址" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
         <div class="form-section-title">登录信息</div>
         <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="hostForm.username" autocomplete="off" :aria-invalid="hostInvalidFields.has('username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="hostForm.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('port') ? 'true' : undefined" /></label></div>
-        <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div>
+        <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
         <label v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" /></label>
-        <label v-else class="field" :class="{ 'is-error': hostInvalidFields.has('key_path') }"><span>密钥路径 <em>*</em></span><ElInput v-model="hostForm.key_path" placeholder="服务端可读取的密钥路径" :aria-invalid="hostInvalidFields.has('key_path') ? 'true' : undefined" /></label>
+        <template v-else><label class="field" :class="{ 'is-error': hostInvalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="hostForm.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="hostInvalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editingHost?.auth_type === 'key' && editingHost.ssh_key_id === null && hostForm.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
+        <ElAlert v-if="sshKeysError" :title="sshKeysError" type="error" :closable="false" show-icon />
         <div class="form-section-title">跳板机</div>
         <label class="field" :class="{ 'is-error': hostInvalidFields.has('jump_host_id') }"><span>关联跳板机</span><ElSelect v-model="hostForm.jump_host_id" clearable :value-on-clear="null" :disabled="jumpHostsLoading || !jumpHostsLoaded" placeholder="不使用跳板机" class="full-width" :aria-invalid="hostInvalidFields.has('jump_host_id') ? 'true' : undefined"><ElOption v-for="jumpHost in jumpHosts" :key="jumpHost.id" :label="`${jumpHost.name} · ${jumpHost.address}`" :value="jumpHost.id" /></ElSelect></label>
         <ElAlert v-if="jumpHostsError" :title="jumpHostsError" type="error" :closable="false" show-icon />
