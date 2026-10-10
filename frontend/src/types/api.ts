@@ -16,6 +16,35 @@ export interface GroupInput {
 
 export type AuthType = 'password' | 'key'
 
+export interface JumpHost {
+  id: number
+  name: string
+  address: string
+  username: string
+  port: number
+  auth_type: AuthType
+  key_path: string | null
+  remark: string
+  has_password: boolean
+  created_at: string
+  updated_at: string
+  version: number
+  host_count: number
+}
+
+export interface JumpHostInput {
+  name: string
+  address: string
+  username: string
+  port: number
+  auth_type: AuthType
+  key_path: string | null
+  remark: string
+  password?: string
+}
+
+export type JumpHostUpdateInput = JumpHostInput & { version: number }
+
 export interface Host {
   id: number
   name: string
@@ -26,21 +55,16 @@ export interface Host {
   auth_type: AuthType
   key_path: string | null
   vip: string | null
-  proxy_address: string | null
-  proxy_username: string | null
-  proxy_port: number | null
-  proxy_auth_type: AuthType | null
-  proxy_key_path: string | null
+  jump_host_id: number | null
   remark: string
   has_password: boolean
-  has_proxy_password: boolean
   created_at: string
   updated_at: string
   version: number
 }
 
-export type HostInput = Omit<Host, 'id' | 'has_password' | 'has_proxy_password' | 'created_at' | 'updated_at' | 'version'> & {
-  version?: number
+export type HostInput = Omit<Host, 'id' | 'has_password' | 'created_at' | 'updated_at' | 'version'> & {
   password?: string
-  proxy_password?: string | null
 }
+
+export type HostUpdateInput = HostInput & { version: number }

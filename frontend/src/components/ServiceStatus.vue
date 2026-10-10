@@ -17,11 +17,9 @@ async function checkHealth() {
     const health = await getHealth()
     if (health.status !== 'ok') throw new Error('服务返回了异常状态')
     state.value = 'online'
-  } catch (cause) {
+  } catch {
     state.value = 'offline'
-    error.value = cause instanceof Error && cause.message.startsWith('请求失败')
-      ? cause.message
-      : '暂时无法连接服务，请稍后重试。'
+    error.value = '系统异常'
   } finally {
     loading.value = false
     lastChecked.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })

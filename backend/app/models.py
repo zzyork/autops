@@ -20,6 +20,28 @@ class HostGroup(Base):
     remark: Mapped[str] = mapped_column(default="")
 
 
+class JumpHost(Base):
+    __tablename__ = "jump_hosts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    address: Mapped[str]
+    username: Mapped[str]
+    port: Mapped[int]
+    auth_type: Mapped[str]
+    key_path: Mapped[str | None]
+    password_encrypted: Mapped[str | None]
+    remark: Mapped[str] = mapped_column(default="")
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
+    version: Mapped[int] = mapped_column(default=1)
+    __mapper_args__ = {"version_id_col": version}
+
+    @property
+    def has_password(self) -> bool:
+        return self.password_encrypted is not None
+
+
 class Host(Base):
     __tablename__ = "hosts"
     __table_args__ = (UniqueConstraint("address", "port"),)
@@ -34,12 +56,7 @@ class Host(Base):
     key_path: Mapped[str | None]
     password_encrypted: Mapped[str | None]
     vip: Mapped[str | None]
-    proxy_address: Mapped[str | None]
-    proxy_username: Mapped[str | None]
-    proxy_port: Mapped[int | None]
-    proxy_auth_type: Mapped[str | None]
-    proxy_key_path: Mapped[str | None]
-    proxy_password_encrypted: Mapped[str | None]
+    jump_host_id: Mapped[int | None] = mapped_column(ForeignKey("jump_hosts.id", ondelete="RESTRICT"))
     remark: Mapped[str] = mapped_column(default="")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
@@ -49,7 +66,3 @@ class Host(Base):
     @property
     def has_password(self) -> bool:
         return self.password_encrypted is not None
-
-    @property
-    def has_proxy_password(self) -> bool:
-        return self.proxy_password_encrypted is not None

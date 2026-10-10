@@ -1,4 +1,4 @@
-import type { GroupInput, Host, HostGroup, HostInput } from '@/types/api'
+import type { GroupInput, Host, HostGroup, HostInput, HostUpdateInput } from '@/types/api'
 import { get, request } from './http'
 
 export const listGroups = () => get<HostGroup[]>('/host-groups')
@@ -15,5 +15,5 @@ export function listHosts(q: string, groupId: number | null) {
 }
 export const getHost = (id: number) => get<Host>(`/hosts/${id}`)
 export const createHost = (body: HostInput) => request<Host>('/hosts', { method: 'POST', body })
-export const updateHost = (id: number, body: HostInput) => request<Host>(`/hosts/${id}`, { method: 'PUT', body })
+export const updateHost = (id: number, body: HostUpdateInput) => request<Host>(`/hosts/${id}`, { method: 'PUT', body })
 export const deleteHost = (id: number) => request<void>(`/hosts/${id}`, { method: 'DELETE' })

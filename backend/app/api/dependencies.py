@@ -17,7 +17,7 @@ def get_session(request: Request) -> Iterator[Session]:
 Database = Annotated[Session, Depends(get_session)]
 
 
-def commit(session: Session) -> None:
+def commit(session: Session, stale_message: str = "主机已被修改，请重新打开编辑页面") -> None:
     try:
         session.commit()
     except IntegrityError:
@@ -25,7 +25,7 @@ def commit(session: Session) -> None:
         raise HTTPException(409, "记录重复或关联数据已变更，请检查后重试") from None
     except StaleDataError:
         session.rollback()
-        raise HTTPException(409, "主机已被修改，请重新打开编辑页面") from None
+        raise HTTPException(409, stale_message) from None
 
 
 def find_group(session: Session, group_id: int) -> HostGroup:

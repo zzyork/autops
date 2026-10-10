@@ -4,10 +4,10 @@ import tempfile
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
-from sqlalchemy import Engine, create_engine, event, select
+from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from ..models import Base, Host
+from ..models import Base, Host, JumpHost, utc_now
 
 
 def protect_key(path: Path) -> None:
@@ -55,12 +55,12 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
     try:
         Base.metadata.create_all(engine)
         sessions = sessionmaker(engine)
-        with sessions() as session:
-            encrypted = [
-                token for pair in session.execute(select(
-                    Host.password_encrypted, Host.proxy_password_encrypted
-                )) for token in pair if token is not None
-            ]
+        with engine.connect() as connection:
+            columns = {column["name"] for column in inspect(connection).get_columns("hosts")}
+            encrypted = list(connection.scalars(select(Host.password_encrypted).where(Host.password_encrypted.is_not(None))))
+            encrypted.extend(connection.scalars(select(JumpHost.password_encrypted).where(JumpHost.password_encrypted.is_not(None))))
+            if "proxy_password_encrypted" in columns:
+                encrypted.extend(connection.scalars(text("SELECT proxy_password_encrypted FROM hosts WHERE proxy_password_encrypted IS NOT NULL")))
         key_path = data_dir / "secrets" / "fernet.key"
         key_path.parent.mkdir(parents=True, exist_ok=True)
         protect_key(key_path.parent)
@@ -84,6 +84,36 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
                 cipher.decrypt(token.encode())
         except (ValueError, InvalidToken) as exc:
             raise RuntimeError("密钥损坏或与已有凭据不匹配；请恢复对应密钥。") from exc
+        with engine.begin() as connection:
+            # sqlite3 不会在 SQLAlchemy 的逻辑事务开始时立即发出 BEGIN；先开启真实写事务以覆盖 DDL。
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            if "jump_host_id" not in columns:
+                connection.execute(text("ALTER TABLE hosts ADD COLUMN jump_host_id INTEGER REFERENCES jump_hosts(id) ON DELETE RESTRICT"))
+            if "proxy_address" in columns:
+                legacy_hosts = connection.execute(text("""
+                    SELECT id, name, proxy_address, proxy_username, proxy_port, proxy_auth_type,
+                           proxy_key_path, proxy_password_encrypted
+                    FROM hosts WHERE proxy_address IS NOT NULL AND jump_host_id IS NULL ORDER BY id
+                """))
+                for host in legacy_hosts.mappings():
+                    now = utc_now()
+                    result = connection.execute(JumpHost.__table__.insert().values(
+                        name=host["name"],
+                        address=host["proxy_address"], username=host["proxy_username"],
+                        port=host["proxy_port"], auth_type=host["proxy_auth_type"],
+                        key_path=host["proxy_key_path"], password_encrypted=host["proxy_password_encrypted"],
+                        remark="", created_at=now, updated_at=now, version=1,
+                    ))
+                    connection.execute(text("UPDATE hosts SET jump_host_id = :jump_host_id WHERE id = :host_id"), {
+                        "jump_host_id": result.inserted_primary_key[0], "host_id": host["id"],
+                    })
+                connection.execute(text("""
+                    UPDATE hosts SET proxy_address = NULL, proxy_username = NULL, proxy_port = NULL,
+                        proxy_auth_type = NULL, proxy_key_path = NULL, proxy_password_encrypted = NULL
+                    WHERE proxy_address IS NOT NULL OR proxy_username IS NOT NULL OR proxy_port IS NOT NULL
+                        OR proxy_auth_type IS NOT NULL OR proxy_key_path IS NOT NULL
+                        OR proxy_password_encrypted IS NOT NULL
+                """))
         return engine, sessions, cipher
     except Exception:
         engine.dispose()

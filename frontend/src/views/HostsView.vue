@@ -2,12 +2,12 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
-  ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn,
+  ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
 import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } from '@/api/assets'
+import { listJumpHosts } from '@/api/jump_hosts'
 import AssetsLayout from '@/components/AssetsLayout.vue'
-import { HttpError } from '@/api/http'
-import type { AuthType, Host, HostGroup, HostInput } from '@/types/api'
+import type { AuthType, Host, HostGroup, HostInput, JumpHost } from '@/types/api'
 import '@/styles/assets.css'
 
 interface HostForm {
@@ -20,23 +20,22 @@ interface HostForm {
   key_path: string
   password: string
   vip: string
-  proxy_address: string
-  proxy_username: string
-  proxy_port: number
-  proxy_auth_type: AuthType
-  proxy_key_path: string
-  proxy_password: string
+  jump_host_id: number | null
   remark: string
 }
 
 const groups = ref<HostGroup[]>([])
+const jumpHosts = ref<JumpHost[]>([])
 const vLoading = ElLoading.directive
 const hosts = ref<Host[]>([])
 const selectedGroup = ref<number | null>(null)
 const search = ref('')
 const groupsLoading = ref(false)
+const jumpHostsLoading = ref(false)
+const jumpHostsLoaded = ref(false)
 const hostsLoading = ref(false)
 const groupsError = ref('')
+const jumpHostsError = ref('')
 const hostsError = ref('')
 const dialogError = ref('')
 const saving = ref(false)
@@ -44,16 +43,12 @@ const openingHost = ref(false)
 const hostDialog = ref(false)
 const editingHost = ref<Host | null>(null)
 const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
-const proxyEnabled = ref(false)
 const hostAuthChanged = ref(false)
-const proxyAuthChanged = ref(false)
 
 function emptyHost(groupId: number | null): HostForm {
   return {
     name: '', address: '', group_id: groupId ?? '', username: '', port: 22,
-    auth_type: 'password', key_path: '', password: '', vip: '', proxy_address: '',
-    proxy_username: '', proxy_port: 22, proxy_auth_type: 'password',
-    proxy_key_path: '', proxy_password: '', remark: '',
+    auth_type: 'password', key_path: '', password: '', vip: '', jump_host_id: null, remark: '',
   }
 }
 
@@ -69,27 +64,37 @@ watch(() => hostForm.value.auth_type, (next, previous) => {
     hostForm.value.password = ''
   }
 }, { flush: 'sync' })
-watch(() => hostForm.value.proxy_auth_type, (next, previous) => {
-  if (hostDialog.value && next !== previous) {
-    proxyAuthChanged.value = true
-    hostForm.value.proxy_password = ''
-  }
-}, { flush: 'sync' })
-
-function errorText(cause: unknown): string {
-  if (cause instanceof HttpError) return cause.message
-  return '无法连接服务，请稍后重试。'
-}
-
 async function refreshGroups() {
   groupsLoading.value = true
   groupsError.value = ''
   try {
     groups.value = await listGroups()
-  } catch (cause) {
-    groupsError.value = errorText(cause)
+  } catch {
+    groupsError.value = '系统异常'
   } finally {
     groupsLoading.value = false
+  }
+}
+
+let jumpHostRequest = 0
+async function refreshJumpHosts() {
+  const current = ++jumpHostRequest
+  jumpHostsLoading.value = true
+  jumpHostsLoaded.value = false
+  jumpHostsError.value = ''
+  try {
+    const result = await listJumpHosts()
+    if (current === jumpHostRequest) {
+      jumpHosts.value = result
+      jumpHostsLoaded.value = true
+    }
+  } catch {
+    if (current === jumpHostRequest) {
+      jumpHosts.value = []
+      jumpHostsError.value = '系统异常'
+    }
+  } finally {
+    if (current === jumpHostRequest) jumpHostsLoading.value = false
   }
 }
 
@@ -102,10 +107,10 @@ async function refreshHosts() {
   try {
     const result = await listHosts(search.value.trim(), selectedGroup.value)
     if (current === hostRequest) hosts.value = result
-  } catch (cause) {
+  } catch {
     if (current === hostRequest) {
       hosts.value = []
-      hostsError.value = errorText(cause)
+      hostsError.value = '系统异常'
     }
   } finally {
     if (current === hostRequest) hostsLoading.value = false
@@ -120,11 +125,13 @@ watch([search, selectedGroup], () => {
 })
 onMounted(() => {
   void refreshGroups()
+  void refreshJumpHosts()
   void refreshHosts()
 })
 onUnmounted(() => {
   clearTimeout(searchTimer)
   hostRequest++
+  jumpHostRequest++
 })
 
 function openNewHost() {
@@ -132,12 +139,11 @@ function openNewHost() {
   if (!groups.value.length) { ElMessage.warning('请先新增分组，再新增主机。'); return }
   editingHost.value = null
   hostAuthChanged.value = false
-  proxyAuthChanged.value = false
   hostForm.value = emptyHost(selectedGroup.value)
   hostInvalidFields.value.clear()
-  proxyEnabled.value = false
   dialogError.value = ''
   hostDialog.value = true
+  void refreshJumpHosts()
 }
 
 async function openEditHost(id: number) {
@@ -147,37 +153,35 @@ async function openEditHost(id: number) {
     const host = await getHost(id)
     editingHost.value = host
     hostAuthChanged.value = false
-    proxyAuthChanged.value = false
     hostForm.value = {
       name: host.name, address: host.address, group_id: host.group_id,
       username: host.username, port: host.port, auth_type: host.auth_type,
       key_path: host.key_path ?? '', password: '', vip: host.vip ?? '',
-      proxy_address: host.proxy_address ?? '', proxy_username: host.proxy_username ?? '',
-      proxy_port: host.proxy_port ?? 22, proxy_auth_type: host.proxy_auth_type ?? 'password',
-      proxy_key_path: host.proxy_key_path ?? '', proxy_password: '', remark: host.remark,
+      jump_host_id: host.jump_host_id, remark: host.remark,
     }
     hostInvalidFields.value.clear()
-    proxyEnabled.value = host.proxy_address !== null
     dialogError.value = ''
     hostDialog.value = true
-  } catch (cause) {
-    hostsError.value = errorText(cause)
+    void refreshJumpHosts()
+  } catch {
+    hostsError.value = '系统异常'
   } finally {
     openingHost.value = false
   }
 }
 
-function toggleProxy(value: string | number | boolean) {
-  const enabled = value === true
-  if (editingHost.value && proxyEnabled.value !== enabled) proxyAuthChanged.value = true
-  proxyEnabled.value = enabled
-  if (!enabled) {
-    hostForm.value.proxy_address = ''
-    hostForm.value.proxy_username = ''
-    hostForm.value.proxy_port = 22
-    hostForm.value.proxy_auth_type = 'password'
-    hostForm.value.proxy_key_path = ''
-    hostForm.value.proxy_password = ''
+function isIpAddress(value: string): boolean {
+  if (!value.includes(':')) {
+    const parts = value.split('.')
+    return parts.length === 4 && parts.every((part) =>
+      /^(0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255)
+  }
+  if (!/^[0-9a-f:.]+$/i.test(value)) return false
+  // 浏览器 URL 解析器校验 IPv6 分组、压缩写法及内嵌 IPv4。
+  try {
+    return new URL(`http://[${value}]/`).hostname.startsWith('[')
+  } catch {
+    return false
   }
 }
 
@@ -189,6 +193,10 @@ function validateHost(): string {
     if (!form.address.trim()) hostInvalidFields.value.add('address')
     if (!form.username.trim()) hostInvalidFields.value.add('username')
     return '请填写主机名称、地址和用户名。'
+  }
+  if (!isIpAddress(form.address.trim())) {
+    hostInvalidFields.value.add('address')
+    return '主机地址须为有效 IPv4 或 IPv6 地址。'
   }
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     hostInvalidFields.value.add('port')
@@ -208,30 +216,17 @@ function validateHost(): string {
     hostInvalidFields.value.add('password')
     return '连接信息已变更，请重新填写主机密码。'
   }
-  if (proxyEnabled.value) {
-    if (editingHost.value && form.proxy_auth_type === 'password' && !form.proxy_password &&
-      (form.proxy_address.trim() !== editingHost.value.proxy_address || form.proxy_username.trim() !== editingHost.value.proxy_username || form.proxy_port !== editingHost.value.proxy_port)) {
-      hostInvalidFields.value.add('proxy_password')
-      return '跳板机连接信息已变更，请重新填写跳板机密码。'
-    }
-    if (!form.proxy_address.trim() || !form.proxy_username.trim()) {
-      if (!form.proxy_address.trim()) hostInvalidFields.value.add('proxy_address')
-      if (!form.proxy_username.trim()) hostInvalidFields.value.add('proxy_username')
-      return '请填写跳板机地址和用户名。'
-    }
-    if (!Number.isInteger(form.proxy_port) || form.proxy_port < 1 || form.proxy_port > 65535) {
-      hostInvalidFields.value.add('proxy_port')
-      return '跳板机端口须在 1 到 65535 之间。'
-    }
-    if (form.proxy_auth_type === 'key' && !form.proxy_key_path.trim()) {
-      hostInvalidFields.value.add('proxy_key_path')
-      return '请输入跳板机密钥路径。'
-    }
-    if (form.proxy_auth_type === 'password' && !form.proxy_password &&
-      !(editingHost.value?.proxy_auth_type === 'password' && editingHost.value.has_proxy_password && !proxyAuthChanged.value)) {
-      hostInvalidFields.value.add('proxy_password')
-      return '请输入跳板机密码；切换为密码认证时不能沿用原凭据。'
-    }
+  if (jumpHostsLoading.value) {
+    hostInvalidFields.value.add('jump_host_id')
+    return '跳板机列表加载中。'
+  }
+  if (!jumpHostsLoaded.value || jumpHostsError.value) {
+    hostInvalidFields.value.add('jump_host_id')
+    return '系统异常'
+  }
+  if (form.jump_host_id !== null && !jumpHosts.value.some((item) => item.id === form.jump_host_id)) {
+    hostInvalidFields.value.add('jump_host_id')
+    return '系统异常'
   }
   return ''
 }
@@ -252,27 +247,20 @@ async function saveHost() {
     username: form.username.trim(), port: form.port, auth_type: form.auth_type,
     key_path: form.auth_type === 'key' ? form.key_path.trim() : null,
     vip: form.vip.trim() || null,
-    proxy_address: proxyEnabled.value ? form.proxy_address.trim() : null,
-    proxy_username: proxyEnabled.value ? form.proxy_username.trim() : null,
-    proxy_port: proxyEnabled.value ? form.proxy_port : null,
-    proxy_auth_type: proxyEnabled.value ? form.proxy_auth_type : null,
-    proxy_key_path: proxyEnabled.value && form.proxy_auth_type === 'key' ? form.proxy_key_path.trim() : null,
+    jump_host_id: form.jump_host_id,
     remark: form.remark.trim(),
   }
-  if (previous) body.version = previous.version
   if (form.auth_type === 'password' && form.password) body.password = form.password
-  if (!proxyEnabled.value) body.proxy_password = null
-  else if (form.proxy_auth_type === 'password' && form.proxy_password) body.proxy_password = form.proxy_password
 
   saving.value = true
   dialogError.value = ''
   try {
-    if (previous) await updateHost(previous.id, body)
+    if (previous) await updateHost(previous.id, { ...body, version: previous.version })
     else await createHost(body)
     hostDialog.value = false
     await Promise.all([refreshHosts(), refreshGroups()])
-  } catch (cause) {
-    dialogError.value = errorText(cause)
+  } catch {
+    dialogError.value = '系统异常'
   } finally {
     saving.value = false
   }
@@ -288,13 +276,19 @@ async function removeHost(id: number, name: string) {
   try {
     await deleteHost(id)
     await Promise.all([refreshHosts(), refreshGroups()])
-  } catch (cause) {
-    hostsError.value = errorText(cause)
+  } catch {
+    hostsError.value = '系统异常'
   }
 }
 
 function groupName(id: number) {
   return groups.value.find((group) => group.id === id)?.name
+}
+
+function jumpHostName(id: number | null) {
+  if (id === null) return '未关联'
+  const jumpHost = jumpHosts.value.find((item) => item.id === id)
+  return jumpHost ? `${jumpHost.name} · ${jumpHost.address}` : '系统异常'
 }
 
 function dateLabel(value: string) {
@@ -310,7 +304,7 @@ function dateLabel(value: string) {
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
           <div class="section-header"><h2>分组筛选</h2><RouterLink to="/assets/groups">管理分组</RouterLink></div>
-          <div v-if="groupsError" class="group-error"><ElAlert :title="groupsError" type="error" :closable="false" show-icon /><ElButton @click="refreshGroups()">重试</ElButton></div>
+          <div v-if="groupsError" class="group-error"><ElAlert :title="groupsError" type="error" :closable="false" show-icon /></div>
           <div v-loading="groupsLoading" class="group-list">
             <button type="button" class="group-item" :class="{ active: selectedGroup === null }" @click="selectedGroup = null"><span>全部主机</span></button>
             <div v-for="group in groups" :key="group.id" class="group-row" :class="{ active: selectedGroup === group.id }">
@@ -320,14 +314,15 @@ function dateLabel(value: string) {
         </aside>
         <section class="host-section" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span class="host-total">{{ hosts.length }} 台</span></div></div>
-          <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading" @click="refreshGroups(); refreshHosts()">刷新</ElButton></div></div>
+          <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton></div></div>
           <ElAlert v-if="hostsError" :title="hostsError" type="error" :closable="false" show-icon class="assets-alert" />
+          <ElAlert v-if="jumpHostsError" :title="jumpHostsError" type="error" :closable="false" show-icon class="assets-alert" />
           <div class="host-table-wrap">
-            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsError ? '加载失败，请点击刷新重试' : hostsLoading ? '加载中' : '暂无主机'">
+            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsError ? '系统异常' : hostsLoading ? '加载中' : '暂无主机'">
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
-              <ElTableColumn label="跳板机" min-width="130"><template #default="{ row }">{{ row.proxy_address || '未启用' }}</template></ElTableColumn>
+              <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '系统异常' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
@@ -340,14 +335,16 @@ function dateLabel(value: string) {
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
         <div class="form-section-title">基本信息</div>
-        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IP 或域名" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
+        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IPv4 或 IPv6 地址" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
         <div class="form-section-title">登录信息</div>
         <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="hostForm.username" autocomplete="off" :aria-invalid="hostInvalidFields.has('username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="hostForm.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('port') ? 'true' : undefined" /></label></div>
         <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div>
         <label v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" /></label>
         <label v-else class="field" :class="{ 'is-error': hostInvalidFields.has('key_path') }"><span>密钥路径 <em>*</em></span><ElInput v-model="hostForm.key_path" placeholder="服务端可读取的密钥路径" :aria-invalid="hostInvalidFields.has('key_path') ? 'true' : undefined" /></label>
-        <div class="form-section-title proxy-heading"><span>跳板机</span><ElSwitch :model-value="proxyEnabled" aria-label="启用跳板机" @update:model-value="toggleProxy" /></div>
-        <template v-if="proxyEnabled"><div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_address') }"><span>跳板机地址 <em>*</em></span><ElInput v-model="hostForm.proxy_address" placeholder="IP 或域名" :aria-invalid="hostInvalidFields.has('proxy_address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_username') }"><span>跳板机用户名 <em>*</em></span><ElInput v-model="hostForm.proxy_username" autocomplete="off" :aria-invalid="hostInvalidFields.has('proxy_username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_port') }"><span>跳板机端口 <em>*</em></span><ElInputNumber v-model="hostForm.proxy_port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('proxy_port') ? 'true' : undefined" /></label></div><div class="field"><span>跳板机认证</span><ElRadioGroup v-model="hostForm.proxy_auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">密钥路径</ElRadioButton></ElRadioGroup></div><label v-if="hostForm.proxy_auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_password') }"><span>跳板机密码 <em v-if="!editingHost || editingHost.proxy_auth_type !== 'password' || !editingHost.has_proxy_password || proxyAuthChanged">*</em></span><ElInput v-model="hostForm.proxy_password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.proxy_auth_type === 'password' && editingHost.has_proxy_password && !proxyAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('proxy_password') ? 'true' : undefined" /></label><label v-else class="field" :class="{ 'is-error': hostInvalidFields.has('proxy_key_path') }"><span>跳板机密钥路径 <em>*</em></span><ElInput v-model="hostForm.proxy_key_path" placeholder="服务端可读取的密钥路径" :aria-invalid="hostInvalidFields.has('proxy_key_path') ? 'true' : undefined" /></label></template>
+        <div class="form-section-title">跳板机</div>
+        <label class="field" :class="{ 'is-error': hostInvalidFields.has('jump_host_id') }"><span>关联跳板机</span><ElSelect v-model="hostForm.jump_host_id" clearable :value-on-clear="null" :disabled="jumpHostsLoading || !jumpHostsLoaded" placeholder="不使用跳板机" class="full-width" :aria-invalid="hostInvalidFields.has('jump_host_id') ? 'true' : undefined"><ElOption v-for="jumpHost in jumpHosts" :key="jumpHost.id" :label="`${jumpHost.name} · ${jumpHost.address}`" :value="jumpHost.id" /></ElSelect></label>
+        <ElAlert v-if="jumpHostsError" :title="jumpHostsError" type="error" :closable="false" show-icon />
+        <ElAlert v-if="jumpHostsLoaded && hostForm.jump_host_id !== null && !jumpHosts.some((item) => item.id === hostForm.jump_host_id)" title="系统异常" type="error" :closable="false" show-icon />
         <label class="field"><span>备注</span><ElInput v-model="hostForm.remark" type="textarea" :rows="3" placeholder="可选" /></label>
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>

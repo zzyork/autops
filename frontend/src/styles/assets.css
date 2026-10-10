@@ -66,4 +66,3 @@
 .asset-form .full-width { width: 100%; }
 .asset-form .form-section-title { border-top: 1px solid var(--ui-border); padding-top: 20px; font-weight: 600; color: var(--ui-text); font-size: 14px; }
 .asset-form .form-section-title:first-child { border: 0; padding-top: 0; }
-.asset-form .proxy-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

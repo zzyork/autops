@@ -2,7 +2,6 @@
 import { onMounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDialog, ElInput, ElLoading, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
 import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/assets'
-import { HttpError } from '@/api/http'
 import AssetsLayout from '@/components/AssetsLayout.vue'
 import type { HostGroup } from '@/types/api'
 
@@ -18,18 +17,13 @@ const form = ref({ name: '', remark: '' })
 const nameError = ref(false)
 watch(() => form.value.name, () => { nameError.value = false })
 
-function errorText(cause: unknown): string {
-  if (cause instanceof HttpError) return cause.message
-  return '无法连接服务，请稍后重试。'
-}
-
 async function refreshGroups() {
   loading.value = true
   error.value = ''
   try {
     groups.value = await listGroups()
-  } catch (cause) {
-    error.value = errorText(cause)
+  } catch {
+    error.value = '系统异常'
   } finally {
     loading.value = false
   }
@@ -54,8 +48,8 @@ async function saveGroup() {
     else await createGroup(body)
     dialog.value = false
     await refreshGroups()
-  } catch (cause) {
-    dialogError.value = errorText(cause)
+  } catch {
+    dialogError.value = '系统异常'
   } finally {
     saving.value = false
   }
@@ -72,8 +66,8 @@ async function removeGroup(group: HostGroup) {
   try {
     await deleteGroup(group.id)
     await refreshGroups()
-  } catch (cause) {
-    error.value = errorText(cause)
+  } catch {
+    error.value = '系统异常'
   }
 }
 </script>
@@ -86,7 +80,7 @@ async function removeGroup(group: HostGroup) {
         <div class="host-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
         <ElAlert v-if="error" :title="error" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="error ? '加载失败，请点击刷新重试' : loading ? '加载中' : '暂无分组，请新增分组'">
+          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="error === '系统异常' ? '系统异常' : loading ? '加载中' : '暂无分组，请新增分组'">
             <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="主机数量" width="120" />
             <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
