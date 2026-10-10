@@ -1,6 +1,6 @@
 # autops
 
-FastAPI + Vue 3 + TypeScript + Element Plus 基础工程，使用 Vite 开发与构建。
+基于 FastAPI + Vue 3 + TypeScript + Element Plus 的运维 Web UI，使用 Vite 开发与构建。当前提供资产管理，可在页面维护主机、分组、SSH 与跳板机配置，并保存到 SQLite。
 
 ## 项目目录
 
@@ -11,7 +11,9 @@ autops/
 │   │   ├── api/v1/endpoints/   # 按业务组织接口
 │   │   ├── core/              # 环境配置及公共基础设施
 │   │   ├── schemas/           # 请求、响应数据模型
+│   │   ├── models.py          # 主机与分组数据库模型
 │   │   └── main.py            # 应用工厂与入口
+│   ├── runtime/               # 自动生成的数据库和密钥，不纳入版本控制
 │   ├── tests/                 # 接口测试
 │   ├── .env.example
 │   ├── requirements.txt
@@ -76,13 +78,33 @@ Copy-Item frontend/.env.example frontend/.env
 npm --prefix frontend run dev
 ```
 
-- 前端工作台：http://127.0.0.1:5173
+- 前端入口：http://127.0.0.1:5173（直接进入资产管理）
+- 资产管理：http://127.0.0.1:5173/assets
 - 版本化健康检查：http://127.0.0.1:8000/api/v1/health
 - Swagger 文档：http://127.0.0.1:8000/docs
 - ReDoc 文档：http://127.0.0.1:8000/redoc
 - 兼容接口：`/` 和 `/health`；兼容启动命令：`uvicorn main:app --reload`。
 
-首页自动检查后端状态，支持手动重试。开发时 `/api` 请求由 Vite 代理至 `http://127.0.0.1:8000`，可通过 `API_PROXY_TARGET` 修改。
+打开前端根路径会直接进入资产管理。开发时 `/api` 请求由 Vite 代理至 `http://127.0.0.1:8000`，可通过 `API_PROXY_TARGET` 修改。
+
+## 资产管理
+
+直接打开资产管理页面，无需登录。先新增分组，再新增主机；左侧分组可筛选主机，列表支持名称与地址搜索。主机可配置密码或私钥路径认证，以及可选跳板机、VIP 和备注。私钥路径是后端机器上的路径，本阶段只保存配置，不连接服务器或检查文件是否存在。
+
+编辑时密码不回显，留空保留原密码；修改地址、用户名或端口时需要重新填写对应密码。切换为私钥认证会清除旧密码，关闭跳板机会清除其配置。主机编辑使用版本检查，旧表单不能覆盖已更新的数据。有主机的分组不能直接删除；删除资产仅删除本地数据库记录。
+
+后端首次启动自动创建：
+
+- `backend/runtime/assets.db`：SQLite 数据库。
+- `backend/runtime/secrets/fernet.key`：Fernet 加密密钥，后续启动自动读取，无需手动配置。
+
+可通过后端 `AUTOPS_DATA_DIR` 指定绝对数据目录，建议自定义目录位于仓库外。Windows 下需要 PowerShell 5.1，程序用运行账号的 ACL 保护密钥目录和文件；Linux 下目录权限为 `0700`、密钥文件为 `0600`。权限设置失败会阻止启动。
+
+备份时先停止本地后端服务，再同时复制数据库与对应密钥；迁移后以目标服务账号运行。已有加密凭据时，密钥丢失、损坏或不匹配会阻止启动，不会生成替代密钥。默认运行目录已被 Git 忽略。
+
+资产接口为 `/api/v1/host-groups` 和 `/api/v1/hosts`，支持增删改查；主机列表接受 `q`、`group_id` 筛选参数。接口不会返回密码或密文，校验错误也不会回显提交的密码。主机更新需携带查询响应中的 `version`。
+
+当前不包含身份认证、操作审计、权限控制、hosts 批量导入或部署与巡检模块。迁移范围见 [资产管理迁移指引](docs/asset-management-plan.md)。
 
 ## 验证与构建
 
@@ -94,4 +116,4 @@ npm --prefix frontend run build
 
 构建命令包含类型检查，产物位于 `frontend/dist/`。可使用 `npm --prefix frontend run preview` 查看产物；预览服务不提供开发代理，接口联通需要配置实际后端地址及对应 CORS 来源。
 
-生产环境使用静态服务器提供 `dist/`，将 `/api` 反向代理至 FastAPI；Vue history 路由需回退到 `index.html`。本次初始化未包含数据库、认证或具体业务模块，后续扩展约定见 [架构说明](docs/architecture.md)。
+生产环境使用静态服务器提供 `dist/`，将 `/api` 反向代理至 FastAPI；Vue history 路由需回退到 `index.html`。当前资产管理使用单实例 SQLite，架构约定见 [架构说明](docs/architecture.md)。

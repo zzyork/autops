@@ -3,7 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 export default createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
-    { path: '/:pathMatch(.*)*', redirect: '/' },
+    { path: '/', redirect: '/assets' },
+    { path: '/assets', name: 'assets', component: () => import('@/views/AssetsView.vue') },
+    { path: '/:pathMatch(.*)*', redirect: '/assets' },
   ],
 })

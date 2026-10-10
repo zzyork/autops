@@ -1,14 +1,16 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import create_app
+from backend.app.core.config import Settings
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    with TestClient(create_app()) as test_client:
+def client(tmp_path: Path) -> Iterator[TestClient]:
+    with TestClient(create_app(Settings(data_dir=tmp_path))) as test_client:
         yield test_client
 
 

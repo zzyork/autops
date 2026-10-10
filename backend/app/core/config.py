@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     app_name: str = "autops API"
     debug: bool = False
+    data_dir: Path = Path(__file__).resolve().parents[2] / "runtime"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 

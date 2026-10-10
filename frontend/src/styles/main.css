@@ -40,6 +40,8 @@ h2 { font-size: 28px; font-weight: 500; line-height: 1.6; letter-spacing: -.5px;
 .welcome-panel .eyebrow { color: #b4c6b5; }
 .welcome-panel h2 { margin-top: 20px; position: relative; z-index: 1; }
 .welcome-panel p { color: #c1cec2; max-width: 245px; position: relative; z-index: 1; }
+.home-assets-link { display: inline-flex; align-items: center; gap: 14px; margin-top: 14px; padding: 9px 0; position: relative; z-index: 1; color: #f6f5e9; font-weight: 600; font-size: 14px; border-bottom: 1px solid #9bb9a3; }
+.home-assets-link:hover { color: #d4eedc; }
 .line-art { position: absolute; width: 160px; height: 180px; right: -50px; bottom: -60px; transform: rotate(-25deg); }
 .line-art span { display: block; position: absolute; border: 1px solid #789977; border-radius: 50%; width: 160px; height: 160px; }
 .line-art span:nth-child(2) { transform: translate(-28px, -20px); }
