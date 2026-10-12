@@ -83,7 +83,6 @@ npm --prefix frontend run dev
 - 主机管理：http://127.0.0.1:5173/assets/hosts
 - 分组管理：http://127.0.0.1:5173/assets/groups
 - 跳板机管理：http://127.0.0.1:5173/assets/jump-hosts
-- 原资产入口：http://127.0.0.1:5173/assets（重定向至主机管理）
 - 版本化健康检查：http://127.0.0.1:8000/api/v1/health
 - Swagger 文档：http://127.0.0.1:8000/docs
 - ReDoc 文档：http://127.0.0.1:8000/redoc
