@@ -84,15 +84,8 @@ onUnmounted(() => { active = false; request++ })
     <main class="assets-main">
       <div class="assets-heading"><h1>巡检规则</h1></div>
       <section v-loading="loading" class="host-section" aria-label="巡检规则">
-        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :disabled="!loaded || loading || editing" @click="openEditor">编辑规则</ElButton><span class="inspection-muted">保存后仅影响后续新任务，历史规则快照不变。</span></div><ElButton :loading="loading" :disabled="editing || saving" @click="loadRules">刷新</ElButton></div>
+        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :disabled="!loaded || loading || editing" @click="openEditor">编辑规则</ElButton><span class="inspection-muted"></span></div><ElButton :loading="loading" :disabled="editing || saving" @click="loadRules">刷新</ElButton></div>
         <div v-if="loaded && catalog" class="inspection-detail">
-          <section aria-label="检查项">
-            <div class="section-header"><h2>检查项</h2></div>
-            <div class="host-table-wrap"><ElTable :data="catalog.checks" row-key="id" class="host-table" empty-text="暂无检查项">
-              <ElTableColumn prop="title" label="检查项" width="180" />
-              <ElTableColumn prop="description" label="检查内容" min-width="400" />
-            </ElTable></div>
-          </section>
           <section aria-label="资源阈值">
             <div class="section-header"><h2>资源阈值</h2></div>
             <div class="host-table-wrap"><ElTable :data="thresholds" row-key="name" class="host-table">
@@ -110,8 +103,7 @@ onUnmounted(() => { active = false; request++ })
             <div class="section-header"><h2>服务判定</h2></div>
             <div class="host-table-wrap"><ElTable :data="catalog.defaults.services" class="host-table" empty-text="暂无服务规则">
               <ElTableColumn prop="name" label="服务名称" min-width="180" />
-              <ElTableColumn label="候选单元" min-width="300"><template #default="{ row }">{{ row.candidates.join('、') }}</template></ElTableColumn>
-              <ElTableColumn label="要求" width="100"><template #default="{ row }"><ElTag :type="row.required ? 'warning' : 'info'" size="small">{{ row.required ? '必需' : '可选' }}</ElTag></template></ElTableColumn>
+              <ElTableColumn label="候选名称" min-width="300"><template #default="{ row }">{{ row.candidates.join('、') }}</template></ElTableColumn>
             </ElTable></div>
             <p class="inspection-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
           </section>
