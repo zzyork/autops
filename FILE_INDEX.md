@@ -20,13 +20,14 @@
 | `backend/app/api/v1/endpoints/` | 按功能组织的接口端点。 |
 | `backend/app/core/` | 应用配置与公共基础设施。 |
 | `backend/app/core/migrations/` | SSH 连接与巡检表的可重复启动迁移。最后同步：2026-10-12。 |
-| `backend/app/repositories/` | SSH 资产、信任、连接测试及巡检记录查询。最后同步：2026-10-12。 |
-| `backend/app/services/` | SSH 资产解析、连接测试与主机密钥确认，以及巡检执行、规则持久化与报告。最后同步：2026-10-12。 |
+| `backend/app/repositories/` | SSH 资产、连接测试、巡检及 AI 配置、会话记录持久化。最后同步：2026-10-12。 |
+| `backend/app/services/` | SSH 资产解析、连接与巡检执行，以及模型协议、能力测试和 AI 对话编排。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/` | 四类巡检采集器、结果校验与分发。最后同步：2026-10-12。 |
 | `backend/app/schemas/` | 接口数据模型。 |
 | `backend/tests/` | 已跟踪的主机与分组接口测试及显式放行的巡检检查、任务测试；其他新测试默认被根目录忽略规则排除。最后同步：2026-10-12。 |
 | `docs/` | 项目文档及 AI 前端、后端开发约束和 README 编写规范。最后同步：2026-10-12。 |
 | `frontend/` | Vue、TypeScript、Vite 前端项目。 |
+| `docs/plans/` | 已授权功能设计、接口契约和实施计划。最后同步：2026-10-12。 |
 | `frontend/src/` | 前端应用源码。 |
 | `frontend/src/api/` | HTTP 请求封装及 API 调用。 |
 | `frontend/src/components/` | 可复用 UI 组件。 |
@@ -42,7 +43,7 @@
 | `.gitignore` | Git 文件忽略配置，忽略运行数据及默认忽略新增的 `backend/tests/*`，例外见 `backend/.gitignore`。最后同步：2026-10-12。 |
 | `AGENTS.md` | 项目 Agent 工作约定，要求严格执行前端、后端开发规范及 README 编写、更新和审核规范。最后同步：2026-10-12。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
-| `README.md` | 项目介绍与安装、运行、资产及巡检使用入口。最后同步：2026-10-12。 |
+| `README.md` | 项目介绍与安装、运行、模型对话及巡检使用入口。最后同步：2026-10-12。 |
 | `main.py` | 兼容根目录 `uvicorn main:app` 启动方式的入口。 |
 | `pyproject.toml` | 配置 pytest 测试目录和 Python 导入路径。 |
 | `requirements.txt` | 根目录运行依赖入口，引用后端运行依赖清单。 |
@@ -56,6 +57,8 @@
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
 | `docs/README-编写规范.md` | README 强制执行要求、验收清单及《写好 README 的完整指南：从项目门面到开发者体验》文章全文。最后同步：2026-10-12。 |
 | `docs/inspections.md` | 主机巡检使用、检查口径、执行边界、接口及报告说明。最后同步：2026-10-12。 |
+| `docs/ai-chat.md` | 自选模型、对话巡检、流式协议、数据与执行边界说明。最后同步：2026-10-12。 |
+| `docs/plans/2026-10-12-conversational-ops.md` | 已授权的对话式运维设计、接口契约与实施验收方案。最后同步：2026-10-12。 |
 
 ## 后端文件
 
@@ -67,14 +70,21 @@
 | `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接依赖。最后同步：2026-10-12。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
 | `backend/app/__init__.py` | 声明后端应用包。 |
-| `backend/app/main.py` | FastAPI 应用入口及连接测试、巡检执行器生命周期管理。最后同步：2026-10-12。 |
+| `backend/app/main.py` | FastAPI 入口及连接测试、巡检和 AI HTTP 客户端生命周期管理。最后同步：2026-10-12。 |
 | `backend/app/connection_models.py` | 连接测试记录与服务器主机密钥信任数据库模型。最后同步：2026-10-12。 |
 | `backend/app/inspection_models.py` | 巡检任务、主机执行和检查结果的数据库模型。最后同步：2026-10-12。 |
 | `backend/app/models.py` | 主机、分组、跳板机与 SSH 密钥数据库模型。最后同步：2026-10-10。 |
+| `backend/app/ai_models.py` | 模型连接、会话、消息、批次工具历史与待确认巡检计划模型。最后同步：2026-10-12。 |
+| `backend/app/core/migrations/ai.py` | AI 表及批次历史、执行中状态的幂等迁移。最后同步：2026-10-12。 |
+| `backend/app/schemas/ai.py` | 模型配置、会话消息、计划与决策接口校验。最后同步：2026-10-12。 |
+| `backend/app/repositories/ai.py` | 模型连接、会话、消息、工具历史、计划持久化与中断标记。最后同步：2026-10-12。 |
+| `backend/app/services/ai_provider.py` | OpenAI 兼容及 Anthropic 流式协议适配、有限输出和终止验证。最后同步：2026-10-12。 |
+| `backend/app/services/ai_chat.py` | LangGraph 对话编排、能力验证、资产与巡检工具、会话互斥。最后同步：2026-10-12。 |
+| `backend/app/api/v1/endpoints/ai.py` | 模型连接、会话、SSE 回复及巡检计划确认接口。最后同步：2026-10-12。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 共用数据库会话依赖、事务提交与分组查询。最后同步：2026-10-10。 |
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
-| `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试与巡检接口。最后同步：2026-10-12。 |
+| `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试、巡检和 AI 接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/ssh_connections.py` | SSH 连接测试提交、查询与主机密钥确认接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/inspections.py` | 巡检目录读取/保存、任务创建/查询/删除与 Markdown 报告 JSON 接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/__init__.py` | 声明接口端点包。 |
@@ -131,12 +141,20 @@
 | `frontend/vite.config.ts` | Vite 开发与构建配置。 |
 | `frontend/src/App.vue` | 应用根组件，承载路由视图。 |
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
-| `frontend/src/api/http.ts` | 通用 HTTP 请求封装。最后同步：2026-10-10。 |
+| `frontend/src/api/http.ts` | 通用 HTTP 请求封装、可配置超时与 SSE 事件读取和错误转换。最后同步：2026-10-12。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/api/ssh_connections.ts` | SSH 连接测试提交、历史、状态与信任接口调用。最后同步：2026-10-12。 |
 | `frontend/src/api/inspections.ts` | 巡检目录读取/保存、任务创建/分页/详情/删除和报告接口调用。最后同步：2026-10-12。 |
+| `frontend/src/api/ai.ts` | AI 配置、会话、流事件校验和计划决策接口调用。最后同步：2026-10-12。 |
+| `frontend/src/types/ai.ts` | 模型能力、会话消息状态及巡检计划类型。最后同步：2026-10-12。 |
+| `frontend/src/components/ChatProposalCard.vue` | 显示计划执行范围，发出确认或拒绝事件。最后同步：2026-10-12。 |
+| `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务进度并复用已有详情组件。最后同步：2026-10-12。 |
+| `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入。最后同步：2026-10-12。 |
+| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、模型选择、流式输入输出和计划决策。最后同步：2026-10-12。 |
+| `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |
+| `frontend/src/styles/ai.css` | 复用控制台主题的对话、模型配置和任务卡片样式。最后同步：2026-10-12。 |
 | `frontend/src/components/SSHConnectionDialog.vue` | 主机与跳板机共用连接测试、结果查询和身份信任弹窗。最后同步：2026-10-12。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机列表统一 SSH 状态图标，查询最近测试、跟踪未完成测试并提供状态说明。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单与本地校验。最后同步：2026-10-12。 |
@@ -145,10 +163,10 @@
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/AssetsLayout.vue` | 资产与巡检页面共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
+| `frontend/src/components/AssetsLayout.vue` | AI、资产与巡检页面共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 资产独立页面与巡检任务、记录、规则页面路由。最后同步：2026-10-12。 |
+| `frontend/src/router/index.ts` | 对话首页、模型配置、资产及巡检独立页面路由。最后同步：2026-10-12。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
 | `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |

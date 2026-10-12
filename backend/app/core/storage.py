@@ -8,6 +8,8 @@ from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..models import Base, Host, JumpHost, SSHKey, utc_now
+from ..ai_models import AIConnection
+from .migrations.ai import migrate_ai
 from .migrations.ssh_connections import migrate_ssh_connections
 from .migrations.inspections import migrate_inspections
 
@@ -57,6 +59,7 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
     try:
         migrate_ssh_connections(engine)
         migrate_inspections(engine)
+        migrate_ai(engine)
         Base.metadata.create_all(engine)
         sessions = sessionmaker(engine)
         with engine.connect() as connection:
@@ -64,6 +67,7 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
             encrypted = list(connection.scalars(select(Host.password_encrypted).where(Host.password_encrypted.is_not(None))))
             encrypted.extend(connection.scalars(select(JumpHost.password_encrypted).where(JumpHost.password_encrypted.is_not(None))))
             encrypted.extend(connection.scalars(select(SSHKey.private_key_encrypted)))
+            encrypted.extend(connection.scalars(select(AIConnection.api_key_encrypted).where(AIConnection.api_key_encrypted.is_not(None))))
             if "proxy_password_encrypted" in columns:
                 encrypted.extend(connection.scalars(text("SELECT proxy_password_encrypted FROM hosts WHERE proxy_password_encrypted IS NOT NULL")))
         key_path = data_dir / "secrets" / "fernet.key"

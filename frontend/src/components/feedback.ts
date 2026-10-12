@@ -3,7 +3,7 @@ import { SYSTEM_ERROR_MESSAGE } from '@/api/http'
 
 let systemErrorVisible = false
 
-export function showSystemError(): void {
+export function showRequestError(): void {
   if (systemErrorVisible) return
   systemErrorVisible = true
   ElMessage({
@@ -15,3 +15,5 @@ export function showSystemError(): void {
     onClose: () => { systemErrorVisible = false },
   })
 }
+
+export const showSystemError = showRequestError

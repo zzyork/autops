@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Callable, Literal
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select, text, update
@@ -28,7 +28,8 @@ def get_group_name(session: Session, group_id: int) -> str:
     return name
 
 
-def create_task(session: Session, data: InspectionInput, snapshots: list[dict], config: InspectionConfig) -> InspectionTask:
+def create_task(session: Session, data: InspectionInput, snapshots: list[dict], config: InspectionConfig,
+                before_commit: Callable[[InspectionTask], None] | None = None) -> InspectionTask:
     task = InspectionTask(id=str(uuid4()), name=data.name, status="queued", host_count=len(data.hosts),
                            check_ids=data.checks, config=config.model_dump(mode="json"), rule_version="1")
     for position, snapshot in enumerate(snapshots):
@@ -39,9 +40,27 @@ def create_task(session: Session, data: InspectionInput, snapshots: list[dict], 
                       for index, check_id in enumerate(data.checks)]
         task.hosts.append(run)
     session.add(task)
+    if before_commit is not None:
+        # The proposal has a foreign key to the task; insert the task before updating that key.
+        session.flush()
+        before_commit(task)
     session.commit()
     session.refresh(task)
     return task
+
+
+def interrupt_unsubmitted(session: Session, task_id: str, run_ids: list[str]) -> None:
+    if not run_ids:
+        return
+    now = utc_now()
+    session.execute(update(InspectionCheckRun).where(InspectionCheckRun.host_run_id.in_(run_ids),
+                                                   InspectionCheckRun.status == "queued").values(
+        status="interrupted", conclusion="unknown", error_code="dispatch_failed", finished_at=now))
+    session.execute(update(InspectionHostRun).where(InspectionHostRun.id.in_(run_ids),
+                                                  InspectionHostRun.status == "queued").values(
+        status="interrupted", failure_code="dispatch_failed", finished_at=now))
+    session.commit()
+    summarize_task(session, task_id)
 
 
 def page_tasks(session: Session, limit: int, offset: int) -> tuple[list[InspectionTask], int]:

@@ -11,11 +11,15 @@ const inspectionsExpanded = ref(true)
 <template>
   <div class="workspace assets-page" :class="{ 'menu-collapsed': menuCollapsed }">
     <header class="topbar console-topbar">
-      <RouterLink to="/assets/hosts" class="brand" aria-label="autops 资产管理"><span class="brand-mark">a.</span>autops</RouterLink>
+      <RouterLink to="/ai/chat" class="brand" aria-label="autops AI 对话"><span class="brand-mark">a.</span>autops</RouterLink>
       <span class="console-version">v0.1</span>
     </header>
     <aside class="console-sidebar" aria-label="主导航">
       <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>
+      <nav aria-label="AI 运维">
+        <RouterLink to="/ai/chat" class="console-menu-item console-menu-root" aria-label="AI 对话" title="AI 对话"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v13H9l-5 4V4zM8 9h8M8 13h5" /></svg><span v-if="!menuCollapsed">AI 对话</span></RouterLink>
+        <RouterLink to="/ai/connections" class="console-menu-item console-menu-root" aria-label="模型配置" title="模型配置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h4" /></svg><span v-if="!menuCollapsed">模型配置</span></RouterLink>
+      </nav>
       <button class="console-menu-label" type="button" :aria-expanded="assetsExpanded" aria-controls="assets-navigation" :aria-label="assetsExpanded ? '收起资产管理菜单' : '展开资产管理菜单'" title="资产管理" @click="assetsExpanded = !assetsExpanded">
         <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5" /></svg>
         <span v-if="!menuCollapsed">资产管理</span>

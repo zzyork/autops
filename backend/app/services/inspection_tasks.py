@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from cryptography.fernet import Fernet
@@ -34,7 +35,8 @@ class InspectionManager:
             repository.interrupt_unfinished(session)
         self.executor = ThreadPoolExecutor(max_workers=MAX_INSPECTION_WORKERS, thread_name_prefix="inspection")
 
-    def start(self, session: Session, data: InspectionInput, config: InspectionConfig) -> InspectionTask:
+    def start(self, session: Session, data: InspectionInput, config: InspectionConfig,
+              before_commit: Callable[[InspectionTask], None] | None = None) -> InspectionTask:
         snapshots = []
         for selected in data.hosts:
             asset = get_asset(session, "host", selected.id)
@@ -53,10 +55,26 @@ class InspectionManager:
                 raise HTTPException(503, "巡检队列不可用")
             if self.active & host_ids:
                 raise HTTPException(409, "所选主机已有巡检正在执行")
-            task = repository.create_task(session, data, snapshots, config)
+            task = repository.create_task(session, data, snapshots, config, before_commit)
             self.active.update(host_ids)
-            for host in task.hosts:
-                self.executor.submit(self._run_host, task.id, host.id, host.host_id)
+            for index, host in enumerate(task.hosts):
+                try:
+                    self.executor.submit(self._run_host, task.id, host.id, host.host_id)
+                except Exception as exc:
+                    logger.error("Inspection task %s dispatch failed: %s", task.id, type(exc).__name__)
+                    unsubmitted = task.hosts[index:]
+                    task_id = task.id
+                    run_ids = [item.id for item in unsubmitted]
+                    self.active.difference_update(item.host_id for item in unsubmitted)
+                    session.rollback()
+                    with self.sessions() as update_session:
+                        try:
+                            repository.interrupt_unsubmitted(update_session, task_id, run_ids)
+                        except Exception:
+                            self.persistence_failed.set()
+                            raise
+                    session.expire_all()
+                    return repository.get_task(session, task_id)
         return task
 
     def close(self) -> None:
