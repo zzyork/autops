@@ -34,7 +34,7 @@ class InspectionManager:
             repository.interrupt_unfinished(session)
         self.executor = ThreadPoolExecutor(max_workers=MAX_INSPECTION_WORKERS, thread_name_prefix="inspection")
 
-    def start(self, session: Session, data: InspectionInput) -> InspectionTask:
+    def start(self, session: Session, data: InspectionInput, config: InspectionConfig) -> InspectionTask:
         snapshots = []
         for selected in data.hosts:
             asset = get_asset(session, "host", selected.id)
@@ -53,7 +53,7 @@ class InspectionManager:
                 raise HTTPException(503, "巡检队列不可用")
             if self.active & host_ids:
                 raise HTTPException(409, "所选主机已有巡检正在执行")
-            task = repository.create_task(session, data, snapshots)
+            task = repository.create_task(session, data, snapshots, config)
             self.active.update(host_ids)
             for host in task.hosts:
                 self.executor.submit(self._run_host, task.id, host.id, host.host_id)

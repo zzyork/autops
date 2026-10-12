@@ -40,8 +40,8 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
                 findings.append(Finding(severity="warning", message=f"必需服务 {service.name} 未安装"))
         elif load_state != "loaded" or active_state != "active":
             findings.append(Finding(severity="warning", message=f"服务 {service.name} 状态: {load_state}/{active_state}"))
-        rows.append([service.name, selected or "未安装", load_state, active_state if selected else "不适用",
-                     "是" if service.required else "否"])
+        if selected is not None:
+            rows.append([service.name, selected, load_state, active_state, "是" if service.required else "否"])
     return CheckPayload(
         conclusion="warning" if findings else "not_applicable" if installed == 0 else "normal",
         findings=findings,

@@ -1,6 +1,7 @@
+from typing import Literal
 from uuid import uuid4
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session, noload, selectinload
 
 from ..inspection_models import InspectionCheckRun, InspectionHostRun, InspectionTask
@@ -27,9 +28,9 @@ def get_group_name(session: Session, group_id: int) -> str:
     return name
 
 
-def create_task(session: Session, data: InspectionInput, snapshots: list[dict]) -> InspectionTask:
+def create_task(session: Session, data: InspectionInput, snapshots: list[dict], config: InspectionConfig) -> InspectionTask:
     task = InspectionTask(id=str(uuid4()), name=data.name, status="queued", host_count=len(data.hosts),
-                          check_ids=data.checks, config=InspectionConfig().model_dump(mode="json"), rule_version="1")
+                           check_ids=data.checks, config=config.model_dump(mode="json"), rule_version="1")
     for position, snapshot in enumerate(snapshots):
         run = InspectionHostRun(id=str(uuid4()), position=position, status="queued", **snapshot)
         run.checks = [InspectionCheckRun(position=index, check_id=check_id, title=CHECK_TITLES[check_id],
@@ -49,6 +50,26 @@ def page_tasks(session: Session, limit: int, offset: int) -> tuple[list[Inspecti
         InspectionTask.created_at.desc(), InspectionTask.id.desc()).limit(limit).offset(offset)
     total = session.scalar(select(func.count()).select_from(InspectionTask))
     return list(session.scalars(query)), total
+
+
+def delete_task(session: Session, task_id: str) -> Literal["missing", "active", "deleted"]:
+    session.rollback()
+    session.execute(text("BEGIN IMMEDIATE"))
+    try:
+        status = session.scalar(select(InspectionTask.status).where(InspectionTask.id == task_id))
+        if status is None:
+            session.rollback()
+            return "missing"
+        if status not in TERMINAL:
+            session.rollback()
+            return "active"
+        # SQLite foreign keys are enabled by storage; deleting the parent cascades to runs and checks.
+        session.execute(delete(InspectionTask).where(InspectionTask.id == task_id))
+        session.commit()
+        return "deleted"
+    except Exception:
+        session.rollback()
+        raise
 
 
 def summarize_task(session: Session, task_id: str) -> None:

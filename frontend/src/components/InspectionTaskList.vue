@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElButton, ElLoading, ElPagination, ElTable, ElTableColumn, ElTag } from 'element-plus'
-import { getInspectionTask, listInspectionTasks } from '@/api/inspections'
+import { ElButton, ElLoading, ElMessageBox, ElPagination, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { deleteInspectionTask, getInspectionTask, listInspectionTasks } from '@/api/inspections'
 import InspectionCreateDialog from '@/components/InspectionCreateDialog.vue'
 import InspectionTaskDetail from '@/components/InspectionTaskDetail.vue'
 import { showSystemError } from '@/components/feedback'
@@ -25,8 +25,10 @@ const listLoaded = ref(false)
 const detail = ref<TaskDetail | null>(null)
 const selectedId = ref<string | null>(null)
 const detailLoading = ref(false)
+const deletingDetailId = ref<string | null>(null)
 const detailLoaded = ref(false)
 const creating = ref(false)
+const deletingId = ref<string | null>(null)
 let active = true
 let listRequest = 0
 let detailRequest = 0
@@ -72,6 +74,7 @@ async function loadList(poll = false) {
   }
 }
 async function loadDetail(id: string, poll = false) {
+  if (deletingDetailId.value === id) return
   clearTimeout(detailTimer)
   const current = ++detailRequest
   const wasActive = detail.value !== null && isActiveRun(detail.value.status)
@@ -121,6 +124,52 @@ function created() {
   detailRequest++
   void loadList()
 }
+async function removeRecord(task: TaskSummary) {
+  if (!props.records || deletingId.value || isActiveRun(task.status)) return
+  deletingId.value = task.id
+  try {
+    await ElMessageBox.confirm(`确定删除巡检记录“${task.name}”吗？该记录的主机检查结果及报告将一并删除，此操作不可撤销。`, '删除巡检记录', {
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
+    })
+  } catch {
+    deletingId.value = null
+    return
+  }
+  try {
+    const latest = tasks.value.find((item) => item.id === task.id)
+    if (!latest || isActiveRun(latest.status)) return
+    deletingDetailId.value = task.id
+    if (selectedId.value === task.id) {
+      clearTimeout(detailTimer)
+      detailRequest++
+      detailLoading.value = false
+    }
+    await deleteInspectionTask(task.id)
+    if (!active) return
+    clearTimeout(listTimer)
+    listRequest++
+    listLoading.value = false
+    tasks.value = tasks.value.filter((item) => item.id !== task.id)
+    total.value = Math.max(0, total.value - 1)
+    if (selectedId.value === task.id) {
+      clearTimeout(detailTimer)
+      detailRequest++
+      selectedId.value = null
+      detail.value = null
+      detailLoaded.value = false
+      detailLoading.value = false
+    }
+    if (route.query.task === task.id) void router.replace({ path: '/inspections/records' })
+    page.value = Math.min(page.value, Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+    void loadList()
+  } catch {
+    if (active) showSystemError()
+  } finally {
+    deletingDetailId.value = null
+    deletingId.value = null
+    if (active && selectedId.value === task.id && !detailLoaded.value) void loadDetail(task.id)
+  }
+}
 watch(() => route.query.task, (id) => {
   if (!props.records) return
   if (typeof id === 'string' && id) selectRecord(id)
@@ -158,6 +207,7 @@ onUnmounted(() => {
             <ElTableColumn label="创建时间" min-width="180"><template #default="{ row }">{{ timeLabel(row.created_at) }}</template></ElTableColumn>
             <ElTableColumn label="结束时间" min-width="180"><template #default="{ row }">{{ timeLabel(row.finished_at) }}</template></ElTableColumn>
             <ElTableColumn v-if="!records" label="操作" width="110" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="selectTask(row.id)">查看记录</ElButton></template></ElTableColumn>
+            <ElTableColumn v-else label="操作" width="110" fixed="right"><template #default="{ row }"><span :title="isActiveRun(row.status) ? '执行中的记录不可删除' : undefined"><ElButton link type="danger" :loading="deletingId === row.id" :disabled="isActiveRun(row.status) || deletingId !== null" @click="removeRecord(row as TaskSummary)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
           <p v-else-if="!listLoading" class="inspection-retry">任务列表未加载。<ElButton @click="loadList()">重试</ElButton></p>
         </div>

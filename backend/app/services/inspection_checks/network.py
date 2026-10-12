@@ -1,6 +1,6 @@
 import ipaddress
 
-from ...schemas.inspections import CheckPayload, InspectionConfig, Metric
+from ...schemas.inspections import CheckPayload, InspectionConfig, Metric, is_loopback_listener
 from . import InspectionCheckError, Runner, query, table
 from .basic import addresses
 
@@ -35,7 +35,8 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
                 ipaddress.ip_address(host[1:-1] if host.startswith("[") else host)
         except ValueError:
             raise InspectionCheckError("invalid_output") from None
-        rows.append([fields[0].upper(), fields[1], fields[4]])
+        if not is_loopback_listener(endpoint):
+            rows.append([fields[0].upper(), fields[1], endpoint])
     return CheckPayload(
         metrics=[Metric(name="本机监听数量", value=len(rows))],
         tables=[table("IPv4 地址", ["网卡", "地址/前缀"], ipv4),

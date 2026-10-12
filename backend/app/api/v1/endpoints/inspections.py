@@ -1,25 +1,32 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from ...dependencies import Database
 from ....repositories import inspections as repository
-from ....schemas.inspections import InspectionCatalog, InspectionConfig, InspectionInput, ReportResponse, TaskDetail, TaskPage, TaskSummary
+from ....schemas.inspections import InspectionCatalog, InspectionConfig, InspectionConfigSave, InspectionInput, ReportResponse, TaskDetail, TaskPage, TaskSummary
 from ....services.inspection_checks import CHECK_DEFINITIONS
 from ....services.inspection_reports import render_report
+from ....services.inspection_rules import load_rules, save_rules
 
 router = APIRouter(prefix="/inspections", tags=["巡检"])
 
 
 @router.get("/catalog", response_model=InspectionCatalog)
-def catalog() -> InspectionCatalog:
-    return InspectionCatalog(checks=CHECK_DEFINITIONS, defaults=InspectionConfig())
+def catalog(request: Request) -> InspectionCatalog:
+    return InspectionCatalog(checks=CHECK_DEFINITIONS, defaults=load_rules(request.app.state.data_dir))
+
+
+@router.put("/catalog", response_model=InspectionCatalog)
+def update_catalog(data: InspectionConfigSave, request: Request) -> InspectionCatalog:
+    config = InspectionConfig.model_validate(data.model_dump())
+    return InspectionCatalog(checks=CHECK_DEFINITIONS, defaults=save_rules(request.app.state.data_dir, config))
 
 
 @router.post("/tasks", response_model=TaskDetail, status_code=202)
 def start_task(data: InspectionInput, request: Request, session: Database) -> TaskDetail:
-    task = request.app.state.inspections.start(session, data)
+    task = request.app.state.inspections.start(session, data, load_rules(request.app.state.data_dir))
     return TaskDetail.model_validate(task)
 
 
@@ -38,6 +45,17 @@ def read_task(task_id: UUID, request: Request, session: Database) -> TaskDetail:
     if task is None:
         raise HTTPException(404, "巡检任务不存在")
     return TaskDetail.model_validate(task)
+
+
+@router.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: UUID, request: Request, session: Database) -> Response:
+    request.app.state.inspections.ensure_available()
+    result = repository.delete_task(session, str(task_id))
+    if result == "missing":
+        raise HTTPException(404, "巡检任务不存在")
+    if result == "active":
+        raise HTTPException(409, "巡检尚未结束")
+    return Response(status_code=204)
 
 
 @router.get("/tasks/{task_id}/report", response_model=ReportResponse)

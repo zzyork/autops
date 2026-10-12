@@ -43,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await run_in_threadpool(engine.dispose)
 
     application = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
+    application.state.data_dir = settings.data_dir
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

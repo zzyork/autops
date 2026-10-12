@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ElButton, ElLoading, ElTable, ElTableColumn, ElTag } from 'element-plus'
-import { getInspectionCatalog } from '@/api/inspections'
+import { ElButton, ElDialog, ElLoading, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { getInspectionCatalog, updateInspectionCatalog } from '@/api/inspections'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import InspectionConfigForm from '@/components/InspectionConfigForm.vue'
 import { showSystemError } from '@/components/feedback'
-import type { InspectionCatalog } from '@/types/inspections'
+import type { InspectionCatalog, InspectionConfig } from '@/types/inspections'
 import '@/styles/inspections.css'
 
 const vLoading = ElLoading.directive
 const catalog = ref<InspectionCatalog | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
+const editing = ref(false)
+const saving = ref(false)
+const draft = ref<InspectionConfig | null>(null)
+const configForm = ref<InstanceType<typeof InspectionConfigForm> | null>(null)
 let active = true
 let request = 0
 const thresholds = computed(() => {
@@ -24,6 +29,7 @@ const thresholds = computed(() => {
   ]
 })
 async function loadRules() {
+  if (saving.value) return
   const current = ++request
   loading.value = true
   try {
@@ -39,6 +45,36 @@ async function loadRules() {
     if (active && current === request) loading.value = false
   }
 }
+function openEditor() {
+  if (!loaded.value || !catalog.value || loading.value) return
+  const defaults = catalog.value.defaults
+  draft.value = {
+    thresholds: { ...defaults.thresholds },
+    command_timeout_seconds: defaults.command_timeout_seconds,
+    host_timeout_seconds: defaults.host_timeout_seconds,
+    services: defaults.services.map((service) => ({ ...service, candidates: [...service.candidates] })),
+  }
+  editing.value = true
+}
+async function saveRules() {
+  if (saving.value || !editing.value || !configForm.value) return
+  if (!configForm.value.validate()) return
+  const body = configForm.value.normalized()
+  const current = ++request
+  loading.value = false
+  saving.value = true
+  try {
+    const result = await updateInspectionCatalog(body)
+    if (!active || current !== request) return
+    catalog.value = result
+    loaded.value = true
+    editing.value = false
+  } catch {
+    if (active && current === request) showSystemError()
+  } finally {
+    if (active && current === request) saving.value = false
+  }
+}
 onMounted(() => { void loadRules() })
 onUnmounted(() => { active = false; request++ })
 </script>
@@ -48,7 +84,7 @@ onUnmounted(() => { active = false; request++ })
     <main class="assets-main">
       <div class="assets-heading"><h1>巡检规则</h1></div>
       <section v-loading="loading" class="host-section" aria-label="巡检规则">
-        <div class="host-toolbar"><span class="inspection-muted">统一默认规则，创建单次任务时不可调整。</span><ElButton :loading="loading" @click="loadRules">刷新</ElButton></div>
+        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :disabled="!loaded || loading || editing" @click="openEditor">编辑规则</ElButton><span class="inspection-muted">保存后仅影响后续新任务，历史规则快照不变。</span></div><ElButton :loading="loading" :disabled="editing || saving" @click="loadRules">刷新</ElButton></div>
         <div v-if="loaded && catalog" class="inspection-detail">
           <section aria-label="检查项">
             <div class="section-header"><h2>检查项</h2></div>
@@ -83,5 +119,9 @@ onUnmounted(() => { active = false; request++ })
         <p v-else-if="!loading" class="inspection-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>
       </section>
     </main>
+    <ElDialog :model-value="editing" align-center title="编辑巡检规则" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!saving && (editing = $event)">
+      <InspectionConfigForm v-if="draft" ref="configForm" v-model="draft" />
+      <template #footer><ElButton :disabled="saving" @click="editing = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveRules">保存</ElButton></template>
+    </ElDialog>
   </AssetsLayout>
 </template>

@@ -1,3 +1,4 @@
+import ipaddress
 import math
 import re
 from datetime import datetime, timezone
@@ -74,6 +75,26 @@ class InspectionConfig(InputModel):
         return self
 
 
+class InspectionConfigSave(InspectionConfig):
+    @model_validator(mode="before")
+    @classmethod
+    def complete_rules(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        missing = cls.model_fields.keys() - value.keys()
+        if missing:
+            raise ValueError(f"保存规则缺少字段: {', '.join(sorted(missing))}")
+        thresholds = value["thresholds"]
+        if isinstance(thresholds, dict):
+            missing = Thresholds.model_fields.keys() - thresholds.keys()
+            if missing:
+                raise ValueError(f"保存规则缺少阈值: {', '.join(sorted(missing))}")
+        services = value["services"]
+        if isinstance(services, list) and any(isinstance(item, dict) and "required" not in item for item in services):
+            raise ValueError("保存规则缺少服务 required 字段")
+        return value
+
+
 class HostSelection(InputModel):
     id: int = Field(gt=0)
     version: int = Field(gt=0)
@@ -131,6 +152,18 @@ class CheckPayload(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
 
 
+def is_loopback_listener(endpoint: str) -> bool:
+    host, separator, _port = endpoint.rpartition(":")
+    if not separator:
+        return False
+    try:
+        address = ipaddress.ip_address(host[1:-1] if host.startswith("[") and host.endswith("]") else host)
+    except ValueError:
+        return False
+    return address.is_loopback or (address.version == 6 and address.ipv4_mapped is not None
+                                   and address.ipv4_mapped.is_loopback)
+
+
 class TimestampResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -149,6 +182,28 @@ class CheckResponse(TimestampResponse):
     finished_at: datetime | None
     error_code: str | None
     payload: CheckPayload
+
+    @model_validator(mode="after")
+    def display_payload(self) -> "CheckResponse":
+        if self.check_id not in ("service_status", "network_info"):
+            return self
+        tables: list[ResultTable] = []
+        for item in self.payload.tables:
+            if self.check_id == "service_status" and item.name == "服务状态":
+                rows = [row for row in item.rows if not (len(row) >= 3 and row[1] == "未安装" and row[2] == "not-found")]
+            elif self.check_id == "network_info" and item.name == "本机监听 TCP/UDP":
+                rows = [row for row in item.rows if not (len(row) >= 3 and is_loopback_listener(row[2]))]
+            else:
+                rows = item.rows
+            tables.append(item.model_copy(update={"rows": rows}))
+        metrics = self.payload.metrics
+        if self.check_id == "network_info":
+            listeners = next((item for item in tables if item.name == "本机监听 TCP/UDP"), None)
+            if listeners is not None:
+                metrics = [metric.model_copy(update={"value": len(listeners.rows)})
+                           if metric.name == "本机监听数量" else metric for metric in metrics]
+        self.payload = self.payload.model_copy(update={"tables": tables, "metrics": metrics})
+        return self
 
 
 class HostRunResponse(TimestampResponse):
