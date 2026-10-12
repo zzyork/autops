@@ -1,57 +1,32 @@
 # autops
 
-基于 FastAPI + Vue 3 + TypeScript + Element Plus 的运维 Web UI，使用 Vite 开发与构建。当前提供资产管理、SSH 连接测试与主机巡检，可在页面维护主机、分组、SSH 与跳板机配置，并将资产、测试与巡检记录保存到 SQLite。
+管理主机资产，验证 SSH 连接，执行只读巡检。
 
-## 项目目录
+autops 是面向运维人员的 Web 控制台，将主机配置、连接测试和巡检记录集中保存在本地，方便从资产维护一路完成主机检查与报告导出。前端使用 Vue 3、TypeScript、Element Plus 和 Vite，后端使用 FastAPI 与 SQLite。
 
-```text
-autops/
-├── backend/
-│   ├── app/
-│   │   ├── api/dependencies.py # 共用数据库依赖与事务处理
-│   │   ├── api/v1/endpoints/   # 资产、连接测试与巡检接口
-│   │   ├── core/              # 环境配置及公共基础设施
-│   │   ├── repositories/      # SSH 与巡检记录查询
-│   │   ├── services/          # SSH 资产解析及后台连接测试、巡检
-│   │   ├── schemas/           # 请求、响应数据模型
-│   │   ├── connection_models.py # 连接测试与主机密钥信任模型
-│   │   ├── models.py          # 资产数据库模型
-│   │   └── main.py            # 应用工厂与入口
-│   ├── runtime/               # 自动生成的数据库和密钥，不纳入版本控制
-│   ├── tests/                 # 接口测试
-│   ├── .env.example
-│   ├── requirements.txt
-│   └── requirements-dev.txt
-├── frontend/
-│   ├── src/
-│   │   ├── api/               # 请求封装与接口调用
-│   │   ├── components/        # 复用组件
-│   │   ├── router/            # 页面路由
-│   │   ├── styles/            # 全局样式
-│   │   ├── types/             # TypeScript 数据类型
-│   │   ├── views/             # 资产管理与巡检任务页面
-│   │   ├── App.vue
-│   │   └── main.ts
-│   ├── .env.example
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   └── vite.config.ts
-├── docs/                      # 开发规范与巡检说明
-├── main.py                    # 原启动方式的兼容入口
-├── requirements*.txt          # 指向后端依赖的兼容入口
-└── pyproject.toml             # 测试配置
-```
+## 当前功能
 
-## 环境要求
+- **资产管理**：独立管理主机、分组、跳板机和 SSH 密钥。
+- **连接测试**：验证 SSH 登录，支持直连、VIP 和单层跳板机，并确认服务器主机密钥。
+- **主机巡检**：检查系统基础信息、系统资源、服务状态和网络信息。
+- **结果留存**：查看任务进度、历史记录和规则快照，导出 Markdown 报告。
+- **凭据保护**：使用 Fernet 加密保存凭据，限制本地密钥目录与文件权限。
 
-- Python 3.13（当前开发环境）。
-- Node.js 20.19+ 或 22.12+，推荐 Node.js 24 LTS；npm。
-- 以下命令使用 Windows PowerShell，后端命令均在仓库根目录执行。
+当前适合本地、单实例使用，仅支持单个 Uvicorn worker。项目尚未提供身份认证、权限控制和操作审计；多人共享或开放网络访问前，需要先落实访问控制。
 
-## 安装依赖
+## 快速开始
 
-已有 `.venv` 时跳过创建步骤：
+以下命令使用 **Windows PowerShell**，均从仓库根目录执行。请先将源码放到本地并进入项目目录。
+
+环境要求：
+
+- Python 3.13（当前开发环境版本）。
+- Node.js 20.19+（20.x）或 22.12+，推荐 Node.js 24 LTS；npm。
+- Windows 下的密钥权限设置需要 PowerShell 5.1。
+
+### 1. 安装依赖
+
+已有 `.venv` 时跳过第一条命令。
 
 ```powershell
 py -3.13 -m venv .venv
@@ -59,18 +34,9 @@ py -3.13 -m venv .venv
 npm --prefix frontend ci
 ```
 
-默认配置可以直接启动。需要调整时复制模板：
+### 2. 启动服务
 
-```powershell
-Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env
-```
-
-后端固定从 `backend/.env` 读取配置；前端从 `frontend/.env` 读取配置。后端跨域来源采用 JSON 数组。`VITE_` 变量会进入浏览器，不能存放密钥。
-
-## 本地启动
-
-在两个终端分别运行：
+默认配置可直接启动，无需先创建 `.env`。在两个终端分别运行：
 
 ```powershell
 # 终端 1：后端
@@ -82,42 +48,107 @@ Copy-Item frontend/.env.example frontend/.env
 npm --prefix frontend run dev
 ```
 
-- 前端入口：http://127.0.0.1:5173（直接进入主机管理）
-- 主机管理：http://127.0.0.1:5173/assets/hosts
-- 分组管理：http://127.0.0.1:5173/assets/groups
-- 跳板机管理：http://127.0.0.1:5173/assets/jump-hosts
-- 巡检任务：http://127.0.0.1:5173/inspections
-- 巡检记录：http://127.0.0.1:5173/inspections/records
-- 巡检规则：http://127.0.0.1:5173/inspections/rules
-- 版本化健康检查：http://127.0.0.1:8000/api/v1/health
-- Swagger 文档：http://127.0.0.1:8000/docs
-- ReDoc 文档：http://127.0.0.1:8000/redoc
-- 兼容接口：`/` 和 `/health`；兼容启动命令：`uvicorn main:app --reload`。
+### 3. 打开控制台
 
-打开前端根路径会直接进入主机管理。开发时 `/api` 请求由 Vite 代理至 `http://127.0.0.1:8000`，可通过 `API_PROXY_TARGET` 修改。
+访问 [http://127.0.0.1:5173](http://127.0.0.1:5173)，默认进入主机管理。首次后端启动会自动创建数据库和加密密钥。
 
-## 资产管理
+后端验证入口：
 
-主机、分组、跳板机和 SSH 密钥通过独立页面管理，共用控制台导航。主机与跳板机列表中的“连接测试”使用已保存的凭据验证 SSH 身份和登录，支持直连、VIP 及单层跳板机。首次连接或服务器主机密钥变化时，须独立核对指纹并确认信任，再重新测试。
+- [健康检查](http://127.0.0.1:8000/api/v1/health)
+- [Swagger API 文档](http://127.0.0.1:8000/docs)
+- [ReDoc API 文档](http://127.0.0.1:8000/redoc)
 
-后端首次启动自动创建：
+## 完成一次主机巡检
 
-- `backend/runtime/assets.db`：SQLite 数据库。
-- `backend/runtime/secrets/fernet.key`：Fernet 加密密钥，后续启动自动读取，无需手动配置。
+1. 首次使用时先在“分组管理”创建分组，再在“主机管理”保存目标主机及 SSH 凭据；需要跳板连接时，先在“跳板机管理”保存跳板机并关联到主机。SSH 密钥可在独立页面维护。
+2. 对目标主机及所用跳板机执行“连接测试”。首次连接或服务器主机密钥变化时，独立核对指纹并确认信任，再重新测试。
+3. 打开“巡检任务”，创建任务，选择 1–32 台主机及至少一类检查。单次任务使用统一默认规则，创建时不能修改阈值或服务配置。
+4. 在任务列表查看进度，在“巡检记录”查看执行状态、风险结论和规则快照。任务结束后导出 Markdown 报告；“巡检规则”页面只读展示当前默认规则。
 
-可通过后端 `AUTOPS_DATA_DIR` 指定绝对数据目录，建议自定义目录位于仓库外。Windows 下需要 PowerShell 5.1，程序用运行账号的 ACL 保护密钥目录和文件；Linux 下目录权限为 `0700`、密钥文件为 `0600`。权限设置失败会阻止启动。
+连接测试只验证 SSH 身份和登录，不执行远程命令或 `sudo`。巡检面向 Linux 主机，执行固定只读命令，不自动使用 `sudo`；目标账号须有相应命令的执行权限。
 
-备份时先停止本地后端服务，再同时复制数据库与对应密钥；迁移后以目标服务账号运行。已有加密凭据时，密钥丢失、损坏或不匹配会阻止启动，不会生成替代密钥。默认运行目录已被 Git 忽略。
+**执行完成不代表主机健康正常。** 检查失败、跳过或中断时，不能据此判定健康正常。关闭弹窗不取消后台任务；服务重启后未完成记录标记为中断。
 
-当前不包含身份认证、操作审计、权限控制、hosts 批量导入、部署、Docker 管理或日志采集模块；巡检中的 Docker 服务状态检查不等于 Docker 管理功能。
+完整检查口径、默认阈值、执行限制、接口和故障处理见 [主机巡检说明](docs/inspections.md)。
 
-连接测试不执行远程命令或 sudo 操作。记录保存到 SQLite，关闭弹窗不取消后端测试，重启后未完成记录标记为中断。当前只支持单实例、单 Uvicorn worker，请勿使用 `--workers` 扩展；多人共享或网络开放前需完成身份认证和权限控制。
+### 页面入口
 
-## 主机巡检
+| 页面 | 路径 |
+| --- | --- |
+| 主机管理 | `/assets/hosts` |
+| 分组管理 | `/assets/groups` |
+| 跳板机管理 | `/assets/jump-hosts` |
+| SSH 密钥管理 | `/assets/ssh-keys` |
+| 巡检任务 | `/inspections` |
+| 巡检记录 | `/inspections/records` |
+| 巡检规则 | `/inspections/rules` |
 
-侧栏“巡检管理”分为“巡检任务”“巡检记录”“巡检规则”三个独立页面。在“巡检任务”创建任务时选择 1-32 台主机及系统基础信息、系统资源、服务状态、网络信息中的至少一项，不允许调整单次任务规则。先对目标主机（以及所用跳板机）完成连接测试并独立核对、信任 SSH 主机密钥。巡检执行固定只读命令，不自动使用 sudo。任务列表查看进度；“巡检记录”查看各检查的执行状态、风险结论和规则快照，结束后导出 Markdown 报告；“巡检规则”只读展示统一默认阈值、服务列表及执行时限。执行完成不代表健康正常，失败或跳过的检查无法判定风险。详细口径、限制、接口和故障处理见 [主机巡检](docs/inspections.md)。
+## 配置
 
-## 验证与构建
+需要调整配置时，复制模板后编辑；已有 `.env` 时直接编辑，避免覆盖现有配置。
+
+```powershell
+if (-not (Test-Path -LiteralPath backend/.env)) { Copy-Item backend/.env.example backend/.env }
+if (-not (Test-Path -LiteralPath frontend/.env)) { Copy-Item frontend/.env.example frontend/.env }
+```
+
+后端固定读取 `backend/.env`，前端读取 `frontend/.env`。
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `AUTOPS_APP_NAME` | `autops API` | 后端应用名称 |
+| `AUTOPS_DEBUG` | `false` | 后端调试模式 |
+| `AUTOPS_DATA_DIR` | `backend/runtime`（项目内的绝对路径） | 数据与密钥目录；自定义时指定绝对路径，建议放在仓库外 |
+| `AUTOPS_CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | 允许的跨域来源，使用 JSON 数组 |
+| `VITE_API_BASE_URL` | `/api/v1` | 浏览器请求的 API 前缀 |
+| `API_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite 开发代理的后端地址 |
+
+开发时 Vite 将 `/api` 请求代理至后端。`VITE_` 变量会进入浏览器，不能存放密钥；`API_PROXY_TARGET` 仅用于开发代理。
+
+## 数据与备份
+
+默认运行数据位于 `backend/runtime/`，该目录已被 Git 忽略：
+
+| 文件 | 内容 |
+| --- | --- |
+| `assets.db` | 资产、连接测试、SSH 主机密钥信任和巡检记录 |
+| `secrets/fernet.key` | 凭据加密密钥，首次启动创建，后续启动自动读取 |
+
+备份前先停止后端服务，再同时复制数据库与对应密钥。迁移后以目标服务账号运行；已有加密凭据时，密钥丢失、损坏或不匹配会阻止启动，不会生成替代密钥。
+
+Windows 使用运行账号的 ACL 保护密钥目录和文件；Linux 下目录权限为 `0700`、密钥文件为 `0600`。权限设置失败会阻止启动。数据库和报告包含运维信息，应限制访问。
+
+## 开发与验证
+
+### 项目结构
+
+```text
+autops/
+├── backend/
+│   ├── app/
+│   │   ├── api/           # HTTP 接口与共用依赖
+│   │   ├── core/          # 配置、存储、迁移与 SSH 基础能力
+│   │   ├── repositories/  # 数据访问
+│   │   ├── services/      # 连接测试、巡检执行与报告
+│   │   └── schemas/       # 请求与响应模型
+│   ├── runtime/           # 自动生成的数据库和密钥
+│   └── tests/             # 后端测试
+├── frontend/
+│   └── src/
+│       ├── api/           # 请求封装与业务接口
+│       ├── components/    # 共用组件
+│       ├── router/        # 页面路由
+│       ├── styles/        # 样式
+│       ├── types/         # TypeScript 类型
+│       └── views/         # 资产与巡检页面
+├── docs/                  # 开发规范与功能文档
+├── AGENTS.md              # AI 编程助手工作约定
+└── FILE_INDEX.md          # 完整文件用途索引
+```
+
+完整文件定位见 [仓库文件索引](FILE_INDEX.md)。根目录 `main.py` 和 `requirements*.txt` 保留启动与依赖安装的兼容入口；兼容启动命令为 `uvicorn main:app --reload`，兼容接口为 `/` 和 `/health`。
+
+### 检查命令
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
@@ -125,6 +156,22 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
-构建命令包含类型检查，产物位于 `frontend/dist/`。可使用 `npm --prefix frontend run preview` 查看产物；预览服务不提供开发代理，接口联通需要配置实际后端地址及对应 CORS 来源。
+`build` 已包含类型检查，产物位于 `frontend/dist/`。使用 `npm --prefix frontend run preview` 可预览构建产物；预览服务不提供开发代理，接口联通需要配置实际后端地址及对应 CORS 来源。
 
-生产环境使用静态服务器提供 `dist/`，将 `/api` 反向代理至 FastAPI；Vue history 路由需回退到 `index.html`。当前资产管理使用单实例 SQLite。
+### 参与开发
+
+修改前阅读 [Agent 工作约定](AGENTS.md)、[前端开发规范](docs/AI-前端开发约束规范.md)和[后端开发规范](docs/AI-后端开发约束规范.md)，按索引定位并阅读相关源码。复用现有实现，保持改动聚焦，并执行与修改相关的检查。
+
+功能、配置或启动方式变化时同步更新文档。AI 生成代码须经人工审核，提交、推送与合并按授权执行。
+
+## 部署边界
+
+构建后由静态服务器提供 `frontend/dist/`，将 `/api` 反向代理至 FastAPI。Vue 使用 history 路由，静态服务器需将页面路由回退到 `index.html`。
+
+SQLite 与后台任务队列当前只支持单后端实例、单 Uvicorn worker，请勿使用 `--workers` 或让多个实例共享数据库来扩容。
+
+当前没有 hosts 批量导入、部署管理、Docker 管理或日志采集模块。巡检中的 Docker 服务状态检查仅检查服务状态。
+
+## 许可证
+
+当前仓库未提供许可证文件，尚未声明开源授权条款。
