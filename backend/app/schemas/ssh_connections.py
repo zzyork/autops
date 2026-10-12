@@ -37,6 +37,7 @@ class ConnectionTestResponse(BaseModel):
     status: TestStatus
     stage: Literal["target", "jump_host"] | None
     failure_code: Literal["authentication", "timeout", "connection", "configuration", "internal"] | None
+    failure_message: str | None
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None

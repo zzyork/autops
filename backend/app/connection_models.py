@@ -43,6 +43,7 @@ class ConnectionTest(Base):
     status: Mapped[str] = mapped_column(default="queued")
     stage: Mapped[str | None]
     failure_code: Mapped[str | None]
+    failure_message: Mapped[str | None]
     challenge: Mapped[dict | None] = mapped_column(JSON)
     candidate_key: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(default=utc_now)

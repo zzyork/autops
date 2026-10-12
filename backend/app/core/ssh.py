@@ -15,6 +15,8 @@ from .ssh_network import NetworkDeadline, open_socket
 
 CONNECTION_TIMEOUT_SECONDS = 30
 PHASE_TIMEOUT_SECONDS = 10
+MAX_FAILURE_MESSAGE_LENGTH = 1000
+FAILURE_MESSAGE_TRUNCATION_MARKER = "\n[错误内容已截断]"
 
 
 @dataclass(frozen=True)
@@ -39,10 +41,33 @@ class HostKeyRequired(Exception):
 
 
 class SSHConnectionError(Exception):
-    def __init__(self, code: str, stage: str):
+    def __init__(self, code: str, stage: str, message: str):
         self.code = code
         self.stage = stage
-        super().__init__(code)
+        self.message = message
+        super().__init__(message)
+
+
+def failure_message(cause: Exception, *endpoints: SSHEndpoint) -> str:
+    """使用原始异常文本，过滤已知凭据及控制字符，超长时标记截断。"""
+    message = str(cause) or type(cause).__name__
+    for endpoint in endpoints:
+        for secret in (endpoint.password, endpoint.private_key):
+            if secret:
+                message = message.replace(secret, "[REDACTED]")
+                message = message.replace(repr(secret)[1:-1], "[REDACTED]")
+                if secret == endpoint.private_key:
+                    for line in secret.splitlines():
+                        if line.strip():
+                            message = message.replace(line.strip(), "[REDACTED]")
+    message = "".join(character for character in message if character.isprintable() or character in "\n\t")
+    if len(message) > MAX_FAILURE_MESSAGE_LENGTH:
+        message = message[:MAX_FAILURE_MESSAGE_LENGTH - len(FAILURE_MESSAGE_TRUNCATION_MARKER)] + FAILURE_MESSAGE_TRUNCATION_MARKER
+    return message
+
+
+def connection_error(code: str, stage: str, endpoint: SSHEndpoint, cause: Exception) -> SSHConnectionError:
+    return SSHConnectionError(code, stage, failure_message(cause, endpoint))
 
 
 def fingerprint(raw: bytes) -> str:
@@ -81,9 +106,9 @@ def _connect(endpoint: SSHEndpoint, deadline: NetworkDeadline, stage: str, sock:
         client.set_missing_host_key_policy(VerifyHostKey(endpoint))
         pkey = load_private_key(endpoint.private_key) if endpoint.private_key is not None else None
     except TimeoutError as exc:
-        raise SSHConnectionError("timeout", stage) from exc
+        raise connection_error("timeout", stage, endpoint, exc) from exc
     except (ValueError, TypeError, paramiko.SSHException) as exc:
-        raise SSHConnectionError("configuration", stage) from exc
+        raise connection_error("configuration", stage, endpoint, exc) from exc
     try:
         if sock is None:
             sock = open_socket(endpoint.address, endpoint.port, deadline, PHASE_TIMEOUT_SECONDS)
@@ -100,18 +125,18 @@ def _connect(endpoint: SSHEndpoint, deadline: NetworkDeadline, stage: str, sock:
         )
         transport = client.get_transport()
         if transport is None or not transport.is_authenticated():
-            raise SSHConnectionError("connection", stage)
+            raise connection_error("connection", stage, endpoint, paramiko.SSHException("SSH transport is not authenticated"))
         deadline.remaining()
         return client
     except HostKeyRequired:
         raise
     except paramiko.AuthenticationException as exc:
         expired = deadline.expired.is_set() or time.monotonic() >= deadline.end
-        raise SSHConnectionError("timeout" if expired else "authentication", stage) from exc
+        raise connection_error("timeout" if expired else "authentication", stage, endpoint, exc) from exc
     except (TimeoutError, socket.timeout) as exc:
-        raise SSHConnectionError("timeout", stage) from exc
+        raise connection_error("timeout", stage, endpoint, exc) from exc
     except (OSError, EOFError, paramiko.SSHException) as exc:
-        raise SSHConnectionError("timeout" if deadline.expired.is_set() else "connection", stage) from exc
+        raise connection_error("timeout" if deadline.expired.is_set() else "connection", stage, endpoint, exc) from exc
 
 
 @contextmanager
@@ -123,20 +148,20 @@ def open_ssh_connection(target: SSHEndpoint, jump: SSHEndpoint | None = None) ->
             proxy = _connect(jump, deadline, "jump_host")
             transport = proxy.get_transport()
             if transport is None:
-                raise SSHConnectionError("connection", "jump_host")
+                raise connection_error("connection", "jump_host", jump, paramiko.SSHException("Jump host SSH transport is unavailable"))
             try:
                 remaining = deadline.remaining()
                 tunnel = transport.open_channel("direct-tcpip", (target.address, target.port), ("127.0.0.1", 0), timeout=min(PHASE_TIMEOUT_SECONDS, remaining))
                 deadline.register(tunnel.close)
             except (TimeoutError, socket.timeout) as exc:
-                raise SSHConnectionError("timeout", "jump_host") from exc
+                raise connection_error("timeout", "jump_host", jump, exc) from exc
             except (OSError, EOFError, paramiko.SSHException) as exc:
-                raise SSHConnectionError("timeout" if deadline.expired.is_set() else "connection", "jump_host") from exc
+                raise connection_error("timeout" if deadline.expired.is_set() else "connection", "jump_host", jump, exc) from exc
         client = _connect(target, deadline, "target", tunnel)
         try:
             deadline.stop_timer()
         except TimeoutError as exc:
-            raise SSHConnectionError("timeout", "target") from exc
+            raise connection_error("timeout", "target", target, exc) from exc
         yield client
     finally:
         deadline.close()

@@ -134,6 +134,7 @@ export interface ConnectionTest {
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_trust' | 'interrupted' | 'trusted'
   stage: 'target' | 'jump_host' | null
   failure_code: 'authentication' | 'timeout' | 'connection' | 'configuration' | 'internal' | null
+  failure_message: string | null
   created_at: string
   started_at: string | null
   finished_at: string | null

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ..api.dependencies import commit
 from ..connection_models import ConnectionTest, KnownHostKey
-from ..core.ssh import HostKeyRequired, SSHConnectionError, fingerprint, open_ssh_connection
+from ..core.ssh import HostKeyRequired, SSHConnectionError, failure_message, fingerprint, open_ssh_connection
 from ..models import utc_now
 from ..repositories.ssh_connections import get_trust, interrupt_tests
 from ..schemas.ssh_connections import ConnectionTestInput
@@ -57,7 +57,7 @@ class ConnectionTestManager:
             id=str(uuid4()), target_type=data.target_type, target_id=data.target_id,
             target_name=plan.name, address=plan.target.address, port=plan.target.port,
             username=plan.target.username, via_jump_host=plan.jump_name, snapshot=plan.snapshot,
-            status="queued", stage=None, failure_code=None, challenge=None, candidate_key=None,
+            status="queued", stage=None, failure_code=None, failure_message=None, challenge=None, candidate_key=None,
             started_at=None, finished_at=None, duration_ms=None,
         )
         try:
@@ -87,6 +87,7 @@ class ConnectionTestManager:
                 record.status = "running"
                 record.started_at = utc_now()
                 session.commit()
+                plan = None
                 try:
                     plan = resolve_plan(session, self.cipher, *identity)
                     if plan.snapshot != record.snapshot:
@@ -111,13 +112,19 @@ class ConnectionTestManager:
                 except SSHConnectionError as exc:
                     record.status = "failed"
                     record.failure_code = exc.code
+                    endpoints = (plan.target,) + ((plan.jump,) if plan.jump is not None else ())
+                    record.failure_message = failure_message(exc, *endpoints)
                     record.stage = exc.stage
-                except HTTPException:
+                except HTTPException as exc:
                     record.status = "failed"
                     record.failure_code = "configuration"
+                    endpoints = (plan.target,) + ((plan.jump,) if plan.jump is not None else ()) if plan is not None else ()
+                    record.failure_message = failure_message(Exception(str(exc.detail)), *endpoints)
                 except Exception as exc:
                     record.status = "failed"
                     record.failure_code = "internal"
+                    endpoints = (plan.target,) + ((plan.jump,) if plan.jump is not None else ()) if plan is not None else ()
+                    record.failure_message = failure_message(exc, *endpoints)
                     logger.error("SSH test %s failed: %s", test_id, type(exc).__name__)
                 record.finished_at = utc_now()
                 record.duration_ms = round((time.monotonic() - started) * 1000)

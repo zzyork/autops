@@ -188,6 +188,7 @@ function statusType(status: ConnectionTest['status']) {
 function dateLabel(value: string) {
   return new Date(value).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
+
 </script>
 
 <template>
@@ -211,15 +212,14 @@ function dateLabel(value: string) {
           <h2>测试结果 <ElTag :type="statusType(selected.status)" size="small">{{ statusText(selected.status) }}</ElTag></h2>
           <dl class="ssh-test-details">
             <dt>目标</dt><dd>{{ selected.target_name }} · {{ selected.address }}:{{ selected.port }}</dd>
-            <dt>登录用户</dt><dd>{{ selected.username }}</dd>
-            <template v-if="selected.via_jump_host"><dt>经由跳板机</dt><dd>{{ selected.via_jump_host }}</dd></template>
-            <template v-if="selected.stage"><dt>阶段</dt><dd>{{ selected.stage === 'jump_host' ? '跳板机' : '目标主机' }}</dd></template>
-            <dt>创建时间</dt><dd>{{ dateLabel(selected.created_at) }}</dd>
-            <template v-if="selected.started_at"><dt>开始时间</dt><dd>{{ dateLabel(selected.started_at) }}</dd></template>
-            <template v-if="selected.finished_at"><dt>结束时间</dt><dd>{{ dateLabel(selected.finished_at) }}</dd></template>
-            <template v-if="selected.duration_ms !== null"><dt>耗时</dt><dd>{{ selected.duration_ms }} ms</dd></template>
+            <dt>登录用户</dt><dd>{{ selected.username }}{{ selected.via_jump_host ? '（目标主机）' : '' }}</dd>
+            <dt>开始时间</dt><dd>{{ selected.started_at ? dateLabel(selected.started_at) : '尚未开始' }}</dd>
+            <dt>耗时</dt><dd>{{ selected.duration_ms !== null ? `${selected.duration_ms} ms` : (selected.status === 'running' ? '计时中' : '未记录') }}</dd>
+            <template v-if="selected.status === 'failed'"><dt>结果</dt><dd class="ssh-test-error">{{ selected.failure_message === null ? '该记录未保存具体错误，请重新测试' : selected.failure_message }}</dd></template>
           </dl>
-          <div v-if="selected.challenge" class="ssh-test-challenge">
+        </section>
+        <section v-if="selected && !recordLoadFailed && selected.challenge" class="ssh-test-challenge" aria-label="服务器身份核对">
+            <h2>服务器身份核对</h2>
             <ElAlert v-if="selected.status === 'awaiting_trust'" :title="selected.challenge.previous_fingerprint === null ? '首次连接：请独立核对服务器身份指纹' : '主机密钥已变化：请独立核对服务器身份指纹'" type="warning" :closable="false" show-icon />
             <p>服务器身份：{{ selected.challenge.target_type === 'jump_host' ? '跳板机' : '目标主机' }} · {{ selected.challenge.address }}:{{ selected.challenge.port }}</p>
             <p>密钥类型：{{ selected.challenge.key_type }}</p>
@@ -230,7 +230,6 @@ function dateLabel(value: string) {
               <ElCheckbox v-model="verified" :disabled="trusting">我已通过独立渠道核对上述服务器身份和新指纹</ElCheckbox>
               <div><ElButton type="primary" :loading="trusting" :disabled="!verified" @click="trustKey">信任此主机密钥</ElButton></div>
             </template>
-          </div>
         </section>
       </template>
     </div>
@@ -255,6 +254,7 @@ function dateLabel(value: string) {
 .ssh-test-details { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
 .ssh-test-details dt { color: var(--ui-text-secondary); }
 .ssh-test-details dd { margin: 0; overflow-wrap: anywhere; }
+.ssh-test-error { white-space: pre-wrap; }
 .ssh-test-challenge { display: grid; gap: 8px; margin-top: 16px; padding: 12px; border: 1px solid var(--ui-border); background: var(--ui-warning-soft); overflow-wrap: anywhere; }
 .ssh-test-challenge .el-checkbox { height: auto; white-space: normal; }
 .ssh-test-challenge .el-checkbox :deep(.el-checkbox__label) { white-space: normal; color: var(--ui-text); }

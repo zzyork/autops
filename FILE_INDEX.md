@@ -85,7 +85,7 @@
 | `backend/app/core/ssh.py` | SSH 直连、单层跳板、内存私钥解析与身份校验。最后同步：2026-10-12。 |
 | `backend/app/core/ssh_network.py` | DNS 与 TCP 建连、整体超时及网络资源清理。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/__init__.py` | 声明数据库迁移包。最后同步：2026-10-12。 |
-| `backend/app/core/migrations/ssh_connections.py` | 幂等创建连接测试与主机密钥信任表。最后同步：2026-10-12。 |
+| `backend/app/core/migrations/ssh_connections.py` | 幂等创建连接测试与主机密钥信任表，并为已有测试记录补充原始错误文本列。最后同步：2026-10-12。 |
 | `backend/app/repositories/__init__.py` | 声明仓储包。最后同步：2026-10-12。 |
 | `backend/app/repositories/ssh_connections.py` | SSH 资产、密钥、信任与测试历史查询及重启状态更新。最后同步：2026-10-12。 |
 | `backend/app/services/__init__.py` | 声明业务服务包。最后同步：2026-10-12。 |

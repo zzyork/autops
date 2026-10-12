@@ -4,6 +4,7 @@ import '@/styles/assets.css'
 
 defineProps<{ title: string }>()
 const menuCollapsed = ref(false)
+const assetsExpanded = ref(true)
 </script>
 
 <template>
@@ -14,11 +15,16 @@ const menuCollapsed = ref(false)
     </header>
     <aside class="console-sidebar" aria-label="主导航">
       <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>
-      <div v-if="!menuCollapsed" class="console-menu-label">资产管理</div>
+      <button class="console-menu-label" type="button" :aria-expanded="assetsExpanded" aria-controls="assets-navigation" :aria-label="assetsExpanded ? '收起资产管理菜单' : '展开资产管理菜单'" title="资产管理" @click="assetsExpanded = !assetsExpanded">
+        <span v-if="!menuCollapsed">资产管理</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="assetsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+      </button>
+      <nav v-show="assetsExpanded" id="assets-navigation" aria-label="资产管理">
       <RouterLink to="/assets/hosts" class="console-menu-item" aria-label="主机管理" title="主机管理"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 21h8M12 16v5M3 12h18" /></svg><span v-if="!menuCollapsed">主机管理</span></RouterLink>
       <RouterLink to="/assets/jump-hosts" class="console-menu-item" aria-label="跳板机管理" title="跳板机管理"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M6 7h12M6 12h12M6 17h12M3 4v16M21 4v16" /></svg><span v-if="!menuCollapsed">跳板机管理</span></RouterLink>
       <RouterLink to="/assets/ssh-keys" class="console-menu-item" aria-label="SSH 密钥管理" title="SSH 密钥管理"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" /><path d="M11 12l9 9m-4-4 2-2m-5-1 2-2" /></svg><span v-if="!menuCollapsed">SSH 密钥管理</span></RouterLink>
       <RouterLink to="/assets/groups" class="console-menu-item" aria-label="分组管理" title="分组管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V4h6l2 3h10v13H3z" /></svg><span v-if="!menuCollapsed">分组管理</span></RouterLink>
+      </nav>
     </aside>
     <div class="console-content">
       <div class="console-breadcrumb"><span>资产管理</span><span class="breadcrumb-separator">/</span><strong>{{ title }}</strong></div>
