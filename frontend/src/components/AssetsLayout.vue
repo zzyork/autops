@@ -16,8 +16,9 @@ const assetsExpanded = ref(true)
     <aside class="console-sidebar" aria-label="主导航">
       <div class="console-sidebar-heading"><span v-if="!menuCollapsed">控制台</span><button class="menu-toggle" type="button" :aria-label="menuCollapsed ? '展开菜单' : '收起菜单'" :aria-expanded="!menuCollapsed" @click="menuCollapsed = !menuCollapsed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button></div>
       <button class="console-menu-label" type="button" :aria-expanded="assetsExpanded" aria-controls="assets-navigation" :aria-label="assetsExpanded ? '收起资产管理菜单' : '展开资产管理菜单'" title="资产管理" @click="assetsExpanded = !assetsExpanded">
+        <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5" /></svg>
         <span v-if="!menuCollapsed">资产管理</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="assetsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+        <svg v-if="!menuCollapsed" class="console-menu-label-arrow" viewBox="0 0 24 24" aria-hidden="true"><path :d="assetsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
       </button>
       <nav v-show="assetsExpanded" id="assets-navigation" aria-label="资产管理">
       <RouterLink to="/assets/hosts" class="console-menu-item" aria-label="主机管理" title="主机管理"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 21h8M12 16v5M3 12h18" /></svg><span v-if="!menuCollapsed">主机管理</span></RouterLink>
