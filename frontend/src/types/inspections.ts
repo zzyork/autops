@@ -25,7 +25,6 @@ export interface InspectionInput {
   name: string
   hosts: HostSelection[]
   checks: CheckId[]
-  config: InspectionConfig
 }
 export interface Metric { name: string; value: string | number | null; unit: string | null }
 export interface ResultTable { name: string; columns: string[]; rows: string[][] }

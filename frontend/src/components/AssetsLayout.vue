@@ -5,6 +5,7 @@ import '@/styles/assets.css'
 withDefaults(defineProps<{ title: string; section?: string }>(), { section: '资产管理' })
 const menuCollapsed = ref(false)
 const assetsExpanded = ref(true)
+const inspectionsExpanded = ref(true)
 </script>
 
 <template>
@@ -26,7 +27,16 @@ const assetsExpanded = ref(true)
       <RouterLink to="/assets/ssh-keys" class="console-menu-item" aria-label="SSH 密钥管理" title="SSH 密钥管理"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" /><path d="M11 12l9 9m-4-4 2-2m-5-1 2-2" /></svg><span v-if="!menuCollapsed">SSH 密钥管理</span></RouterLink>
       <RouterLink to="/assets/groups" class="console-menu-item" aria-label="分组管理" title="分组管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V4h6l2 3h10v13H3z" /></svg><span v-if="!menuCollapsed">分组管理</span></RouterLink>
       </nav>
-      <RouterLink to="/inspections" class="console-menu-item" aria-label="巡检任务" title="巡检任务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 10l2 2 4-4M8 16h8" /></svg><span v-if="!menuCollapsed">巡检任务</span></RouterLink>
+      <button class="console-menu-label" type="button" :aria-expanded="inspectionsExpanded" aria-controls="inspections-navigation" :aria-label="inspectionsExpanded ? '收起巡检管理菜单' : '展开巡检管理菜单'" title="巡检管理" @click="inspectionsExpanded = !inspectionsExpanded">
+        <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 10l2 2 4-4M8 16h8" /></svg>
+        <span v-if="!menuCollapsed">巡检管理</span>
+        <svg v-if="!menuCollapsed" class="console-menu-label-arrow" viewBox="0 0 24 24" aria-hidden="true"><path :d="inspectionsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+      </button>
+      <nav v-show="inspectionsExpanded" id="inspections-navigation" aria-label="巡检管理">
+        <RouterLink to="/inspections" class="console-menu-item" aria-label="巡检任务" title="巡检任务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 10l2 2 4-4M8 16h8" /></svg><span v-if="!menuCollapsed">巡检任务</span></RouterLink>
+        <RouterLink to="/inspections/records" class="console-menu-item" aria-label="巡检记录" title="巡检记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 7h8M8 12h8M8 17h5" /></svg><span v-if="!menuCollapsed">巡检记录</span></RouterLink>
+        <RouterLink to="/inspections/rules" class="console-menu-item" aria-label="巡检规则" title="巡检规则"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6" /></svg><span v-if="!menuCollapsed">巡检规则</span></RouterLink>
+      </nav>
     </aside>
     <div class="console-content">
       <div class="console-breadcrumb"><span>{{ section }}</span><span class="breadcrumb-separator">/</span><strong>{{ title }}</strong></div>

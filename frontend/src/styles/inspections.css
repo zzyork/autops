@@ -1,6 +1,7 @@
 .inspection-name { white-space: normal; text-align: left; height: auto; overflow-wrap: anywhere; }
 .inspection-pagination { display: flex; justify-content: flex-end; padding-top: 16px; }
 .inspection-detail-wrap { margin-top: 16px; min-height: 100px; }
+.inspection-record-detail { margin-bottom: 16px; min-height: 100px; }
 .inspection-retry { display: flex; align-items: center; gap: 8px; padding: 16px; color: var(--ui-text-secondary); }
 .inspection-create { min-height: 110px; }
 .inspection-create .form-section-title em { font-style: normal; color: var(--ui-danger); }

@@ -83,7 +83,6 @@ class InspectionInput(InputModel):
     name: str = Field(min_length=1, max_length=100)
     hosts: list[HostSelection] = Field(min_length=1, max_length=32)
     checks: list[CheckId] = Field(min_length=1, max_length=4)
-    config: InspectionConfig = Field(default_factory=InspectionConfig)
 
     @field_validator("name")
     @classmethod

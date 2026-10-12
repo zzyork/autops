@@ -4,9 +4,8 @@ import { ElAlert, ElButton, ElCheckbox, ElCheckboxGroup, ElDialog, ElInput, ElLo
 import { listGroups, listHosts } from '@/api/assets'
 import { createInspectionTask, getInspectionCatalog } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
-import InspectionConfigForm from '@/components/InspectionConfigForm.vue'
 import type { Host, HostGroup } from '@/types/api'
-import type { CheckId, InspectionCatalog, InspectionConfig, InspectionInput, TaskDetail } from '@/types/inspections'
+import type { CheckId, InspectionCatalog, InspectionInput, TaskDetail } from '@/types/inspections'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; created: [task: TaskDetail] }>()
@@ -15,7 +14,6 @@ const MAX_HOSTS = 32
 const hosts = ref<Host[]>([])
 const groups = ref<HostGroup[]>([])
 const catalog = ref<InspectionCatalog | null>(null)
-const config = ref<InspectionConfig | null>(null)
 const name = ref('')
 const selectedHosts = ref<number[]>([])
 const selectedChecks = ref<CheckId[]>([])
@@ -25,7 +23,6 @@ const loaded = ref(false)
 const saving = ref(false)
 const formError = ref('')
 const invalidField = ref<'name' | 'hosts' | 'checks' | null>(null)
-const configForm = ref<InstanceType<typeof InspectionConfigForm> | null>(null)
 const visibleHosts = computed(() => hosts.value.filter((host) => groupId.value === null || host.group_id === groupId.value))
 let session = 0
 
@@ -35,7 +32,6 @@ watch(() => props.modelValue, (visible) => {
   hosts.value = []
   groups.value = []
   catalog.value = null
-  config.value = null
   name.value = ''
   selectedHosts.value = []
   selectedChecks.value = []
@@ -60,7 +56,6 @@ async function loadOptions() {
     hosts.value = hostList
     groups.value = groupList
     catalog.value = definitions
-    config.value = structuredClone(definitions.defaults)
     selectedChecks.value = definitions.checks.map((check) => check.id)
     loaded.value = true
   } catch {
@@ -80,7 +75,7 @@ function toggleHost(id: number, checked: string | number | boolean) {
 }
 
 async function submit() {
-  if (!loaded.value || !config.value || saving.value) return
+  if (!loaded.value || saving.value) return
   const taskName = name.value.trim()
   if (!taskName || taskName.length > 100) {
     invalidField.value = 'name'
@@ -97,12 +92,10 @@ async function submit() {
     formError.value = '请至少选择一个检查项。'
     return
   }
-  if (!configForm.value?.validate()) return
   const body: InspectionInput = {
     name: taskName,
     hosts: hosts.value.filter((host) => selectedHosts.value.includes(host.id)).map((host) => ({ id: host.id, version: host.version })),
     checks: [...selectedChecks.value],
-    config: configForm.value.normalized(),
   }
   const current = session
   saving.value = true
@@ -122,7 +115,7 @@ async function submit() {
 <template>
   <ElDialog :model-value="modelValue" align-center title="创建巡检任务" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="emit('update:modelValue', $event)">
     <div v-loading="loading" class="inspection-create asset-form">
-      <template v-if="loaded && catalog && config">
+      <template v-if="loaded && catalog">
         <label class="field" :class="{ 'is-error': invalidField === 'name' }"><span>任务名称 <em>*</em></span><ElInput v-model="name" maxlength="100" :aria-invalid="invalidField === 'name'" placeholder="输入任务名称" /></label>
         <div class="form-section-title">选择主机 <em>*</em></div>
         <div class="inspection-selection-head"><span>已选 {{ selectedHosts.length }} / {{ MAX_HOSTS }} 台</span><label class="field">分组筛选<ElSelect v-model="groupId" clearable :value-on-clear="null" placeholder="全部分组" class="inspection-group-select" aria-label="按分组筛选主机"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label></div>
@@ -137,7 +130,7 @@ async function submit() {
         <ElCheckboxGroup v-model="selectedChecks" class="inspection-check-picker" :class="{ 'is-error': invalidField === 'checks' }" aria-label="检查项">
           <ElCheckbox v-for="check in catalog.checks" :key="check.id" :value="check.id"><span>{{ check.title }}</span><span class="inspection-muted">{{ check.description }}</span></ElCheckbox>
         </ElCheckboxGroup>
-        <InspectionConfigForm ref="configForm" v-model="config" />
+        <p class="inspection-muted">本次巡检使用统一默认规则。阈值、服务配置及执行时限可在“巡检规则”页面查看。</p>
         <ElAlert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
       </template>
       <div v-else-if="!loading" class="inspection-retry"><ElButton @click="loadOptions">重试加载</ElButton></div>

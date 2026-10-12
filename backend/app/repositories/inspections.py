@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, noload, selectinload
 
 from ..inspection_models import InspectionCheckRun, InspectionHostRun, InspectionTask
 from ..models import HostGroup, utc_now
-from ..schemas.inspections import CheckPayload, InspectionInput
+from ..schemas.inspections import CheckPayload, InspectionConfig, InspectionInput
 from ..services.inspection_checks import CHECK_TITLES
 
 ACTIVE = ("queued", "running")
@@ -29,7 +29,7 @@ def get_group_name(session: Session, group_id: int) -> str:
 
 def create_task(session: Session, data: InspectionInput, snapshots: list[dict]) -> InspectionTask:
     task = InspectionTask(id=str(uuid4()), name=data.name, status="queued", host_count=len(data.hosts),
-                          check_ids=data.checks, config=data.config.model_dump(mode="json"), rule_version="1")
+                          check_ids=data.checks, config=InspectionConfig().model_dump(mode="json"), rule_version="1")
     for position, snapshot in enumerate(snapshots):
         run = InspectionHostRun(id=str(uuid4()), position=position, status="queued", **snapshot)
         run.checks = [InspectionCheckRun(position=index, check_id=check_id, title=CHECK_TITLES[check_id],

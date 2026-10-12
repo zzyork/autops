@@ -143,7 +143,7 @@
 | `frontend/src/components/AssetsLayout.vue` | 资产与巡检页面共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 资产独立页面与巡检任务页面路由。最后同步：2026-10-12。 |
+| `frontend/src/router/index.ts` | 资产独立页面与巡检任务、记录、规则页面路由。最后同步：2026-10-12。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
 | `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
@@ -153,4 +153,7 @@
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |
-| `frontend/src/views/InspectionsView.vue` | 巡检任务列表、分页、详情选择与活跃任务轮询页面。最后同步：2026-10-12。 |
+| `frontend/src/views/InspectionsView.vue` | 独立巡检任务页面，提供创建、任务进度与记录跳转。最后同步：2026-10-12。 |
+| `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录页面，提供执行详情、规则快照与报告导出。最后同步：2026-10-12。 |
+| `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，只读展示检查项、默认阈值、时限与服务判定。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表，复用创建入口、记录选择和活跃执行轮询。最后同步：2026-10-12。 |
