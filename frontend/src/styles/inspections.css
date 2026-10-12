@@ -1,0 +1,46 @@
+.inspection-name { white-space: normal; text-align: left; height: auto; overflow-wrap: anywhere; }
+.inspection-pagination { display: flex; justify-content: flex-end; padding-top: 16px; }
+.inspection-detail-wrap { margin-top: 16px; min-height: 100px; }
+.inspection-retry { display: flex; align-items: center; gap: 8px; padding: 16px; color: var(--ui-text-secondary); }
+.inspection-create { min-height: 110px; }
+.inspection-create .form-section-title em { font-style: normal; color: var(--ui-danger); }
+.inspection-selection-head, .inspection-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.inspection-selection-head .field { min-width: 210px; }
+.inspection-group-select { width: 210px; }
+.inspection-host-picker { max-height: 220px; overflow: auto; border: 1px solid var(--ui-border); }
+.inspection-host-picker.is-error, .inspection-check-picker.is-error { border-color: var(--ui-danger); }
+.inspection-host-picker .el-table { min-width: 500px; }
+.inspection-check-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; padding: 8px; border: 1px solid var(--ui-border); }
+.inspection-check-picker .el-checkbox { height: auto; margin: 0; align-items: flex-start; }
+.inspection-check-picker .el-checkbox__label { display: grid; white-space: normal; line-height: 1.43; }
+.inspection-muted { color: var(--ui-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.inspection-config { padding-bottom: 0; }
+.inspection-config .form-section-title:first-child { border-top: 1px solid var(--ui-border); padding-top: 20px; }
+.inspection-thresholds { display: grid; gap: 8px; }
+.inspection-threshold-row { display: grid; grid-template-columns: 80px repeat(2, minmax(0, 1fr)); gap: 16px; align-items: end; }
+.inspection-threshold-row > span { padding-bottom: 6px; }
+.inspection-service-list { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.inspection-service-row { display: grid; grid-template-columns: 125px minmax(0, 1fr) 62px 40px; align-items: end; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
+.inspection-service-row .inspection-required { margin-bottom: 5px; }
+.inspection-service-row > .el-button { margin-bottom: 4px; }
+.inspection-detail { display: grid; gap: 16px; min-width: 0; }
+.inspection-detail .section-header { margin-bottom: 0; }
+.inspection-detail .section-header h2 { overflow-wrap: anywhere; }
+.inspection-detail-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; color: var(--ui-text-secondary); }
+.inspection-config-summary { border-top: 1px solid var(--ui-border); padding-top: 8px; overflow-wrap: anywhere; }
+.inspection-config-summary summary { cursor: pointer; color: var(--ui-primary); }
+.inspection-config-summary p { margin-top: 8px; color: var(--ui-text-secondary); }
+.inspection-host-choice { display: flex; align-items: center; gap: 8px; }
+.inspection-host-choice .el-select { width: 300px; }
+.inspection-host-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; border-bottom: 1px solid var(--ui-border); overflow-wrap: anywhere; }
+.inspection-key-alert a { text-decoration: underline; }
+.inspection-check-result { display: grid; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--ui-border); min-width: 0; }
+.inspection-check-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.inspection-check-header h3 { margin: 0; font-size: 14px; }
+.inspection-finding { display: flex; align-items: flex-start; gap: 8px; padding: 8px; overflow-wrap: anywhere; }
+.inspection-finding-warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
+.inspection-finding-critical { background: var(--ui-danger-soft); color: var(--ui-danger); }
+.inspection-metrics { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; margin: 0; overflow-wrap: anywhere; }
+.inspection-metrics dt { color: var(--ui-text-secondary); }
+.inspection-metrics dd { margin: 0; }
+.inspection-result-table h4 { font-size: 13px; margin: 0 0 8px; }

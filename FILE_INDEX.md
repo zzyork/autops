@@ -19,9 +19,10 @@
 | `backend/app/api/v1/` | 第一版 API 路由。 |
 | `backend/app/api/v1/endpoints/` | 按功能组织的接口端点。 |
 | `backend/app/core/` | 应用配置与公共基础设施。 |
-| `backend/app/core/migrations/` | SSH 连接相关新增表的可重复启动迁移。最后同步：2026-10-12。 |
-| `backend/app/repositories/` | SSH 资产、主机密钥信任与连接测试记录查询。最后同步：2026-10-12。 |
-| `backend/app/services/` | SSH 资产解析、连接测试执行与主机密钥确认。最后同步：2026-10-12。 |
+| `backend/app/core/migrations/` | SSH 连接与巡检表的可重复启动迁移。最后同步：2026-10-12。 |
+| `backend/app/repositories/` | SSH 资产、信任、连接测试及巡检记录查询。最后同步：2026-10-12。 |
+| `backend/app/services/` | SSH 资产解析、连接测试与主机密钥确认，以及巡检执行与报告。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/` | 四类巡检采集器、结果校验与分发。最后同步：2026-10-12。 |
 | `backend/app/schemas/` | 接口数据模型。 |
 | `backend/tests/` | 主机与分组接口测试，纳入版本管理。最后同步：2026-10-10。 |
 | `docs/` | 项目文档及 AI 前端、后端开发约束规范。最后同步：2026-10-12。 |
@@ -41,7 +42,7 @@
 | `.gitignore` | Git 文件忽略配置，保留后端测试文件供版本管理。最后同步：2026-10-10。 |
 | `AGENTS.md` | 项目 Agent 工作约定，要求设计、编码及审核时严格执行 docs 下的前端、后端开发规范。最后同步：2026-10-12。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
-| `README.md` | 项目介绍与安装、运行和使用说明。最后同步：2026-10-10。 |
+| `README.md` | 项目介绍与安装、运行、资产及巡检使用入口。最后同步：2026-10-12。 |
 | `main.py` | 兼容根目录 `uvicorn main:app` 启动方式的入口。 |
 | `pyproject.toml` | 配置 pytest 测试目录和 Python 导入路径。 |
 | `requirements.txt` | 根目录运行依赖入口，引用后端运行依赖清单。 |
@@ -53,7 +54,7 @@
 | --- | --- |
 | `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准。最后同步：2026-10-12。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
-| `docs/ssh-connections.md` | SSH 连接测试、主机密钥信任、接口和单实例运行说明。最后同步：2026-10-12。 |
+| `docs/inspections.md` | 主机巡检使用、检查口径、执行边界、接口及报告说明。最后同步：2026-10-12。 |
 
 ## 后端文件
 
@@ -64,14 +65,16 @@
 | `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接依赖。最后同步：2026-10-12。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
 | `backend/app/__init__.py` | 声明后端应用包。 |
-| `backend/app/main.py` | FastAPI 应用入口及连接测试执行器生命周期管理。最后同步：2026-10-12。 |
+| `backend/app/main.py` | FastAPI 应用入口及连接测试、巡检执行器生命周期管理。最后同步：2026-10-12。 |
 | `backend/app/connection_models.py` | 连接测试记录与服务器主机密钥信任数据库模型。最后同步：2026-10-12。 |
+| `backend/app/inspection_models.py` | 巡检任务、主机执行和检查结果的数据库模型。最后同步：2026-10-12。 |
 | `backend/app/models.py` | 主机、分组、跳板机与 SSH 密钥数据库模型。最后同步：2026-10-10。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 共用数据库会话依赖、事务提交与分组查询。最后同步：2026-10-10。 |
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
-| `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产与 SSH 连接测试接口。最后同步：2026-10-12。 |
+| `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试与巡检接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/ssh_connections.py` | SSH 连接测试提交、查询与主机密钥确认接口。最后同步：2026-10-12。 |
+| `backend/app/api/v1/endpoints/inspections.py` | 巡检目录、任务创建/查询与 Markdown 报告 JSON 接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/__init__.py` | 声明接口端点包。 |
 | `backend/app/api/v1/endpoints/health.py` | 提供 v1 健康检查接口。 |
 | `backend/app/api/v1/endpoints/hosts.py` | 主机管理及跳板机关联接口。最后同步：2026-10-10。 |
@@ -81,16 +84,26 @@
 | `backend/app/api/v1/endpoints/host_groups.py` | 分组管理接口及组内主机计数。最后同步：2026-10-10。 |
 | `backend/app/core/__init__.py` | 声明配置及公共基础设施包。 |
 | `backend/app/core/config.py` | 后端应用配置。最后同步：2026-10-10。 |
-| `backend/app/core/storage.py` | 资产数据库、凭据密钥管理及旧配置迁移，调用连接表迁移。最后同步：2026-10-12。 |
-| `backend/app/core/ssh.py` | SSH 直连、单层跳板、内存私钥解析与身份校验。最后同步：2026-10-12。 |
+| `backend/app/core/storage.py` | 资产数据库、凭据密钥管理及旧配置迁移，调用连接与巡检表迁移。最后同步：2026-10-12。 |
+| `backend/app/core/ssh.py` | SSH 直连、单层跳板、内存私钥解析、身份校验及可配置连接时限。最后同步：2026-10-12。 |
+| `backend/app/core/ssh_commands.py` | 有时限与输出上限的固定巡检 SSH 命令执行、双流读取及通道清理。最后同步：2026-10-12。 |
 | `backend/app/core/ssh_network.py` | DNS 与 TCP 建连、整体超时及网络资源清理。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/__init__.py` | 声明数据库迁移包。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/ssh_connections.py` | 幂等创建连接测试与主机密钥信任表，并为已有测试记录补充原始错误文本列。最后同步：2026-10-12。 |
+| `backend/app/core/migrations/inspections.py` | 幂等创建巡检任务、主机执行及检查结果表。最后同步：2026-10-12。 |
 | `backend/app/repositories/__init__.py` | 声明仓储包。最后同步：2026-10-12。 |
 | `backend/app/repositories/ssh_connections.py` | SSH 资产、密钥、信任与测试历史查询及重启状态更新。最后同步：2026-10-12。 |
+| `backend/app/repositories/inspections.py` | 巡检任务与执行记录持久化、分页、状态汇总和中断恢复。最后同步：2026-10-12。 |
 | `backend/app/services/__init__.py` | 声明业务服务包。最后同步：2026-10-12。 |
 | `backend/app/services/ssh_assets.py` | SSH 连接配置解析、凭据解密及资产版本快照。最后同步：2026-10-12。 |
 | `backend/app/services/ssh_connections.py` | 有界后台连接测试、持久化结果与事务化主机密钥确认。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/services.py` | systemd 候选服务状态采集与必需服务告警。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/network.py` | 网卡地址、本机 TCP/UDP 监听信息采集。最后同步：2026-10-12。 |
 | `backend/app/core/ssh_keys.py` | SSH 公私钥内容与配对校验、指纹生成。最后同步：2026-10-10。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
@@ -98,6 +111,7 @@
 | `backend/app/schemas/jump_hosts.py` | 跳板机接口数据模型。 |
 | `backend/app/schemas/ssh_keys.py` | SSH 密钥与引用接口数据模型。 |
 | `backend/app/schemas/ssh_connections.py` | SSH 连接测试请求、状态、身份挑战与响应模型。最后同步：2026-10-12。 |
+| `backend/app/schemas/inspections.py` | 巡检输入校验、默认配置、结果、任务和报告响应模型。最后同步：2026-10-12。 |
 | `backend/tests/test_assets.py` | 使用 TestClient 验证主机、分组的 CRUD、筛选及异常路径。最后同步：2026-10-10。 |
 
 ## 前端文件
@@ -117,18 +131,26 @@
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/api/ssh_connections.ts` | SSH 连接测试提交、历史、状态与信任接口调用。最后同步：2026-10-12。 |
+| `frontend/src/api/inspections.ts` | 巡检目录、任务创建/分页/详情和报告接口调用。最后同步：2026-10-12。 |
 | `frontend/src/components/SSHConnectionDialog.vue` | 主机与跳板机共用连接测试、结果查询和身份信任弹窗。最后同步：2026-10-12。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机列表统一 SSH 状态图标，查询最近测试、跟踪未完成测试并提供状态说明。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单与本地校验。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机与检查结果、风险、配置及报告导出展示。最后同步：2026-10-12。 |
+| `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/AssetsLayout.vue` | 资产页面共用控制台布局、导航和面包屑。最后同步：2026-10-10。 |
+| `frontend/src/components/AssetsLayout.vue` | 资产与巡检页面共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 主机、分组、跳板机与 SSH 密钥独立页面路由。最后同步：2026-10-10。 |
+| `frontend/src/router/index.ts` | 资产独立页面与巡检任务页面路由。最后同步：2026-10-12。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
+| `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
+| `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |
 | `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择与 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |
+| `frontend/src/views/InspectionsView.vue` | 巡检任务列表、分页、详情选择与活跃任务轮询页面。最后同步：2026-10-12。 |

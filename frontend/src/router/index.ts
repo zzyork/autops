@@ -9,6 +9,7 @@ export default createRouter({
     { path: '/assets/jump-hosts', name: 'jump-hosts', component: () => import('@/views/JumpHostsView.vue') },
     { path: '/assets/ssh-keys', name: 'ssh-keys', component: () => import('@/views/SSHKeysView.vue') },
     { path: '/assets/groups', name: 'host-groups', component: () => import('@/views/HostGroupsView.vue') },
+    { path: '/inspections', name: 'inspections', component: () => import('@/views/InspectionsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/assets/hosts' },
   ],
 })

@@ -1,6 +1,6 @@
 # autops
 
-基于 FastAPI + Vue 3 + TypeScript + Element Plus 的运维 Web UI，使用 Vite 开发与构建。当前提供资产管理与 SSH 连接测试，可在页面维护主机、分组、SSH 与跳板机配置，并保存到 SQLite。
+基于 FastAPI + Vue 3 + TypeScript + Element Plus 的运维 Web UI，使用 Vite 开发与构建。当前提供资产管理、SSH 连接测试与主机巡检，可在页面维护主机、分组、SSH 与跳板机配置，并将资产、测试与巡检记录保存到 SQLite。
 
 ## 项目目录
 
@@ -9,10 +9,10 @@ autops/
 ├── backend/
 │   ├── app/
 │   │   ├── api/dependencies.py # 共用数据库依赖与事务处理
-│   │   ├── api/v1/endpoints/   # 主机、分组与跳板机独立接口
+│   │   ├── api/v1/endpoints/   # 资产、连接测试与巡检接口
 │   │   ├── core/              # 环境配置及公共基础设施
-│   │   ├── repositories/      # SSH 资产与测试记录查询
-│   │   ├── services/          # SSH 资产解析及后台连接测试
+│   │   ├── repositories/      # SSH 与巡检记录查询
+│   │   ├── services/          # SSH 资产解析及后台连接测试、巡检
 │   │   ├── schemas/           # 请求、响应数据模型
 │   │   ├── connection_models.py # 连接测试与主机密钥信任模型
 │   │   ├── models.py          # 资产数据库模型
@@ -29,7 +29,7 @@ autops/
 │   │   ├── router/            # 页面路由
 │   │   ├── styles/            # 全局样式
 │   │   ├── types/             # TypeScript 数据类型
-│   │   ├── views/             # 主机、分组与跳板机独立管理页面
+│   │   ├── views/             # 资产管理与巡检任务页面
 │   │   ├── App.vue
 │   │   └── main.ts
 │   ├── .env.example
@@ -37,7 +37,7 @@ autops/
 │   ├── package-lock.json
 │   ├── tsconfig.json
 │   └── vite.config.ts
-├── docs/                      # 开发规范与 SSH 连接使用说明
+├── docs/                      # 开发规范与巡检说明
 ├── main.py                    # 原启动方式的兼容入口
 ├── requirements*.txt          # 指向后端依赖的兼容入口
 └── pyproject.toml             # 测试配置
@@ -86,6 +86,7 @@ npm --prefix frontend run dev
 - 主机管理：http://127.0.0.1:5173/assets/hosts
 - 分组管理：http://127.0.0.1:5173/assets/groups
 - 跳板机管理：http://127.0.0.1:5173/assets/jump-hosts
+- 巡检任务：http://127.0.0.1:5173/inspections
 - 版本化健康检查：http://127.0.0.1:8000/api/v1/health
 - Swagger 文档：http://127.0.0.1:8000/docs
 - ReDoc 文档：http://127.0.0.1:8000/redoc
@@ -95,7 +96,7 @@ npm --prefix frontend run dev
 
 ## 资产管理
 
-主机、分组、跳板机和 SSH 密钥通过独立页面管理，共用控制台导航。主机与跳板机列表中的“连接测试”使用已保存的凭据验证 SSH 身份和登录，支持直连、VIP 及单层跳板机。首次连接或服务器主机密钥变化时，须独立核对指纹并确认信任，再重新测试。详细流程见 [SSH 连接与测试](docs/ssh-connections.md)。
+主机、分组、跳板机和 SSH 密钥通过独立页面管理，共用控制台导航。主机与跳板机列表中的“连接测试”使用已保存的凭据验证 SSH 身份和登录，支持直连、VIP 及单层跳板机。首次连接或服务器主机密钥变化时，须独立核对指纹并确认信任，再重新测试。
 
 后端首次启动自动创建：
 
@@ -106,9 +107,13 @@ npm --prefix frontend run dev
 
 备份时先停止本地后端服务，再同时复制数据库与对应密钥；迁移后以目标服务账号运行。已有加密凭据时，密钥丢失、损坏或不匹配会阻止启动，不会生成替代密钥。默认运行目录已被 Git 忽略。
 
-当前不包含身份认证、操作审计、权限控制、hosts 批量导入或部署与巡检模块。
+当前不包含身份认证、操作审计、权限控制、hosts 批量导入、部署、Docker 管理或日志采集模块；巡检中的 Docker 服务状态检查不等于 Docker 管理功能。
 
 连接测试不执行远程命令或 sudo 操作。记录保存到 SQLite，关闭弹窗不取消后端测试，重启后未完成记录标记为中断。当前只支持单实例、单 Uvicorn worker，请勿使用 `--workers` 扩展；多人共享或网络开放前需完成身份认证和权限控制。
+
+## 主机巡检
+
+在侧栏进入“巡检任务”，创建任务时选择 1-32 台主机及系统基础信息、系统资源、服务状态、网络信息中的至少一项。先对目标主机（以及所用跳板机）完成连接测试并独立核对、信任 SSH 主机密钥。巡检执行固定只读命令，不自动使用 sudo；可调整资源阈值、服务列表及执行时限。任务列表可查看进度与历史，点开任务看各检查的执行状态和风险结论，结束后导出 Markdown 报告。执行完成不代表健康正常，失败或跳过的检查无法判定风险。详细口径、限制、接口和故障处理见 [主机巡检](docs/inspections.md)。
 
 ## 验证与构建
 

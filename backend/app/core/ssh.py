@@ -140,8 +140,11 @@ def _connect(endpoint: SSHEndpoint, deadline: NetworkDeadline, stage: str, sock:
 
 
 @contextmanager
-def open_ssh_connection(target: SSHEndpoint, jump: SSHEndpoint | None = None) -> Iterator[paramiko.SSHClient]:
-    deadline = NetworkDeadline(CONNECTION_TIMEOUT_SECONDS)
+def open_ssh_connection(target: SSHEndpoint, jump: SSHEndpoint | None = None, *, timeout_seconds: float | None = None) -> Iterator[paramiko.SSHClient]:
+    seconds = CONNECTION_TIMEOUT_SECONDS if timeout_seconds is None else min(CONNECTION_TIMEOUT_SECONDS, timeout_seconds)
+    if seconds <= 0:
+        raise ValueError("连接时限必须大于零")
+    deadline = NetworkDeadline(seconds)
     try:
         tunnel = None
         if jump is not None:

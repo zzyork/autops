@@ -12,6 +12,7 @@ from .core.config import Settings, get_settings
 from .core.storage import initialize_storage
 from .schemas.health import HealthResponse
 from .services.ssh_connections import ConnectionTestManager
+from .services.inspection_tasks import InspectionManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -23,14 +24,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application.state.sessions = sessions
         application.state.cipher = cipher
         manager = None
+        inspections = None
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
+            inspections = await run_in_threadpool(InspectionManager, sessions, cipher)
+            application.state.inspections = inspections
             yield
         finally:
             try:
-                if manager is not None:
-                    await run_in_threadpool(manager.close)
+                try:
+                    if inspections is not None:
+                        await run_in_threadpool(inspections.close)
+                finally:
+                    if manager is not None:
+                        await run_in_threadpool(manager.close)
             finally:
                 await run_in_threadpool(engine.dispose)
 
