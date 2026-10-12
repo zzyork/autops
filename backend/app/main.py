@@ -11,6 +11,7 @@ from .api.v1.router import api_router
 from .core.config import Settings, get_settings
 from .core.storage import initialize_storage
 from .schemas.health import HealthResponse
+from .services.ssh_connections import ConnectionTestManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -21,10 +22,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine, sessions, cipher = await run_in_threadpool(initialize_storage, settings.data_dir)
         application.state.sessions = sessions
         application.state.cipher = cipher
+        manager = None
         try:
+            manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
+            application.state.connection_tests = manager
             yield
         finally:
-            await run_in_threadpool(engine.dispose)
+            try:
+                if manager is not None:
+                    await run_in_threadpool(manager.close)
+            finally:
+                await run_in_threadpool(engine.dispose)
 
     application = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
 

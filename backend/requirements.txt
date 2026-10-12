@@ -3,3 +3,4 @@ uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
 SQLAlchemy==2.0.54
 cryptography==50.0.2
+paramiko==3.5.1

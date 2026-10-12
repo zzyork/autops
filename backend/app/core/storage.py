@@ -8,6 +8,7 @@ from sqlalchemy import Engine, create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..models import Base, Host, JumpHost, SSHKey, utc_now
+from .migrations.ssh_connections import migrate_ssh_connections
 
 
 def protect_key(path: Path) -> None:
@@ -53,6 +54,7 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
         connection.execute("PRAGMA foreign_keys=ON")
 
     try:
+        migrate_ssh_connections(engine)
         Base.metadata.create_all(engine)
         sessions = sessionmaker(engine)
         with engine.connect() as connection:

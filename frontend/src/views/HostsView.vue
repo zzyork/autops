@@ -8,8 +8,10 @@ import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } fr
 import { listJumpHosts } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
+import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import { showSystemError } from '@/components/feedback'
-import type { AuthType, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
+import type { AuthType, ConnectionTest, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
 interface HostForm {
@@ -45,6 +47,9 @@ const dialogError = ref('')
 const saving = ref(false)
 const openingHost = ref(false)
 const hostDialog = ref(false)
+const testDialog = ref(false)
+const testTarget = ref<ConnectionTestTarget | null>(null)
+const updatedTest = ref<ConnectionTest | null>(null)
 const editingHost = ref<Host | null>(null)
 const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
 const hostAuthChanged = ref(false)
@@ -321,6 +326,11 @@ function groupName(id: number) {
   return groups.value.find((group) => group.id === id)?.name
 }
 
+function openConnectionTest(host: Host) {
+  testTarget.value = { target_type: 'host', target_id: host.id, version: host.version, name: host.name }
+  testDialog.value = true
+}
+
 function jumpHostName(id: number | null) {
   if (id === null) return '未关联'
   const jumpHost = jumpHosts.value.find((item) => item.id === id)
@@ -357,7 +367,8 @@ function dateLabel(value: string) {
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-              <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
+              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" :updated-record="updatedTest?.target_id === row.id ? updatedTest : null" /></template></ElTableColumn>
+              <ElTableColumn label="操作" width="210" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
           </div>
           <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
@@ -365,6 +376,7 @@ function dateLabel(value: string) {
       </div>
     </main>
 
+    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @record-updated="updatedTest = $event" @closed="refreshHosts" />
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
         <div class="form-section-title">基本信息</div>

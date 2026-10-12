@@ -170,6 +170,7 @@ p { margin: 0; line-height: 1.43; }
 .el-form-item.is-error .el-select__wrapper, .el-form-item.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
 .el-switch.is-disabled, .el-radio.is-disabled, .el-radio-button.is-disabled { opacity: 1; }
 .el-radio-button__inner { height: 30px; padding: 7px 12px; border: 1px solid var(--ui-control-border); outline: none; border-radius: 2px; font-size: 13px; box-shadow: none !important; }
+.host-dialog .el-radio-button__original-radio:focus-visible + .el-radio-button__inner { outline: none; }
 .el-radio-button + .el-radio-button { margin-left: -1px; }
 .el-radio-button.is-disabled .el-radio-button__inner { background: var(--ui-disabled-bg); border-color: var(--ui-control-border); color: var(--ui-disabled-text); }
 

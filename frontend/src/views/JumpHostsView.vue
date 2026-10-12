@@ -7,8 +7,9 @@ import {
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
+import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import { showSystemError } from '@/components/feedback'
-import type { AuthType, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
+import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 
 interface JumpHostForm {
   name: string
@@ -34,6 +35,8 @@ const loadFailed = ref(false)
 const localError = ref('')
 const dialogError = ref('')
 const dialog = ref(false)
+const testDialog = ref(false)
+const testTarget = ref<ConnectionTestTarget | null>(null)
 const editing = ref<JumpHost | null>(null)
 const authChanged = ref(false)
 const invalidFields = ref<Set<keyof JumpHostForm>>(new Set())
@@ -219,6 +222,11 @@ async function remove(item: JumpHost) {
 function dateLabel(value: string) {
   return new Date(value).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
+
+function openConnectionTest(item: JumpHost) {
+  testTarget.value = { target_type: 'jump_host', target_id: item.id, version: item.version, name: item.name }
+  testDialog.value = true
+}
 </script>
 
 <template>
@@ -235,13 +243,14 @@ function dateLabel(value: string) {
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
             <ElTableColumn label="备注" min-width="180"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-            <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
+            <ElTableColumn label="操作" width="210" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as JumpHost)">连接测试</ElButton><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
         <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
       </section>
     </main>
 
+    <SSHConnectionDialog v-model="testDialog" :target="testTarget" />
     <ElDialog v-model="dialog" align-center :title="editing ? '编辑跳板机' : '新增跳板机'" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form">
         <div class="form-section-title">基本信息</div>
