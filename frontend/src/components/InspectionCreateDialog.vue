@@ -24,6 +24,9 @@ const saving = ref(false)
 const formError = ref('')
 const invalidField = ref<'name' | 'hosts' | 'checks' | null>(null)
 const visibleHosts = computed(() => hosts.value.filter((host) => groupId.value === null || host.group_id === groupId.value))
+const selectedVisibleHostCount = computed(() => visibleHosts.value.filter((host) => selectedHosts.value.includes(host.id)).length)
+const allVisibleHostsSelected = computed(() => visibleHosts.value.length > 0 && selectedVisibleHostCount.value === visibleHosts.value.length)
+const hostsIndeterminate = computed(() => selectedVisibleHostCount.value > 0 && !allVisibleHostsSelected.value)
 let session = 0
 
 watch(() => props.modelValue, (visible) => {
@@ -74,6 +77,22 @@ function toggleHost(id: number, checked: string | number | boolean) {
   if (checked === false) selectedHosts.value = selectedHosts.value.filter((selected) => selected !== id)
 }
 
+function toggleAllHosts(checked: string | number | boolean) {
+  const visibleIds = new Set(visibleHosts.value.map((host) => host.id))
+  if (checked === false) {
+    selectedHosts.value = selectedHosts.value.filter((id) => !visibleIds.has(id))
+    return
+  }
+  if (checked !== true) return
+  const nextSelection = [...new Set([...selectedHosts.value, ...visibleIds])]
+  if (nextSelection.length > MAX_HOSTS) {
+    invalidField.value = 'hosts'
+    formError.value = `全选后超过 ${MAX_HOSTS} 台主机，请按分组筛选或减少已选主机。`
+    return
+  }
+  selectedHosts.value = nextSelection
+}
+
 async function submit() {
   if (!loaded.value || saving.value) return
   const taskName = name.value.trim()
@@ -121,7 +140,10 @@ async function submit() {
         <div class="inspection-selection-head"><span>已选 {{ selectedHosts.length }} / {{ MAX_HOSTS }} 台</span><label class="field">分组筛选<ElSelect v-model="groupId" clearable :value-on-clear="null" placeholder="全部分组" class="inspection-group-select" aria-label="按分组筛选主机"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label></div>
         <div class="inspection-host-picker" :class="{ 'is-error': invalidField === 'hosts' }">
           <ElTable :data="visibleHosts" row-key="id" size="small" :empty-text="groupId === null ? '暂无主机' : '该分组暂无主机'">
-            <ElTableColumn label="选择" width="65"><template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${row.name}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template></ElTableColumn>
+            <ElTableColumn label="选择" width="85">
+              <template #header><ElCheckbox :model-value="allVisibleHostsSelected" :indeterminate="hostsIndeterminate" :disabled="visibleHosts.length === 0" aria-label="全选当前筛选的主机" @change="toggleAllHosts">全选</ElCheckbox></template>
+              <template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${row.name}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template>
+            </ElTableColumn>
             <ElTableColumn label="主机" min-width="180"><template #default="{ row }"><strong>{{ row.name }}</strong><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName((row as Host).group_id) }}</template></ElTableColumn>
           </ElTable>
