@@ -5,7 +5,7 @@ import { createConnection, updateConnection } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import type { ModelConnection, ModelConnectionInput } from '@/types/ai'
 
-const props = defineProps<{ modelValue: boolean; connection: ModelConnection | null }>()
+const props = defineProps<{ modelValue: boolean; connection: ModelConnection | null; copySource?: ModelConnection | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
 const form = reactive<ModelConnectionInput>({ name: '', protocol: 'openai_compatible', base_url: '', model: '', api_key: '', is_default: false, is_backup: false })
 const saving = ref(false)
@@ -14,12 +14,13 @@ const invalidField = ref<'name' | 'base_url' | 'model' | null>(null)
 let revision = 0
 onUnmounted(() => { revision++ })
 
-watch(() => [props.modelValue, props.connection] as const, () => {
+watch(() => [props.modelValue, props.connection, props.copySource] as const, () => {
   revision++
   if (!props.modelValue) return
-  Object.assign(form, props.connection ? {
-    name: props.connection.name, protocol: props.connection.protocol, base_url: props.connection.base_url,
-    model: props.connection.model, api_key: '', is_default: props.connection.is_default, is_backup: props.connection.is_backup,
+  const source = props.connection ?? props.copySource
+  Object.assign(form, source ? {
+    name: source.name, protocol: source.protocol, base_url: source.base_url,
+    model: source.model, api_key: '', is_default: source.is_default, is_backup: source.is_backup,
   } : { name: '', protocol: 'openai_compatible', base_url: '', model: '', api_key: '', is_default: false, is_backup: false })
   saving.value = false
   error.value = ''
@@ -67,6 +68,7 @@ async function save() {
       <label class="field" :class="{ 'is-error': invalidField === 'base_url' }"><span>服务地址 <em>*</em></span><ElInput v-model="form.base_url" placeholder="https://example.com/v1" @input="error = ''; invalidField = null" /></label>
       <label class="field" :class="{ 'is-error': invalidField === 'model' }"><span>模型 ID <em>*</em></span><ElInput v-model="form.model" placeholder="模型标识" @input="error = ''; invalidField = null" /></label>
       <label class="field"><span>API Key</span><ElInput v-model="form.api_key" type="password" show-password autocomplete="new-password" :placeholder="connection?.has_api_key ? '留空保留已保存的密钥' : '本地服务可留空'" /></label>
+      <p v-if="!connection && copySource?.has_api_key" class="host-secondary">已保存的 API Key 无法复制，请重新填写。</p>
       <label class="ai-default-field">设为主模型 <ElSwitch v-model="form.is_default" @change="form.is_default && (form.is_backup = false)" /></label>
       <label class="ai-default-field">设为备用模型 <ElSwitch v-model="form.is_backup" @change="form.is_backup && (form.is_default = false)" /></label>
       <p v-if="error" class="ssh-field-error" role="alert">{{ error }}</p>
