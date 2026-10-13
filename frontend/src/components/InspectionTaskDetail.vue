@@ -62,7 +62,7 @@ async function exportReport() {
       <span>开始 {{ timeLabel(task.started_at) }}</span><span>结束 {{ timeLabel(task.finished_at) }}</span>
     </div>
     <template v-if="task.hosts.length">
-      <label class="inspection-host-choice">查看主机 <ElSelect v-model="hostId" aria-label="选择巡检主机"><ElOption v-for="host in task.hosts" :key="host.id" :label="`${host.host_name} · ${host.address}`" :value="host.id" /></ElSelect></label>
+      <div class="inspection-host-choice"><span>查看主机</span><ElSelect v-model="hostId" aria-label="选择巡检主机"><ElOption v-for="host in task.hosts" :key="host.id" :label="`${host.host_name} · ${host.address}`" :value="host.id" /></ElSelect></div>
       <template v-if="selectedHost">
         <div class="inspection-host-meta"><strong>{{ selectedHost.host_name }}</strong><span>{{ selectedHost.group_name }} · {{ selectedHost.username }}@{{ selectedHost.address }}:{{ selectedHost.port }}</span><ElTag :type="runType(selectedHost.status)" size="small">{{ runLabel(selectedHost.status) }}</ElTag></div>
         <div class="inspection-host-summary" aria-label="主机检查概览">
