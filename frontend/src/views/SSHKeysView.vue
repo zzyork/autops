@@ -23,11 +23,14 @@ import {
   updateSSHKey,
 } from "@/api/ssh_keys";
 import { showSystemError } from "@/components/feedback";
+import ListPagination from "@/components/ListPagination.vue";
+import { useListPagination } from "@/components/pagination";
 import type { SSHKey, SSHKeyReferences, SSHKeyUpdateInput } from "@/types/api";
 import "@/styles/assets.css";
 
 const vLoading = ElLoading.directive;
 const keys = ref<SSHKey[]>([]);
+const { page, pageSize, total, pageItems, resetPage } = useListPagination(keys);
 const search = ref("");
 const loading = ref(false);
 const opening = ref(false);
@@ -91,6 +94,7 @@ async function refresh() {
 
 watch(search, () => {
   clearTimeout(searchTimer);
+  resetPage();
   requestId++;
   loading.value = true;
   searchTimer = setTimeout(refresh, search.value ? 250 : 0);
@@ -510,7 +514,7 @@ function dateLabel(value: string) {
         <div class="host-table-wrap">
           <ElTable
             v-loading="loading || opening"
-            :data="keys"
+            :data="pageItems"
             row-key="id"
             class="host-table"
             :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无 SSH 密钥'"
@@ -593,6 +597,7 @@ function dateLabel(value: string) {
             >新增密钥</ElButton
           ></ElEmpty
         >
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!loading && !loadFailed" :disabled="loading || loadFailed" />
       </section>
     </main>
 

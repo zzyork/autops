@@ -10,6 +10,8 @@ import { listSSHKeys } from '@/api/ssh_keys'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTest, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
@@ -33,6 +35,8 @@ const jumpHosts = ref<JumpHost[]>([])
 const sshKeys = ref<SSHKey[]>([])
 const vLoading = ElLoading.directive
 const hosts = ref<Host[]>([])
+const { page, pageSize, total, pageItems, resetPage } = useListPagination(hosts)
+const hostTable = ref<{ clearSelection: () => void } | null>(null)
 const selectedGroup = ref<number | null>(null)
 const search = ref('')
 const groupsLoading = ref(false)
@@ -50,6 +54,11 @@ const hostDialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
 const selectedHosts = ref<Host[]>([])
+function clearSelectedHosts() {
+  selectedHosts.value = []
+  hostTable.value?.clearSelection()
+}
+watch([page, pageSize], clearSelectedHosts, { flush: 'sync' })
 const batchHosts = ref<Host[]>([])
 const batchDialog = ref(false)
 const testRecords = ref<Record<number, ConnectionTest>>({})
@@ -143,7 +152,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 let hostRequest = 0
 async function refreshHosts() {
   const current = ++hostRequest
-  selectedHosts.value = []
+  clearSelectedHosts()
   hostsLoading.value = true
   hostsLoadFailed.value = false
   try {
@@ -162,7 +171,8 @@ async function refreshHosts() {
 
 watch([search, selectedGroup], () => {
   clearTimeout(searchTimer)
-  selectedHosts.value = []
+  resetPage()
+  clearSelectedHosts()
   hostRequest++
   hostsLoading.value = true
   searchTimer = setTimeout(refreshHosts, search.value ? 250 : 0)
@@ -380,7 +390,7 @@ function dateLabel(value: string) {
             </div>
           </div>
           <div class="host-table-wrap">
-            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
+            <ElTable ref="hostTable" v-loading="hostsLoading || openingHost" :data="pageItems" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
               <ElTableColumn type="selection" width="44" />
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
@@ -392,6 +402,7 @@ function dateLabel(value: string) {
             </ElTable>
           </div>
           <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
+          <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!hostsLoading && !hostsLoadFailed" :disabled="hostsLoading || hostsLoadFailed" />
         </section>
       </div>
     </main>

@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import { createSession, decideProposal, deleteSession, getSession, listConnections, listSessions, sendMessage } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/inspectionDisplay'
@@ -13,6 +15,7 @@ const connections = ref<ModelConnection[]>([])
 const connectionsLoaded = ref(false)
 const connectionsLoading = ref(false)
 const sessions = ref<SessionSummary[]>([])
+const { page, pageSize, total, pageItems, resetPage } = useListPagination(sessions)
 const sessionsLoaded = ref(false)
 const sessionsLoading = ref(false)
 const selectedId = ref<string | null>(null)
@@ -121,6 +124,7 @@ async function send() {
       detail.value = { ...summary, messages: [], proposals: [] }
       detailLoaded.value = true
       selectInitialSession = false
+      resetPage()
       void loadSessions()
     }
     operation.value = 'send'
@@ -207,11 +211,12 @@ onUnmounted(() => {
             <p v-if="sessionsLoading && !sessionsLoaded" class="ai-placeholder">正在读取会话...</p>
             <p v-else-if="!sessionsLoaded" class="inspection-retry">会话未加载。<ElButton @click="loadSessions()">重试</ElButton></p>
             <p v-else-if="!sessions.length" class="ai-placeholder">暂无会话</p>
-            <div v-for="session in sessionsLoaded ? sessions : []" :key="session.id" class="ai-session-row" :class="{ active: selectedId === session.id }">
+            <div v-for="session in sessionsLoaded ? pageItems : []" :key="session.id" class="ai-session-row" :class="{ active: selectedId === session.id }">
               <button type="button" class="ai-session-select" :disabled="!!operation" :title="session.title" @click="select(session.id)"><strong>{{ session.title }}</strong><small>{{ timeLabel(session.updated_at) }}</small></button>
               <ElButton link type="danger" :disabled="!!operation" :aria-label="`删除会话 ${session.title}`" title="删除会话" @click="remove(session)">删除</ElButton>
             </div>
           </div>
+          <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="sessionsLoaded && !sessionsLoading" :disabled="sessionsLoading || !sessionsLoaded || !!operation" compact />
         </aside>
         <section class="ai-chat" aria-label="对话内容">
           <div class="ai-pane-heading"><strong>{{ detail?.title ?? (selectedId ? '对话' : '新对话') }}</strong><span v-if="detailLoaded && selectedConnection" class="inspection-muted">{{ selectedConnection.name }}</span></div>

@@ -114,9 +114,9 @@
 | `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_rules.py` | 从数据目录读取巡检规则，并以临时文件和原子替换保存生效配置。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容，按原项目 IP_hostname.md 命名和分组/月目录打包逐主机报告；缺少远端 hostname 时使用资产名称。最后同步：2026-10-13。 |
-| `backend/app/schemas/inspection_analysis.py` | AI 报告状态、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
+| `backend/app/schemas/inspection_analysis.py` | AI 报告状态、实时批次进度、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成和按任务取消。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、当前生成批次进度与耗时日志和按任务取消。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_input.py` | 从巡检原始快照提取全量发现、日志、检查和主机证据，保留结果序号并完整分批。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_engine.py` | 复用模型 provider 分批分析、证据覆盖校验、分层汇总并生成结构化报告。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
@@ -175,6 +175,8 @@
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
+| `frontend/src/components/ListPagination.vue` | 共用列表分页控件，接收总数、加载可用状态及紧凑布局选项，双向绑定页码与每页数量，统一提供 10、20、50 条选择。最后同步：2026-10-13。 |
+| `frontend/src/components/pagination.ts` | 共用分页数量配置与本地数组分页逻辑，维护当前页、数量切换重置及数据减少后的页码校正。最后同步：2026-10-13。 |
 | `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-13。 |
 | `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，接收注入的标签状态并切换、关闭页面，复用 Element Plus 的键盘与溢出导航。最后同步：2026-10-13。 |
 | `frontend/src/components/WorkspacePage.vue` | 标签页面路由容器，接收独立路由快照，为业务页面隔离路由参数与查询条件。最后同步：2026-10-13。 |

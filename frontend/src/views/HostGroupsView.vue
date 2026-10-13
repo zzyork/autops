@@ -2,11 +2,14 @@
 import { onMounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDialog, ElInput, ElLoading, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
 import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/assets'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
 import type { HostGroup } from '@/types/api'
 
 const vLoading = ElLoading.directive
 const groups = ref<HostGroup[]>([])
+const { page, pageSize, total, pageItems } = useListPagination(groups)
 const loading = ref(false)
 const loadFailed = ref(false)
 const localError = ref('')
@@ -82,13 +85,14 @@ async function removeGroup(group: HostGroup) {
         <div class="host-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
         <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
+          <ElTable v-loading="loading" :data="pageItems" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
             <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="主机数量" width="120" />
             <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="操作" width="128" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openGroup(row as HostGroup)">编辑</ElButton><span :title="row.host_count ? '请先移动或删除组内主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="removeGroup(row as HostGroup)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!loading && !loadFailed" :disabled="loading || loadFailed" />
       </section>
     </main>
     <ElDialog v-model="dialog" align-center :title="editingGroup ? '编辑分组' : '新增分组'" width="min(440px, 92vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">

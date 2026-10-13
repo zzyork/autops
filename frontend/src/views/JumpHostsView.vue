@@ -7,6 +7,8 @@ import {
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 
@@ -23,6 +25,7 @@ interface JumpHostForm {
 
 const vLoading = ElLoading.directive
 const jumpHosts = ref<JumpHost[]>([])
+const { page, pageSize, total, pageItems, resetPage } = useListPagination(jumpHosts)
 const sshKeys = ref<SSHKey[]>([])
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
@@ -96,6 +99,7 @@ async function refresh() {
 
 watch(search, () => {
   clearTimeout(searchTimer)
+  resetPage()
   requestId++
   loading.value = true
   searchTimer = setTimeout(refresh, search.value ? 250 : 0)
@@ -235,7 +239,7 @@ function openConnectionTest(item: JumpHost) {
         <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
         <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
+          <ElTable v-loading="loading || opening" :data="pageItems" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
             <ElTableColumn label="跳板机" min-width="200"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
@@ -245,6 +249,7 @@ function openConnectionTest(item: JumpHost) {
           </ElTable>
         </div>
         <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!loading && !loadFailed" :disabled="loading || loadFailed" />
       </section>
     </main>
 

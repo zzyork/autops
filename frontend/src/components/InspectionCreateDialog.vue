@@ -4,6 +4,8 @@ import { ElAlert, ElButton, ElCheckbox, ElCheckboxGroup, ElDialog, ElInput, ElLo
 import { listGroups, listHosts } from '@/api/assets'
 import { createInspectionTask, getInspectionCatalog } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import type { Host, HostGroup } from '@/types/api'
 import type { CheckId, InspectionCatalog, InspectionInput, TaskDetail } from '@/types/inspections'
 
@@ -24,6 +26,8 @@ const saving = ref(false)
 const formError = ref('')
 const invalidField = ref<'name' | 'hosts' | 'checks' | null>(null)
 const visibleHosts = computed(() => hosts.value.filter((host) => groupId.value === null || host.group_id === groupId.value))
+const { page, pageSize, total, pageItems, resetPage } = useListPagination(visibleHosts)
+watch(groupId, resetPage, { flush: 'sync' })
 const selectedVisibleHostCount = computed(() => visibleHosts.value.filter((host) => selectedHosts.value.includes(host.id)).length)
 const allVisibleHostsSelected = computed(() => visibleHosts.value.length > 0 && selectedVisibleHostCount.value === visibleHosts.value.length)
 const hostsIndeterminate = computed(() => selectedVisibleHostCount.value > 0 && !allVisibleHostsSelected.value)
@@ -32,6 +36,7 @@ let session = 0
 watch(() => props.modelValue, (visible) => {
   session++
   if (!visible) return
+  resetPage()
   hosts.value = []
   groups.value = []
   catalog.value = null
@@ -139,15 +144,17 @@ async function submit() {
         <div class="form-section-title">选择主机 <em>*</em></div>
         <div class="inspection-selection-head"><span>已选 {{ selectedHosts.length }} / {{ MAX_HOSTS }} 台</span><label class="field">分组筛选<ElSelect v-model="groupId" clearable :value-on-clear="null" placeholder="全部分组" class="inspection-group-select" aria-label="按分组筛选主机"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label></div>
         <div class="inspection-host-picker" :class="{ 'is-error': invalidField === 'hosts' }">
-          <ElTable :data="visibleHosts" row-key="id" size="small" :empty-text="groupId === null ? '暂无主机' : '该分组暂无主机'">
+          <ElTable :data="pageItems" row-key="id" size="small" :empty-text="groupId === null ? '暂无主机' : '该分组暂无主机'">
             <ElTableColumn label="选择" width="85">
-              <template #header><ElCheckbox :model-value="allVisibleHostsSelected" :indeterminate="hostsIndeterminate" :disabled="visibleHosts.length === 0" aria-label="全选当前筛选的主机" @change="toggleAllHosts">全选</ElCheckbox></template>
+              <template #header><ElCheckbox :model-value="allVisibleHostsSelected" :indeterminate="hostsIndeterminate" :disabled="visibleHosts.length === 0" aria-label="全选当前筛选的全部主机（含其他页）" @change="toggleAllHosts">全选</ElCheckbox></template>
               <template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${row.name}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template>
             </ElTableColumn>
             <ElTableColumn label="主机" min-width="180"><template #default="{ row }"><strong>{{ row.name }}</strong><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName((row as Host).group_id) }}</template></ElTableColumn>
           </ElTable>
         </div>
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :disabled="loading || saving || !loaded" />
+        <p class="inspection-muted">翻页保留已选主机；全选作用于当前筛选的全部主机（含其他页）。</p>
         <div class="form-section-title">检查项 <em>*</em></div>
         <ElCheckboxGroup v-model="selectedChecks" class="inspection-check-picker" :class="{ 'is-error': invalidField === 'checks' }" aria-label="检查项">
           <ElCheckbox v-for="check in catalog.checks" :key="check.id" :value="check.id"><span>{{ check.title }}</span><span class="inspection-muted">{{ check.description }}</span></ElCheckbox>

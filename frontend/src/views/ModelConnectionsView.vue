@@ -3,6 +3,8 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { ElButton, ElLoading, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import ModelConnectionDialog from '@/components/ModelConnectionDialog.vue'
 import TestStatus from '@/components/TestStatus.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import { deleteConnection, listConnections, testConnection } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import type { ModelConnection } from '@/types/ai'
@@ -11,6 +13,7 @@ import '@/styles/ai.css'
 
 const vLoading = ElLoading.directive
 const connections = ref<ModelConnection[]>([])
+const { page, pageSize, total, pageItems } = useListPagination(connections)
 const loaded = ref(false)
 const loading = ref(false)
 const editing = ref<ModelConnection | null>(null)
@@ -89,7 +92,7 @@ onUnmounted(() => { active = false; sequence++ })
       <section class="host-section" aria-label="模型连接">
         <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
         <div v-loading="loading" class="host-table-wrap">
-          <ElTable v-if="loaded" :data="connections" class="host-table" empty-text="暂无模型连接">
+          <ElTable v-if="loaded" :data="pageItems" class="host-table" empty-text="暂无模型连接">
             <ElTableColumn label="连接名称" min-width="170"><template #default="{ row }"><strong>{{ row.name }}</strong><ElTag v-if="row.is_default" size="small" class="ai-default-tag">主模型</ElTag><ElTag v-if="row.is_backup" size="small" type="info" class="ai-default-tag">备用模型</ElTag></template></ElTableColumn>
             <ElTableColumn label="协议 / 模型" min-width="190"><template #default="{ row }">{{ row.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容' }}<div class="host-secondary">{{ row.model }}</div></template></ElTableColumn>
             <ElTableColumn label="服务地址" min-width="240"><template #default="{ row }"><span class="ai-address">{{ row.base_url }}</span></template></ElTableColumn>
@@ -99,6 +102,7 @@ onUnmounted(() => { active = false; sequence++ })
           </ElTable>
           <p v-else-if="!loading" class="inspection-retry">连接列表未加载。<ElButton @click="load">重试</ElButton></p>
         </div>
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="loaded && !loading" :disabled="loading || !loaded || operating !== null" />
       </section>
       <p class="ai-data-notice">模型服务会收到用户对话，以及完成请求所需的资产信息和巡检结果。请确认服务地址和数据处理范围后再使用。</p>
     </main>

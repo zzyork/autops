@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElButton, ElLoading, ElMessageBox, ElPagination, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { ElButton, ElLoading, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { deleteInspectionTask, getInspectionTask, listInspectionTasks } from '@/api/inspections'
 import InspectionCreateDialog from '@/components/InspectionCreateDialog.vue'
 import InspectionRecordSummary from '@/components/InspectionRecordSummary.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, runType, timeLabel } from '@/components/inspectionDisplay'
 import type { TaskDetail, TaskSummary } from '@/types/inspections'
@@ -14,7 +16,7 @@ const vLoading = ElLoading.directive
 const props = defineProps<{ records?: boolean }>()
 const route = useRoute()
 const router = useRouter()
-const PAGE_SIZE = 20
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const POLL_INTERVAL_MS = 1000
 const MAX_POLL_FAILURES = 2
 const tasks = ref<TaskSummary[]>([])
@@ -56,8 +58,14 @@ async function loadList(poll = false) {
   if (!poll) listFailures = 0
   listLoading.value = true
   try {
-    const result = await listInspectionTasks(PAGE_SIZE, (page.value - 1) * PAGE_SIZE, props.records === true)
+    const result = await listInspectionTasks(pageSize.value, (page.value - 1) * pageSize.value, props.records === true)
     if (!active || current !== listRequest) return
+    const lastPage = Math.max(1, Math.ceil(result.total / pageSize.value))
+    if (page.value > lastPage) {
+      page.value = lastPage
+      await loadList()
+      return
+    }
     tasks.value = result.items
     total.value = result.total
     listLoaded.value = true
@@ -110,8 +118,7 @@ function selectRecord(id: string) {
   detailLoaded.value = false
   void loadDetail(id)
 }
-function changePage(next: number) {
-  page.value = next
+function changePage() {
   listLoaded.value = false
   void loadList()
 }
@@ -159,7 +166,7 @@ async function removeRecord(task: TaskSummary) {
       detailLoading.value = false
     }
     if (route.query.task === task.id) void router.replace({ path: '/inspections/records' })
-    page.value = Math.min(page.value, Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+    page.value = Math.min(page.value, Math.max(1, Math.ceil(total.value / pageSize.value)))
     void loadList()
   } catch {
     if (active) showSystemError()
@@ -217,7 +224,7 @@ onUnmounted(() => {
           </ElTable>
            <p v-else-if="!listLoading" class="inspection-retry">{{ records ? '历史记录' : '任务列表' }}未加载。<ElButton @click="loadList()">重试</ElButton></p>
         </div>
-        <div v-if="listLoaded && total > PAGE_SIZE" class="inspection-pagination"><ElPagination :current-page="page" :page-size="PAGE_SIZE" :total="total" layout="total, prev, pager, next" @current-change="changePage" /></div>
+        <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="listLoaded && !listLoading" :disabled="listLoading || !listLoaded || deletingId !== null" @change="changePage" />
       </section>
     <InspectionCreateDialog v-if="!records" v-model="creating" @created="created" />
 </template>
