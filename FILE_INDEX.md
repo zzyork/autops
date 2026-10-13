@@ -147,7 +147,7 @@
 | `frontend/package-lock.json` | npm 依赖版本锁定文件。 |
 | `frontend/tsconfig.json` | TypeScript 编译与类型检查配置。 |
 | `frontend/vite.config.ts` | Vite 开发与构建配置。 |
-| `frontend/src/App.vue` | 应用根组件，承载路由视图。 |
+| `frontend/src/App.vue` | 应用根组件，创建工作区状态并承载唯一控制台布局与页面标签。最后同步：2026-10-13。 |
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
 | `frontend/src/api/http.ts` | 通用 HTTP 请求封装、二进制下载、可配置超时与 SSE 事件读取和错误转换。最后同步：2026-10-13。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
@@ -175,7 +175,10 @@
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
+| `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-13。 |
+| `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，接收注入的标签状态并切换、关闭页面，复用 Element Plus 的键盘与溢出导航。最后同步：2026-10-13。 |
+| `frontend/src/components/WorkspacePage.vue` | 标签页面路由容器，接收独立路由快照，为业务页面隔离路由参数与查询条件。最后同步：2026-10-13。 |
+| `frontend/src/components/workspace.ts` | 布局内工作区状态与注入契约，管理标签去重、导航、关闭、滚动恢复及弹窗切页限制。最后同步：2026-10-13。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
 | `frontend/src/router/index.ts` | 对话首页、配置管理、资产及巡检独立页面路由，保留旧配置地址重定向。最后同步：2026-10-12。 |

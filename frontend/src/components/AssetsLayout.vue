@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useWorkspace } from './workspace'
 import '@/styles/assets.css'
 
 withDefaults(defineProps<{ title: string; section?: string }>(), { section: '资产管理' })
 const route = useRoute()
-const menuCollapsed = ref(false)
-const assetsExpanded = ref(true)
-const inspectionsExpanded = ref(true)
-const settingsExpanded = ref(true)
+const { menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded } = useWorkspace()
 </script>
 
 <template>
@@ -53,7 +50,6 @@ const settingsExpanded = ref(true)
       </nav>
     </aside>
     <div class="console-content">
-      <div class="console-breadcrumb"><span>{{ route.path.startsWith('/settings/') ? '配置管理' : section }}</span><span class="breadcrumb-separator">/</span><strong>{{ title }}</strong></div>
       <slot />
     </div>
   </div>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import { createSession, decideProposal, deleteSession, getSession, listConnections, listSessions, sendMessage } from '@/api/ai'
@@ -199,7 +198,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AssetsLayout title="AI 对话" section="AI 对话">
     <main class="assets-main ai-main">
       <div class="assets-heading"><h1>AI 对话</h1></div>
       <div class="ai-workspace">
@@ -238,5 +236,4 @@ onUnmounted(() => {
         </section>
       </div>
     </main>
-  </AssetsLayout>
 </template>

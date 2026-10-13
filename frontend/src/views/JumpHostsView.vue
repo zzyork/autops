@@ -6,7 +6,6 @@ import {
 } from 'element-plus'
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
@@ -230,7 +229,6 @@ function openConnectionTest(item: JumpHost) {
 </script>
 
 <template>
-  <AssetsLayout title="跳板机管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>跳板机管理</h1></div>
       <section class="host-section" aria-label="跳板机列表">
@@ -271,5 +269,4 @@ function openConnectionTest(item: JumpHost) {
       </div>
       <template #footer><ElButton :disabled="saving" @click="dialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="save">保存</ElButton></template>
     </ElDialog>
-  </AssetsLayout>
 </template>

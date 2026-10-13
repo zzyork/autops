@@ -2,7 +2,6 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { ElButton, ElForm, ElLoading } from 'element-plus'
 import { getInspectionCatalog, updateInspectionCatalog } from '@/api/inspections'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import InspectionConfigForm from '@/components/InspectionConfigForm.vue'
 import { showSystemError } from '@/components/feedback'
 import type { InspectionCatalog, InspectionConfig } from '@/types/inspections'
@@ -67,7 +66,6 @@ onUnmounted(() => { active = false; request++ })
 </script>
 
 <template>
-  <AssetsLayout title="巡检规则" section="巡检管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>巡检规则</h1></div>
       <section v-loading="loading" class="host-section" aria-label="巡检规则">
@@ -82,7 +80,6 @@ onUnmounted(() => { active = false; request++ })
         <p v-else-if="!loading" class="inspection-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>
       </section>
     </main>
-  </AssetsLayout>
 </template>
 
 <style scoped>

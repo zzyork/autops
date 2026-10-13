@@ -22,7 +22,6 @@ import {
   listSSHKeys,
   updateSSHKey,
 } from "@/api/ssh_keys";
-import AssetsLayout from "@/components/AssetsLayout.vue";
 import { showSystemError } from "@/components/feedback";
 import type { SSHKey, SSHKeyReferences, SSHKeyUpdateInput } from "@/types/api";
 import "@/styles/assets.css";
@@ -493,7 +492,6 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-  <AssetsLayout title="SSH 密钥管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>SSH 密钥管理</h1></div>
       <section class="host-section" aria-label="SSH 密钥列表">
@@ -844,7 +842,6 @@ function dateLabel(value: string) {
         ><ElButton @click="referencesDialog = false">关闭</ElButton></template
       >
     </ElDialog>
-  </AssetsLayout>
 </template>
 
 <style scoped>

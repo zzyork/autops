@@ -7,7 +7,6 @@ import {
 import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } from '@/api/assets'
 import { listJumpHosts } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
@@ -357,7 +356,6 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-  <AssetsLayout title="主机管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>主机管理</h1></div>
       <ElAlert v-if="!groupsLoading && !groupsLoadFailed && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
@@ -416,5 +414,4 @@ function dateLabel(value: string) {
       </div>
       <template #footer><ElButton :disabled="saving" @click="hostDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveHost">保存</ElButton></template>
     </ElDialog>
-  </AssetsLayout>
 </template>

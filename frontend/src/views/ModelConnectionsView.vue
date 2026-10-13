@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { ElButton, ElLoading, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import ModelConnectionDialog from '@/components/ModelConnectionDialog.vue'
 import TestStatus from '@/components/TestStatus.vue'
 import { deleteConnection, listConnections, testConnection } from '@/api/ai'
@@ -85,7 +84,6 @@ onUnmounted(() => { active = false; sequence++ })
 </script>
 
 <template>
-  <AssetsLayout title="模型配置" section="配置管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>模型配置</h1></div>
       <section class="host-section" aria-label="模型连接">
@@ -105,5 +103,4 @@ onUnmounted(() => { active = false; sequence++ })
       <p class="ai-data-notice">模型服务会收到用户对话，以及完成请求所需的资产信息和巡检结果。请确认服务地址和数据处理范围后再使用。</p>
     </main>
     <ModelConnectionDialog v-model="dialog" :connection="editing" @saved="load" />
-  </AssetsLayout>
 </template>

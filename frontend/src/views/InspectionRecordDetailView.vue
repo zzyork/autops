@@ -3,7 +3,6 @@ import { onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElButton, ElLoading } from 'element-plus'
 import { getInspectionTask } from '@/api/inspections'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import InspectionTaskDetail from '@/components/InspectionTaskDetail.vue'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun } from '@/components/inspectionDisplay'
@@ -55,7 +54,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AssetsLayout title="巡检记录详情" section="巡检管理">
     <main class="assets-main">
       <div class="assets-heading inspection-section-heading">
         <h1>巡检记录详情</h1>
@@ -66,5 +64,4 @@ onUnmounted(() => {
         <p v-else-if="!loading" class="inspection-retry">详情未加载。<ElButton @click="load()">重试</ElButton></p>
       </section>
     </main>
-  </AssetsLayout>
 </template>

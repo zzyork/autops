@@ -17,3 +17,7 @@ export function showRequestError(): void {
 }
 
 export const showSystemError = showRequestError
+
+export function showNavigationBlocked(): void {
+  ElMessage({ message: '请先完成或关闭当前弹窗。', type: 'warning', placement: 'top', offset: 16, duration: 3000, grouping: true })
+}

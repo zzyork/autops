@@ -2,7 +2,6 @@
 import { onMounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDialog, ElInput, ElLoading, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
 import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/assets'
-import AssetsLayout from '@/components/AssetsLayout.vue'
 import { showSystemError } from '@/components/feedback'
 import type { HostGroup } from '@/types/api'
 
@@ -77,7 +76,6 @@ async function removeGroup(group: HostGroup) {
 </script>
 
 <template>
-  <AssetsLayout title="分组管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>分组管理</h1></div>
       <section class="host-section" aria-label="分组列表">
@@ -97,5 +95,4 @@ async function removeGroup(group: HostGroup) {
       <div class="asset-form"><label class="field" :class="{ 'is-error': nameError }"><span>分组名称 <em>*</em></span><ElInput v-model="form.name" maxlength="100" placeholder="输入分组名称" :aria-invalid="nameError ? 'true' : undefined" /></label><label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" placeholder="可选" /></label><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon /></div>
       <template #footer><ElButton :disabled="saving" @click="dialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveGroup">保存</ElButton></template>
     </ElDialog>
-  </AssetsLayout>
 </template>
