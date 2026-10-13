@@ -13,3 +13,4 @@ dist/
 htmlcov/
 backend/runtime/
 backend/tests/*
+.vscode/*
