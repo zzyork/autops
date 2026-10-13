@@ -3,6 +3,8 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElDialog, ElTable, ElTableColumn } from 'element-plus'
 import { getConnectionTest, startConnectionTest } from '@/api/ssh_connections'
 import { showSystemError } from '@/components/feedback'
+import { SSH_STATUS_UNAVAILABLE, sshTestDisplay } from '@/components/sshTestDisplay'
+import TestStatus from '@/components/TestStatus.vue'
 import type { ConnectionTest, Host } from '@/types/api'
 
 const props = defineProps<{ modelValue: boolean; hosts: Host[] }>()
@@ -70,14 +72,12 @@ async function start() {
   await Promise.all(Array.from({ length: CONCURRENCY }, worker))
   if (current === generation) running.value = false
 }
-function label(row: Row): string {
-  if (row.state === 'unavailable') return row.record ? '状态待刷新' : '未能提交'
-  if (!row.record) return row.state === 'submitting' ? '提交中' : stopped.value ? '未提交' : '待提交'
-  const labels: Record<ConnectionTest['status'], string> = {
-    queued: '排队中', running: '测试中', succeeded: '测试通过', failed: '测试未通过',
-    awaiting_trust: '待核对主机密钥', interrupted: '已中断', trusted: '已信任，需重新测试',
-  }
-  return labels[row.record.status]
+function rowDisplay(row: Row) {
+  if (row.state === 'unavailable') return { status: 'unavailable' as const, label: row.record ? SSH_STATUS_UNAVAILABLE : '未能提交', description: row.record ? SSH_STATUS_UNAVAILABLE : 'SSH 连接测试未能提交' }
+  if (!row.record) return stopped.value && row.state !== 'submitting'
+    ? { status: 'untested' as const, label: '未提交', description: 'SSH 连接测试未提交' }
+    : { status: 'pending' as const, label: row.state === 'submitting' ? '提交中' : '待提交', description: row.state === 'submitting' ? 'SSH 连接测试提交中' : 'SSH 连接测试待提交' }
+  return sshTestDisplay(row.record.status)
 }
 watch(() => props.modelValue, (visible) => {
   reset()
@@ -94,7 +94,7 @@ onUnmounted(reset)
     <p v-if="stopped" class="batch-summary">后续提交已停止，可通过单台连接测试查看或重新测试。</p>
     <ElTable :data="rows" max-height="420">
       <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="host-secondary">{{ (row as Row).host.address }}</div></template></ElTableColumn>
-      <ElTableColumn label="状态" min-width="140"><template #default="{ row }">{{ label(row as Row) }}</template></ElTableColumn>
+      <ElTableColumn label="状态" min-width="140"><template #default="{ row }"><span class="batch-test-status"><TestStatus :status="rowDisplay(row as Row).status" :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`" />{{ rowDisplay(row as Row).label }}</span></template></ElTableColumn>
       <ElTableColumn label="操作" width="100"><template #default="{ row }"><ElButton link type="primary" :disabled="(row as Row).state === 'submitting' || ((row as Row).state === 'submitted' && !!((row as Row).record && isActive((row as Row).record!)))" @click="emit('inspect', (row as Row).host)">查看详情</ElButton></template></ElTableColumn>
     </ElTable>
     <p class="batch-summary">关闭弹窗会停止提交后续主机，已提交的测试继续执行。</p>
@@ -104,4 +104,5 @@ onUnmounted(reset)
 
 <style scoped>
 .batch-summary { margin: 0 0 16px; color: var(--ui-text-secondary); }
+.batch-test-status { display: inline-flex; align-items: center; gap: 8px; }
 </style>

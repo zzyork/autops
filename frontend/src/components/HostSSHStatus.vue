@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElTooltip } from 'element-plus'
 import { getConnectionTest, listConnectionTests } from '@/api/ssh_connections'
 import { showSystemError } from '@/components/feedback'
+import { SSH_STATUS_UNAVAILABLE, sshTestDisplay } from '@/components/sshTestDisplay'
+import TestStatus from '@/components/TestStatus.vue'
 import type { ConnectionTest, Host } from '@/types/api'
 
 const props = defineProps<{ host: Host; updatedRecord: ConnectionTest | null }>()
@@ -14,24 +15,15 @@ let requestId = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const appearance = computed(() => {
-  if (loadFailed.value) return { tone: 'muted', symbol: '?', text: 'SSH 状态待刷新' }
-  if (loading.value) return { tone: 'info', symbol: '…', text: '正在查询 SSH 状态' }
-  switch (latest.value?.status) {
-    case 'queued': return { tone: 'info', symbol: '…', text: 'SSH 连接测试排队中' }
-    case 'running': return { tone: 'info', symbol: '…', text: 'SSH 连接测试中' }
-    case 'succeeded': return { tone: 'success', symbol: '✓', text: '最近一次 SSH 连接测试通过' }
-    case 'failed': return { tone: 'danger', symbol: '×', text: '最近一次 SSH 连接测试未通过' }
-    case 'interrupted': return { tone: 'danger', symbol: '×', text: '最近一次 SSH 连接测试已中断' }
-    case 'awaiting_trust': return { tone: 'warning', symbol: '!', text: 'SSH 待核对主机密钥' }
-    case 'trusted': return { tone: 'warning', symbol: '!', text: 'SSH 主机密钥已信任，需重新测试' }
-    default: return { tone: 'muted', symbol: '?', text: 'SSH 尚未测试' }
-  }
+  if (loadFailed.value) return { status: 'unavailable' as const, description: SSH_STATUS_UNAVAILABLE }
+  if (loading.value) return { status: 'pending' as const, description: '正在查询 SSH 状态' }
+  return latest.value ? sshTestDisplay(latest.value.status) : { status: 'untested' as const, description: 'SSH 尚未测试' }
 })
 const description = computed(() => {
   const time = latest.value?.created_at
   return time && !loading.value && !loadFailed.value
-    ? `${appearance.value.text}（${new Date(time).toLocaleString('zh-CN')}）`
-    : appearance.value.text
+    ? `${appearance.value.description}（${new Date(time).toLocaleString('zh-CN')}）`
+    : appearance.value.description
 })
 
 function invalidate() {
@@ -101,30 +93,5 @@ onUnmounted(invalidate)
 </script>
 
 <template>
-  <ElTooltip :content="description" placement="top">
-    <span class="host-ssh-status" :class="`is-${appearance.tone}`" role="img" :aria-label="description" tabindex="0">
-      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-        <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.5" />
-        <path v-if="appearance.symbol === '✓'" d="M6 10l2.5 2.5L14 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-        <path v-else-if="appearance.symbol === '×'" d="M7 7l6 6M13 7l-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-        <g v-else-if="appearance.symbol === '?'">
-          <path d="M7.5 8a2.5 2.5 0 0 1 5 0c0 1.5-2.5 1.5-2.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <circle cx="10" cy="14.5" r="0.75" fill="currentColor" />
-        </g>
-        <text v-else x="10" y="10.5" text-anchor="middle" dominant-baseline="middle" fill="currentColor">{{ appearance.symbol }}</text>
-      </svg>
-    </span>
-  </ElTooltip>
+  <TestStatus :status="appearance.status" :description="description" />
 </template>
-
-<style scoped>
-.host-ssh-status { display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px; vertical-align: middle; }
-.host-ssh-status svg { width: 100%; height: 100%; }
-.host-ssh-status text { font-size: 13px; font-weight: 600; }
-.host-ssh-status.is-muted { color: var(--ui-text-muted); }
-.host-ssh-status.is-info { color: var(--ui-info); }
-.host-ssh-status.is-success { color: var(--ui-success); }
-.host-ssh-status.is-danger { color: var(--ui-danger); }
-.host-ssh-status.is-warning { color: var(--ui-warning); }
-.host-ssh-status:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-</style>

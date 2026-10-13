@@ -212,7 +212,7 @@ class ChatManager:
             user = repository.add_user(session, conversation, content)
             user_id = user.id
             messages.append({"role": "user", "content": content})
-            tool_enabled = record.tool_status == "passed"
+            tool_enabled = record.chat_status == "passed" and record.tool_status == "passed"
             session.expunge(record)
         state: GraphState = {"messages": messages, "ledger": ledger, "calls": [], "pending": [],
                              "reply": None, "rounds": 0, "display": ""}
@@ -239,6 +239,12 @@ class ChatManager:
                 {"id": call["id"], "type": "function", "function": {"name": call["name"],
                  "arguments": json.dumps(call["arguments"])} } for call in reply.calls]})
             for index, call in enumerate(reply.calls):
+                with self.sessions() as session:
+                    current = repository.connection(session, record.id)
+                    if current is None or current.config_version != record.config_version:
+                        raise ProviderError("模型连接已修改，请新建会话")
+                    if current.chat_status != "passed" or current.tool_status != "passed":
+                        raise ProviderError("模型测试未通过，不能调用运维工具")
                 result = self.execute_tool(session_id, call["name"], call["arguments"], state["ledger"], state["pending"])
                 state["calls"].append({"call_id": call["id"], "name": call["name"],
                                         "arguments": call["arguments"], "result": result,

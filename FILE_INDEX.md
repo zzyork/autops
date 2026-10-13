@@ -53,7 +53,7 @@
 
 | 路径 | 用途 |
 | --- | --- |
-| `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准。最后同步：2026-10-12。 |
+| `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准，包含统一测试状态图标与 tooltip 复用要求。最后同步：2026-10-13。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
 | `docs/README-编写规范.md` | README 强制执行要求、验收清单及《写好 README 的完整指南：从项目门面到开发者体验》文章全文。最后同步：2026-10-12。 |
 | `docs/inspections.md` | 主机巡检使用、检查口径、执行边界、接口及报告说明。最后同步：2026-10-12。 |
@@ -158,7 +158,10 @@
 | `frontend/src/styles/ai.css` | 复用控制台主题的对话、模型配置和任务卡片样式。最后同步：2026-10-12。 |
 | `frontend/src/components/SSHConnectionDialog.vue` | 主机与跳板机共用连接测试、结果查询和身份信任弹窗。最后同步：2026-10-12。 |
 | `frontend/src/components/BatchSSHConnectionDialog.vue` | 资产批量连接测试的有界提交、轮询、逐台状态及单台详情入口；输入所选主机，输出测试记录和详情事件。最后同步：2026-10-12。 |
-| `frontend/src/components/HostSSHStatus.vue` | 主机列表统一 SSH 状态图标，查询最近测试、跟踪未完成测试并提供状态说明。最后同步：2026-10-12。 |
+| `frontend/src/components/HostSSHStatus.vue` | 主机列表 SSH 状态查询与轮询，复用统一测试图标并提供状态与时间说明。最后同步：2026-10-13。 |
+| `frontend/src/components/TestStatus.vue` | 各类测试共用圆形状态图标、语义颜色、tooltip 与键盘焦点，接收状态、说明及可聚焦选项。最后同步：2026-10-13。 |
+| `frontend/src/components/sshTestDisplay.ts` | 主机列表、单台与批量 SSH 测试共用状态映射及提示文案。最后同步：2026-10-13。 |
+| `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单与本地校验。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机概览、可折叠检查结果与风险、报告导出展示；详情不展示配置。最后同步：2026-10-12。 |

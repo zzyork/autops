@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCheckbox, ElDialog, ElLoading, ElMessageBox, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElCheckbox, ElDialog, ElLoading, ElMessageBox } from 'element-plus'
 import { getConnectionTest, listConnectionTests, startConnectionTest, trustConnectionTest } from '@/api/ssh_connections'
 import { showSystemError } from '@/components/feedback'
+import { SSH_STATUS_UNAVAILABLE, sshTestDisplay } from '@/components/sshTestDisplay'
+import TestStatus from '@/components/TestStatus.vue'
 import type { ConnectionTest, ConnectionTestTarget } from '@/types/api'
 
 const props = defineProps<{ target: ConnectionTestTarget | null; modelValue: boolean }>()
@@ -16,6 +18,7 @@ const POLL_INTERVAL_MS = 800
 const HISTORY_LIMIT = 20
 const history = ref<ConnectionTest[]>([])
 const selectedId = ref<string | null>(null)
+const focusedRecordId = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
 const submitting = ref(false)
@@ -38,6 +41,7 @@ function reset() {
   stopPolling()
   history.value = []
   selectedId.value = null
+  focusedRecordId.value = null
   loading.value = false
   loaded.value = false
   submitting.value = false
@@ -166,23 +170,10 @@ async function trustKey() {
   }
 }
 
-function statusText(status: ConnectionTest['status']) {
-  switch (status) {
-    case 'queued': return '排队中'
-    case 'running': return '测试中'
-    case 'succeeded': return '测试通过'
-    case 'failed': return '测试未通过'
-    case 'awaiting_trust': return '待核对主机密钥'
-    case 'interrupted': return '测试已中断'
-    case 'trusted': return '已信任，需重新测试'
-  }
-}
-
-function statusType(status: ConnectionTest['status']) {
-  if (status === 'succeeded') return 'success'
-  if (status === 'failed' || status === 'interrupted') return 'danger'
-  if (status === 'awaiting_trust' || status === 'trusted') return 'warning'
-  return 'info'
+function recordDisplay(item: ConnectionTest) {
+  return recordLoadFailed.value && selectedId.value === item.id
+    ? { status: 'unavailable' as const, label: SSH_STATUS_UNAVAILABLE, description: SSH_STATUS_UNAVAILABLE }
+    : sshTestDisplay(item.status)
 }
 
 function dateLabel(value: string) {
@@ -203,13 +194,14 @@ function dateLabel(value: string) {
           <h2>最近测试记录</h2>
           <div v-if="!history.length" class="ssh-test-muted">暂无测试记录</div>
           <div v-else class="ssh-test-history">
-            <button v-for="item in history" :key="item.id" type="button" class="ssh-test-history-row" :class="{ selected: selectedId === item.id }" :aria-pressed="selectedId === item.id" :disabled="submitting || trusting" @click="selectRecord(item)">
-               <span>{{ dateLabel(item.created_at) }}</span><ElTag :type="recordLoadFailed && selectedId === item.id ? 'warning' : statusType(item.status)" size="small">{{ recordLoadFailed && selectedId === item.id ? '状态待刷新' : statusText(item.status) }}</ElTag>
+            <button v-for="item in history" :key="item.id" type="button" class="ssh-test-history-row" :class="{ selected: selectedId === item.id }" :aria-pressed="selectedId === item.id" :disabled="submitting || trusting" @click="selectRecord(item)" @focus="focusedRecordId = item.id" @blur="focusedRecordId = null">
+               <span>{{ dateLabel(item.created_at) }}</span>
+                <span class="ssh-test-status"><TestStatus :status="recordDisplay(item).status" :description="`${item.target_name}：${recordDisplay(item).description}`" :focusable="false" :tooltip-visible="focusedRecordId === item.id ? true : undefined" />{{ recordDisplay(item).label }}</span>
             </button>
           </div>
         </section>
         <section v-if="selected && !recordLoadFailed" class="ssh-test-result" aria-label="测试结果">
-          <h2>测试结果 <ElTag :type="statusType(selected.status)" size="small">{{ statusText(selected.status) }}</ElTag></h2>
+          <h2>测试结果 <span class="ssh-test-status"><TestStatus :status="sshTestDisplay(selected.status).status" :description="`${selected.target_name}：${sshTestDisplay(selected.status).description}`" />{{ sshTestDisplay(selected.status).label }}</span></h2>
           <dl class="ssh-test-details">
             <dt>目标</dt><dd>{{ selected.target_name }} · {{ selected.address }}:{{ selected.port }}</dd>
             <dt>登录用户</dt><dd>{{ selected.username }}{{ selected.via_jump_host ? '（目标主机）' : '' }}</dd>
@@ -248,9 +240,11 @@ function dateLabel(value: string) {
 .ssh-test-history-row.selected { background: var(--ui-primary-soft); }
 .ssh-test-history-row:focus-visible { outline: 2px solid var(--ui-primary) !important; outline-offset: -2px !important; }
 .ssh-test-history-row:disabled { cursor: default; }
+.ssh-test-status { display: inline-flex; align-items: center; gap: 8px; }
 .ssh-test-muted { color: var(--ui-text-secondary); }
 .ssh-test-result { border-top: 1px solid var(--ui-border); padding-top: 16px; }
 .ssh-test-result h2 { display: flex; align-items: center; gap: 8px; }
+.ssh-test-result .ssh-test-status { font-size: 13px; font-weight: 400; }
 .ssh-test-details { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
 .ssh-test-details dt { color: var(--ui-text-secondary); }
 .ssh-test-details dd { margin: 0; overflow-wrap: anywhere; }

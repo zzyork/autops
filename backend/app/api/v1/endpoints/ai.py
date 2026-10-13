@@ -223,6 +223,11 @@ def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Re
             proposal.status = "cancelled"
             commit(session)
             return conversation
+        record = require_connection(session, conversation.connection_id)
+        if conversation.connection_version != record.config_version:
+            raise HTTPException(409, "模型连接已修改，请新建会话")
+        if record.chat_status != "passed" or record.tool_status != "passed":
+            raise HTTPException(409, "模型测试未通过，不能执行 AI 运维计划")
         selected = InspectionInput(name=proposal.name,
                                    hosts=[{"id": item["id"], "version": item["version"]} for item in proposal.hosts],
                                    checks=proposal.checks)
