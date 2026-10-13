@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ElButton, ElDialog, ElLoading, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { ElButton, ElForm, ElLoading } from 'element-plus'
 import { getInspectionCatalog, updateInspectionCatalog } from '@/api/inspections'
 import AssetsLayout from '@/components/AssetsLayout.vue'
 import InspectionConfigForm from '@/components/InspectionConfigForm.vue'
@@ -9,25 +9,26 @@ import type { InspectionCatalog, InspectionConfig } from '@/types/inspections'
 import '@/styles/inspections.css'
 
 const vLoading = ElLoading.directive
-const catalog = ref<InspectionCatalog | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
-const editing = ref(false)
 const saving = ref(false)
 const draft = ref<InspectionConfig | null>(null)
 const configForm = ref<InstanceType<typeof InspectionConfigForm> | null>(null)
+const formRevision = ref(0)
 let active = true
 let request = 0
-const thresholds = computed(() => {
-  if (!catalog.value) return []
-  const values = catalog.value.defaults.thresholds
-  return [
-    { name: 'CPU', warning: values.cpu_warning, critical: values.cpu_critical },
-    { name: '内存', warning: values.mem_warning, critical: values.mem_critical },
-    { name: '磁盘', warning: values.disk_warning, critical: values.disk_critical },
-    { name: 'Swap', warning: values.swap_warning, critical: values.swap_critical },
-  ]
-})
+function applyRules(result: InspectionCatalog) {
+  const defaults = result.defaults
+  draft.value = {
+    thresholds: { ...defaults.thresholds },
+    command_timeout_seconds: defaults.command_timeout_seconds,
+    host_timeout_seconds: defaults.host_timeout_seconds,
+    services: defaults.services.map((service) => ({ ...service, candidates: [...service.candidates] })),
+    logs: { ...defaults.logs, paths: [...defaults.logs.paths] },
+  }
+  loaded.value = true
+  formRevision.value++
+}
 async function loadRules() {
   if (saving.value) return
   const current = ++request
@@ -35,8 +36,7 @@ async function loadRules() {
   try {
     const result = await getInspectionCatalog()
     if (!active || current !== request) return
-    catalog.value = result
-    loaded.value = true
+    applyRules(result)
   } catch {
     if (!active || current !== request) return
     loaded.value = false
@@ -45,20 +45,8 @@ async function loadRules() {
     if (active && current === request) loading.value = false
   }
 }
-function openEditor() {
-  if (!loaded.value || !catalog.value || loading.value) return
-  const defaults = catalog.value.defaults
-  draft.value = {
-    thresholds: { ...defaults.thresholds },
-    command_timeout_seconds: defaults.command_timeout_seconds,
-    host_timeout_seconds: defaults.host_timeout_seconds,
-    services: defaults.services.map((service) => ({ ...service, candidates: [...service.candidates] })),
-    logs: { ...defaults.logs, paths: [...defaults.logs.paths] },
-  }
-  editing.value = true
-}
 async function saveRules() {
-  if (saving.value || !editing.value || !configForm.value) return
+  if (saving.value || loading.value || !loaded.value || !configForm.value) return
   if (!configForm.value.validate()) return
   const body = configForm.value.normalized()
   const current = ++request
@@ -67,9 +55,7 @@ async function saveRules() {
   try {
     const result = await updateInspectionCatalog(body)
     if (!active || current !== request) return
-    catalog.value = result
-    loaded.value = true
-    editing.value = false
+    applyRules(result)
   } catch {
     if (active && current === request) showSystemError()
   } finally {
@@ -85,43 +71,20 @@ onUnmounted(() => { active = false; request++ })
     <main class="assets-main">
       <div class="assets-heading"><h1>巡检规则</h1></div>
       <section v-loading="loading" class="host-section" aria-label="巡检规则">
-        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :disabled="!loaded || loading || editing" @click="openEditor">编辑规则</ElButton><span class="inspection-muted"></span></div><ElButton :loading="loading" :disabled="editing || saving" @click="loadRules">刷新</ElButton></div>
-        <div v-if="loaded && catalog" class="inspection-detail">
-          <section aria-label="资源阈值">
-            <div class="section-header"><h2>资源阈值</h2></div>
-            <div class="host-table-wrap"><ElTable :data="thresholds" row-key="name" class="host-table">
-              <ElTableColumn prop="name" label="资源" min-width="180" />
-              <ElTableColumn label="警告阈值"><template #default="{ row }">{{ row.warning }}%</template></ElTableColumn>
-              <ElTableColumn label="严重阈值"><template #default="{ row }">{{ row.critical }}%</template></ElTableColumn>
-            </ElTable></div>
-            <p class="inspection-muted">达到阈值触发对应结论；无 Swap 时不产生 Swap 阈值告警。</p>
-          </section>
-          <section aria-label="执行时限">
-            <div class="section-header"><h2>执行时限</h2></div>
-            <div class="inspection-detail-meta"><span>单命令 {{ catalog.defaults.command_timeout_seconds }} 秒</span><span>单主机 {{ catalog.defaults.host_timeout_seconds }} 秒</span></div>
-          </section>
-          <section aria-label="服务判定">
-            <div class="section-header"><h2>服务判定</h2></div>
-            <div class="host-table-wrap"><ElTable :data="catalog.defaults.services" class="host-table" empty-text="暂无服务规则">
-              <ElTableColumn prop="name" label="服务名称" min-width="180" />
-              <ElTableColumn label="候选名称" min-width="300"><template #default="{ row }">{{ row.candidates.join('、') }}</template></ElTableColumn>
-            </ElTable></div>
-            <p class="inspection-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
-          </section>
-          <section aria-label="错误日志">
-            <div class="section-header"><h2>错误日志</h2></div>
-            <div class="inspection-detail-meta"><span>最近 {{ catalog.defaults.logs.days }} 天</span><span>每来源最多 {{ catalog.defaults.logs.lines }} 行</span></div>
-            <div class="host-table-wrap"><ElTable :data="catalog.defaults.logs.paths.map((path) => ({ path }))" class="host-table" empty-text="不扫描文件日志">
-              <ElTableColumn prop="path" label="扫描路径" min-width="300" />
-            </ElTable></div>
-          </section>
-        </div>
+        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :loading="saving" :disabled="!loaded || loading" @click="saveRules">保存</ElButton><span class="inspection-muted">修改后点击保存生效；刷新会重新加载已保存的规则。</span></div><ElButton :loading="loading" :disabled="saving" @click="loadRules">刷新</ElButton></div>
+        <fieldset v-if="loaded && draft" :disabled="loading || saving" class="inspection-rules-form" aria-label="编辑巡检规则">
+          <ElForm :disabled="loading || saving" @submit.prevent="saveRules">
+            <InspectionConfigForm :key="formRevision" ref="configForm" v-model="draft" />
+          </ElForm>
+          <p class="inspection-muted">达到阈值触发对应结论；无 Swap 时不产生 Swap 阈值告警。</p>
+          <p class="inspection-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
+        </fieldset>
         <p v-else-if="!loading" class="inspection-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>
       </section>
     </main>
-    <ElDialog :model-value="editing" align-center title="编辑巡检规则" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!saving && (editing = $event)">
-      <InspectionConfigForm v-if="draft" ref="configForm" v-model="draft" />
-      <template #footer><ElButton :disabled="saving" @click="editing = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveRules">保存</ElButton></template>
-    </ElDialog>
   </AssetsLayout>
 </template>
+
+<style scoped>
+.inspection-rules-form { min-width: 0; margin: 0; padding: 0; border: 0; }
+</style>

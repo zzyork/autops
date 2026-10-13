@@ -373,7 +373,14 @@ function dateLabel(value: string) {
         </aside>
         <section class="host-section" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span class="host-total">{{ hosts.length }} 台</span></div></div>
-          <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><ElButton :disabled="hostsLoading || hostsLoadFailed || !selectedHosts.length || batchDialog" @click="startBatchTest">批量测试连接{{ selectedHosts.length ? `（${selectedHosts.length}）` : '' }}</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton></div></div>
+          <div class="host-toolbar">
+            <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" />
+            <div class="host-toolbar-right">
+              <ElButton type="primary" @click="openNewHost">新增主机</ElButton>
+              <ElButton :disabled="hostsLoading || hostsLoadFailed || !selectedHosts.length || batchDialog" @click="startBatchTest">批量测试连接{{ selectedHosts.length ? `（${selectedHosts.length}）` : '' }}</ElButton>
+              <ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton>
+            </div>
+          </div>
           <div class="host-table-wrap">
             <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
               <ElTableColumn type="selection" width="44" />
