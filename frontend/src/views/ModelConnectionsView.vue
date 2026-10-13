@@ -66,14 +66,14 @@ onUnmounted(() => { active = false; sequence++ })
 </script>
 
 <template>
-  <AssetsLayout title="模型配置" section="AI 对话">
+  <AssetsLayout title="模型配置" section="配置管理">
     <main class="assets-main">
       <div class="assets-heading"><h1>模型配置</h1></div>
       <section class="host-section" aria-label="模型连接">
         <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading" @click="load">刷新</ElButton></div>
         <div v-loading="loading" class="host-table-wrap">
           <ElTable v-if="loaded" :data="connections" class="host-table" empty-text="暂无模型连接">
-            <ElTableColumn label="连接名称" min-width="170"><template #default="{ row }"><strong>{{ row.name }}</strong><ElTag v-if="row.is_default" size="small" class="ai-default-tag">默认</ElTag></template></ElTableColumn>
+            <ElTableColumn label="连接名称" min-width="170"><template #default="{ row }"><strong>{{ row.name }}</strong><ElTag v-if="row.is_default" size="small" class="ai-default-tag">主模型</ElTag><ElTag v-if="row.is_backup" size="small" type="info" class="ai-default-tag">备用模型</ElTag></template></ElTableColumn>
             <ElTableColumn label="协议 / 模型" min-width="190"><template #default="{ row }">{{ row.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容' }}<div class="host-secondary">{{ row.model }}</div></template></ElTableColumn>
             <ElTableColumn label="服务地址" min-width="240"><template #default="{ row }"><span class="ai-address">{{ row.base_url }}</span></template></ElTableColumn>
             <ElTableColumn label="密钥" width="90"><template #default="{ row }">{{ row.has_api_key ? '已配置' : '无密钥' }}</template></ElTableColumn>

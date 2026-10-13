@@ -16,13 +16,18 @@ def connection(session: Session, connection_id: int) -> AIConnection | None:
     return session.get(AIConnection, connection_id)
 
 
+def primary_connection(session: Session) -> AIConnection | None:
+    return session.scalar(select(AIConnection).where(AIConnection.is_default.is_(True)))
+
+
 def save_connection(session: Session, data: ConnectionInput, encrypted: str | None,
                     record: AIConnection | None = None) -> AIConnection:
-    if data.is_default:
-        previous = update(AIConnection).where(AIConnection.is_default.is_(True))
-        if record is not None:
-            previous = previous.where(AIConnection.id != record.id)
-        session.execute(previous.values(is_default=False))
+    for field in ("is_default", "is_backup"):
+        if getattr(data, field):
+            previous = update(AIConnection).where(getattr(AIConnection, field).is_(True))
+            if record is not None:
+                previous = previous.where(AIConnection.id != record.id)
+            session.execute(previous.values({field: False}))
     if record is None:
         record = AIConnection()
         session.add(record)
@@ -32,7 +37,7 @@ def save_connection(session: Session, data: ConnectionInput, encrypted: str | No
         if changed:
             record.config_version += 1
             record.chat_status = record.tool_status = "untested"
-    for field in ("name", "protocol", "base_url", "model", "is_default"):
+    for field in ("name", "protocol", "base_url", "model", "is_default", "is_backup"):
         setattr(record, field, getattr(data, field))
     if encrypted is not None:
         record.api_key_encrypted = encrypted

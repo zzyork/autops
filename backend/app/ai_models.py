@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, JSON, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .models import Base, utc_now
@@ -8,6 +8,11 @@ from .models import Base, utc_now
 
 class AIConnection(Base):
     __tablename__ = "ai_connections"
+    __table_args__ = (
+        CheckConstraint("NOT (is_default = 1 AND is_backup = 1)", name="ck_ai_connections_distinct_roles"),
+        Index("uq_ai_connections_primary", "is_default", unique=True, sqlite_where=text("is_default = 1")),
+        Index("uq_ai_connections_backup", "is_backup", unique=True, sqlite_where=text("is_backup = 1")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
@@ -16,6 +21,7 @@ class AIConnection(Base):
     model: Mapped[str] = mapped_column(String(200))
     api_key_encrypted: Mapped[str | None]
     is_default: Mapped[bool] = mapped_column(default=False)
+    is_backup: Mapped[bool] = mapped_column(default=False)
     chat_status: Mapped[str] = mapped_column(default="untested")
     tool_status: Mapped[str] = mapped_column(default="untested")
     config_version: Mapped[int] = mapped_column(default=1)

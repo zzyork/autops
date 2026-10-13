@@ -1,7 +1,12 @@
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from backend.app.core.ssh_commands import CommandExecutionError, CommandResult
-from backend.app.schemas.inspections import InspectionConfig, ServiceSpec, Thresholds
+from backend.app.schemas.inspections import InspectionConfig, LogRules, ServiceSpec, Thresholds
 from backend.app.services.inspection_checks import (
     CHECK_DEFINITIONS, CHECK_TITLES, InspectionCheckError, collect,
 )
@@ -38,7 +43,7 @@ def resource_outputs() -> dict[str, str | CommandResult]:
 
 def test_registry_and_basic_ipv4_ipv6() -> None:
     assert set(CHECK_TITLES) == {definition.id for definition in CHECK_DEFINITIONS} == {
-        "server_info", "system_resources", "service_status", "network_info",
+        "server_info", "system_resources", "service_status", "network_info", "log_error",
     }
     outputs = {
         "hostname": "node1\n", "cat /etc/os-release": 'NAME="Linux"\nPRETTY_NAME="Test Linux 1"\n',
@@ -256,3 +261,139 @@ def test_output_limits_and_execution_errors_propagate() -> None:
     with pytest.raises(CommandExecutionError) as caught:
         collect("server_info", failed_runner, InspectionConfig())
     assert caught.value.code == "timeout"
+
+
+def test_logs_match_exclusions_keywords_and_quoted_paths() -> None:
+    path = "/var/log/web's error.log"
+    commands = []
+
+    def run(command: str) -> CommandResult:
+        commands.append(command)
+        if "journalctl" in command:
+            return CommandResult("Oct 01 host error\nOct 02 host fatal\n", "", 0)
+        return CommandResult("ERROR one\n异常 two\n", "", 0)
+
+    payload = collect("log_error", run, InspectionConfig(logs=LogRules(days=7, lines=2, paths=[path])))
+    assert payload.conclusion == "warning"
+    assert [finding.message for finding in payload.findings] == [
+        "systemd journal 匹配到 2 行错误日志", f"{path} 匹配到 2 行错误日志",
+    ]
+    assert payload.tables[0].rows == [["匹配", "Oct 01 host error"], ["匹配", "Oct 02 host fatal"]]
+    assert payload.tables[1].rows == [["匹配", "ERROR one"], ["匹配", "异常 two"]]
+    assert "-p err..alert --no-pager --quiet" in commands[0]
+    assert "7 days ago" in commands[0] and "systemd-coredump|ldapdb_canonuser_plug_init" in commands[0]
+    assert "grep -aiE" in commands[1] and "error|failed|fatal|panic|crit|critical|异常" in commands[1]
+    assert "'/var/log/web'\"'\"'s error.log'" in commands[1]
+    assert "command -v readlink" in commands[1] and "readlink -e --" in commands[1]
+    assert '[ ! -x "$parent" ]' in commands[1] and '[ -L "$path" ]' in commands[1]
+    assert '[ ! -r "$resolved" ]' in commands[1]
+    assert 'case $resolved in /var/log/*)' in commands[1]
+    assert 'grep -aiE' in commands[1] and '-- "$resolved"' in commands[1]
+    assert all("tail -n 2" in command for command in commands)
+
+
+def test_logs_no_matches_missing_sources_and_failures() -> None:
+    config = InspectionConfig(logs=LogRules(paths=["/var/log/missing", "/var/log/empty"]))
+    outcomes = [CommandResult("", "", 3), CommandResult("", "", 3), CommandResult("", "", 1)]
+    payload = collect("log_error", lambda _: outcomes.pop(0), config)
+    assert payload.conclusion == "normal"
+    assert [item.rows[0][0] for item in payload.tables] == ["不适用", "不适用", "未匹配"]
+    assert payload.findings == []
+    missing = collect("log_error", lambda _: CommandResult("", "", 3), config)
+    assert missing.conclusion == "not_applicable"
+    assert all(item.rows[0][0] == "不适用" for item in missing.tables)
+    for result, code in [(CommandResult("", "denied", 1), "command_failed"),
+                         (CommandResult("", "missing grep", 127), "tool_missing"),
+                         (CommandResult("", "", 4), "command_failed")]:
+        with pytest.raises(InspectionCheckError) as caught:
+            collect("log_error", lambda _: result, config)
+        assert caught.value.code == code
+        assert "denied" not in str(caught.value)
+    outcomes = [CommandResult("", "", 3), CommandResult("", "readlink not found", 127)]
+    with pytest.raises(InspectionCheckError, match="tool_missing"):
+        collect("log_error", lambda _: outcomes.pop(0), InspectionConfig(logs=LogRules(paths=["/var/log/messages"])))
+
+
+def test_logs_bounded_output_and_execution_error() -> None:
+    config = InspectionConfig(logs=LogRules(paths=[]))
+    for output in ["line\n" * 201, "x" * 501 + "\n"]:
+        with pytest.raises(InspectionCheckError, match="output_limit"):
+            collect("log_error", lambda _: CommandResult(output, "", 0), config)
+
+    def timeout(_command: str) -> CommandResult:
+        raise CommandExecutionError("timeout", True)
+
+    with pytest.raises(CommandExecutionError, match="SSH 命令执行超时"):
+        collect("log_error", timeout, config)
+
+
+@pytest.mark.parametrize("paths", [
+    ["relative.log"], ["/etc/shadow"], ["/tmp/app.log"], ["/var/log"], ["/var/log/"],
+    ["/var/log//secure"], ["/var/log/a/"], ["/var/log/../secure"], ["/var/log/./secure"],
+    ["/var/log/a\ncmd"], ["/var/log/a\x00b"],
+    ["/var/log/a", "/var/log/a"], ["/" + "a" * 240],
+    [f"/var/log/{index}" for index in range(13)],
+])
+def test_log_rules_reject_unsafe_paths(paths: list[str]) -> None:
+    with pytest.raises(ValueError):
+        LogRules(paths=paths)
+
+
+def test_log_rules_keep_original_default_paths() -> None:
+    assert LogRules().paths == [
+        "/var/log/messages", "/var/log/secure", "/var/log/nginx/error.log",
+        "/var/log/mysql/error.log", "/var/log/mysqld.log",
+        "/var/log/rabbitmq/rabbitmqd-error.log",
+    ]
+
+
+@pytest.mark.skipif(os.name != "posix" or shutil.which("bash") is None, reason="需要 Linux bash 和 readlink")
+def test_log_file_shell_checks_resolution_and_permissions(tmp_path: Path) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    inside = log_root / "inside.log"
+    inside.write_text("ERROR inside\n", encoding="utf-8")
+    outside = tmp_path / "outside.log"
+    outside.write_text("ERROR outside\n", encoding="utf-8")
+    (log_root / "safe-link.log").symlink_to(inside)
+    (log_root / "escape.log").symlink_to(outside)
+    blocked = log_root / "blocked"
+    blocked.mkdir()
+    (blocked / "error.log").write_text("ERROR hidden\n", encoding="utf-8")
+    bash = shutil.which("bash")
+    assert bash is not None
+
+    def run(command: str, *, missing_readlink: bool = False) -> CommandResult:
+        if "journalctl" in command:
+            return CommandResult("", "", 3)
+        script = command.replace("/var/log/", f"{log_root}/")
+        env = {**os.environ, "PATH": "/nonexistent"} if missing_readlink else None
+        result = subprocess.run([bash, "-c", script], capture_output=True, text=True, env=env, check=False)
+        return CommandResult(result.stdout, result.stderr, result.returncode)
+
+    def check(filename: str, *, missing_readlink: bool = False):
+        return collect("log_error", lambda command: run(command, missing_readlink=missing_readlink),
+                       InspectionConfig(logs=LogRules(paths=[f"/var/log/{filename}"])))
+
+    assert check("inside.log").tables[1].rows == [["匹配", "ERROR inside"]]
+    assert check("safe-link.log").tables[1].rows == [["匹配", "ERROR inside"]]
+    assert check("missing.log").tables[1].rows == [["不适用", "日志文件不存在"]]
+    for filename in ("escape.log", "blocked/error.log"):
+        if filename.startswith("blocked") and os.geteuid() == 0:
+            continue
+        if filename.startswith("blocked"):
+            blocked.chmod(0)
+        try:
+            with pytest.raises(InspectionCheckError, match="command_failed"):
+                check(filename)
+        finally:
+            blocked.chmod(0o700)
+    with pytest.raises(InspectionCheckError, match="tool_missing"):
+        check("inside.log", missing_readlink=True)
+
+
+@pytest.mark.parametrize("field,value", [("days", 0), ("days", 366), ("days", "7"),
+                                         ("lines", 0), ("lines", 201), ("lines", 1.5)])
+def test_log_rules_reject_invalid_limits(field: str, value: object) -> None:
+    with pytest.raises(ValueError):
+        LogRules(**{field: value})

@@ -29,7 +29,7 @@ export const updateConnection = (id: number, body: ModelConnectionInput) => requ
 export const deleteConnection = (id: number) => request<void>(connectionPath(id), { method: 'DELETE' })
 export const testConnection = (id: number) => request<ModelConnection>(`${connectionPath(id)}/test`, { method: 'POST', timeoutMs: 150000 })
 export const listSessions = () => get<SessionSummary[]>('/ai/sessions')
-export const createSession = (connectionId: number) => request<SessionSummary>('/ai/sessions', { method: 'POST', body: { connection_id: connectionId } })
+export const createSession = () => request<SessionSummary>('/ai/sessions', { method: 'POST' })
 export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })
 export const decideProposal = (sessionId: string, proposalId: string, approve: boolean) => request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, { method: 'POST', body: { approve }, timeoutMs: 120000 })

@@ -10,6 +10,7 @@ export interface ModelConnectionInput {
   model: string
   api_key: string
   is_default: boolean
+  is_backup: boolean
 }
 export interface ModelConnection extends Omit<ModelConnectionInput, 'api_key'> {
   id: number

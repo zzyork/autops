@@ -1,4 +1,4 @@
-export type CheckId = 'server_info' | 'system_resources' | 'service_status' | 'network_info'
+export type CheckId = 'server_info' | 'system_resources' | 'service_status' | 'network_info' | 'log_error'
 export type RunStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted'
 export type CheckStatus = 'queued' | 'running' | 'completed' | 'failed' | 'skipped' | 'interrupted'
 export type Conclusion = 'normal' | 'warning' | 'critical' | 'not_applicable' | 'unknown'
@@ -14,9 +14,11 @@ export interface Thresholds {
   swap_critical: number
 }
 export interface ServiceSpec { name: string; candidates: string[]; required: boolean }
+export interface LogRules { days: number; lines: number; paths: string[] }
 export interface InspectionConfig {
   thresholds: Thresholds
   services: ServiceSpec[]
+  logs: LogRules
   command_timeout_seconds: number
   host_timeout_seconds: number
 }

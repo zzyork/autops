@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-CheckId = Literal["server_info", "system_resources", "service_status", "network_info"]
+CheckId = Literal["server_info", "system_resources", "service_status", "network_info", "log_error"]
 RunStatus = Literal["queued", "running", "completed", "partial", "failed", "interrupted"]
 CheckStatus = Literal["queued", "running", "completed", "failed", "skipped", "interrupted"]
 Conclusion = Literal["normal", "warning", "critical", "not_applicable", "unknown"]
@@ -60,9 +60,36 @@ def default_services() -> list[ServiceSpec]:
     )]
 
 
+def default_log_paths() -> list[str]:
+    return [
+        "/var/log/messages", "/var/log/secure", "/var/log/nginx/error.log",
+        "/var/log/mysql/error.log", "/var/log/mysqld.log",
+        "/var/log/rabbitmq/rabbitmqd-error.log",
+    ]
+
+
+class LogRules(InputModel):
+    days: int = Field(default=30, ge=1, le=365, strict=True)
+    lines: int = Field(default=200, ge=1, le=200, strict=True)
+    paths: list[str] = Field(default_factory=default_log_paths, max_length=12)
+
+    @field_validator("paths")
+    @classmethod
+    def valid_paths(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value) or any(
+            len(path) > 240 or not path.startswith("/var/log/") or
+            any(part in ("", ".", "..") for part in path[len("/var/log/"):].split("/")) or
+            any(ord(char) < 32 or ord(char) == 127 for char in path)
+            for path in value
+        ):
+            raise ValueError("日志路径须为 /var/log/ 下不重复的规范路径，不得包含控制字符或相对路径段")
+        return value
+
+
 class InspectionConfig(InputModel):
     thresholds: Thresholds = Field(default_factory=Thresholds)
     services: list[ServiceSpec] = Field(default_factory=default_services, max_length=30)
+    logs: LogRules = Field(default_factory=LogRules)
     command_timeout_seconds: int = Field(default=30, ge=2, le=120)
     host_timeout_seconds: int = Field(default=180, ge=10, le=600)
 
@@ -92,6 +119,11 @@ class InspectionConfigSave(InspectionConfig):
         services = value["services"]
         if isinstance(services, list) and any(isinstance(item, dict) and "required" not in item for item in services):
             raise ValueError("保存规则缺少服务 required 字段")
+        logs = value["logs"]
+        if isinstance(logs, dict):
+            missing = LogRules.model_fields.keys() - logs.keys()
+            if missing:
+                raise ValueError(f"保存规则缺少日志字段: {', '.join(sorted(missing))}")
         return value
 
 
@@ -103,7 +135,7 @@ class HostSelection(InputModel):
 class InspectionInput(InputModel):
     name: str = Field(min_length=1, max_length=100)
     hosts: list[HostSelection] = Field(min_length=1, max_length=32)
-    checks: list[CheckId] = Field(min_length=1, max_length=4)
+    checks: list[CheckId] = Field(min_length=1, max_length=5)
 
     @field_validator("name")
     @classmethod

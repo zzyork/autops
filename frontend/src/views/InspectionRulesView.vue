@@ -53,6 +53,7 @@ function openEditor() {
     command_timeout_seconds: defaults.command_timeout_seconds,
     host_timeout_seconds: defaults.host_timeout_seconds,
     services: defaults.services.map((service) => ({ ...service, candidates: [...service.candidates] })),
+    logs: { ...defaults.logs, paths: [...defaults.logs.paths] },
   }
   editing.value = true
 }
@@ -106,6 +107,13 @@ onUnmounted(() => { active = false; request++ })
               <ElTableColumn label="候选名称" min-width="300"><template #default="{ row }">{{ row.candidates.join('、') }}</template></ElTableColumn>
             </ElTable></div>
             <p class="inspection-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
+          </section>
+          <section aria-label="错误日志">
+            <div class="section-header"><h2>错误日志</h2></div>
+            <div class="inspection-detail-meta"><span>最近 {{ catalog.defaults.logs.days }} 天</span><span>每来源最多 {{ catalog.defaults.logs.lines }} 行</span></div>
+            <div class="host-table-wrap"><ElTable :data="catalog.defaults.logs.paths.map((path) => ({ path }))" class="host-table" empty-text="不扫描文件日志">
+              <ElTableColumn prop="path" label="扫描路径" min-width="300" />
+            </ElTable></div>
           </section>
         </div>
         <p v-else-if="!loading" class="inspection-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>

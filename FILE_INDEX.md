@@ -117,6 +117,7 @@
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/services.py` | systemd 候选服务状态采集、未安装服务结果隐藏与必需服务告警。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/network.py` | 网卡地址、本机 TCP/UDP 监听信息采集与回环监听过滤。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/logs.py` | journal 与 /var/log 下文件错误日志筛选、权限及真实路径校验，复用巡检结果和报告。最后同步：2026-10-12。 |
 | `backend/app/core/ssh_keys.py` | SSH 公私钥内容与配对校验、指纹生成。最后同步：2026-10-10。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
@@ -152,10 +153,11 @@
 | `frontend/src/components/ChatProposalCard.vue` | 显示计划执行范围，发出确认或拒绝事件。最后同步：2026-10-12。 |
 | `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务进度并复用已有详情组件。最后同步：2026-10-12。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入。最后同步：2026-10-12。 |
-| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、模型选择、流式输入输出和计划决策。最后同步：2026-10-12。 |
+| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、首次发送自动使用主模型创建会话、流式输入输出和计划决策。最后同步：2026-10-12。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |
 | `frontend/src/styles/ai.css` | 复用控制台主题的对话、模型配置和任务卡片样式。最后同步：2026-10-12。 |
 | `frontend/src/components/SSHConnectionDialog.vue` | 主机与跳板机共用连接测试、结果查询和身份信任弹窗。最后同步：2026-10-12。 |
+| `frontend/src/components/BatchSSHConnectionDialog.vue` | 资产批量连接测试的有界提交、轮询、逐台状态及单台详情入口；输入所选主机，输出测试记录和详情事件。最后同步：2026-10-12。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机列表统一 SSH 状态图标，查询最近测试、跟踪未完成测试并提供状态说明。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单与本地校验。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交。最后同步：2026-10-12。 |
@@ -163,16 +165,16 @@
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/AssetsLayout.vue` | AI、资产与巡检页面共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
+| `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台布局、导航和面包屑。最后同步：2026-10-12。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 对话首页、模型配置、资产及巡检独立页面路由。最后同步：2026-10-12。 |
+| `frontend/src/router/index.ts` | 对话首页、配置管理、资产及巡检独立页面路由，保留旧配置地址重定向。最后同步：2026-10-12。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
 | `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
 | `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |
-| `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择与 SSH 连接测试入口。最后同步：2026-10-12。 |
+| `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择、单台与勾选批量 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |

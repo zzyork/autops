@@ -6,7 +6,7 @@ import type { CheckId } from '@/types/inspections'
 defineProps<{ proposal: InspectionProposal; busy: boolean }>()
 const emit = defineEmits<{ decide: [id: string, approve: boolean] }>()
 const labels: Record<CheckId, string> = {
-  server_info: '系统基础信息', system_resources: '系统资源', service_status: '服务状态', network_info: '网络信息',
+  server_info: '系统基础信息', system_resources: '系统资源', service_status: '服务状态', network_info: '网络信息', log_error: '错误日志',
 }
 </script>
 

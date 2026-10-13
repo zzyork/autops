@@ -12,6 +12,7 @@ const thresholdFields: { label: string; warning: keyof Thresholds; critical: key
   { label: 'Swap', warning: 'swap_warning', critical: 'swap_critical' },
 ]
 const UNIT_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.@-]{0,127}$/
+const LOG_PATH = /^\/var\/log\/[^\x00-\x1f\x7f]+$/
 
 function updateCandidates(index: number, value: string) {
   config.value.services[index]!.candidates = value.split(',').map((item) => item.trim())
@@ -24,6 +25,10 @@ function addService() {
 }
 function removeService(index: number) {
   config.value.services.splice(index, 1)
+  error.value = ''
+}
+function updatePaths(value: string) {
+  config.value.logs.paths = value === '' ? [] : value.split('\n')
   error.value = ''
 }
 function validate(): boolean {
@@ -56,6 +61,15 @@ function validate(): boolean {
       return false
     }
   }
+  const { days, lines, paths } = current.logs
+  if (!Number.isInteger(days) || days < 1 || days > 365 || !Number.isInteger(lines) || lines < 1 || lines > 200) {
+    error.value = '日志范围须为 1-365 天，每来源行数须为 1-200。'
+    return false
+  }
+  if (paths.length > 12 || new Set(paths).size !== paths.length || paths.some((path) => path.length > 240 || !LOG_PATH.test(path) || path.slice('/var/log/'.length).split('/').some((part) => !part || part === '.' || part === '..'))) {
+    error.value = '日志路径最多 12 条，须为 /var/log/ 下不重复的规范路径（每行一条、每条不超过 240 字符）。'
+    return false
+  }
   error.value = ''
   return true
 }
@@ -64,6 +78,7 @@ function normalized(): InspectionConfig {
     ...config.value,
     thresholds: { ...config.value.thresholds },
     services: config.value.services.map((service: ServiceSpec) => ({ ...service, name: service.name.trim(), candidates: [...service.candidates] })),
+    logs: { ...config.value.logs, paths: [...config.value.logs.paths] },
   }
 }
 defineExpose({ validate, normalized })
@@ -94,6 +109,12 @@ defineExpose({ validate, normalized })
       </div>
       <p v-if="!config.services.length" class="inspection-muted">不检查服务</p>
     </div>
+    <div class="form-section-title">错误日志</div>
+    <div class="field-grid">
+      <label class="field"><span>最近天数</span><ElInputNumber v-model="config.logs.days" :min="1" :max="365" :controls="false" class="full-width" @change="error = ''" /></label>
+      <label class="field"><span>每来源最多行数</span><ElInputNumber v-model="config.logs.lines" :min="1" :max="200" :controls="false" class="full-width" @change="error = ''" /></label>
+    </div>
+    <label class="field"><span>/var/log/ 下日志路径（每行一条，最多 12 条）</span><ElInput type="textarea" :rows="6" :model-value="config.logs.paths.join('\n')" @update:model-value="updatePaths" /></label>
     <ElAlert v-if="error" :title="error" type="error" :closable="false" show-icon />
   </div>
 </template>

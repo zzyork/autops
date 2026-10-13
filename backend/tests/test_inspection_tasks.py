@@ -26,7 +26,7 @@ from backend.app.services import inspection_rules
 from backend.app.services.inspection_checks import InspectionCheckError
 
 ROOT = "/api/v1/inspections"
-CHECKS = ["server_info", "system_resources", "service_status", "network_info"]
+CHECKS = ["server_info", "system_resources", "service_status", "network_info", "log_error"]
 SECRET = "only-in-encrypted-assets-9837"
 
 
@@ -127,8 +127,8 @@ def test_catalog_completed_critical_and_report_api(client: TestClient, monkeypat
     result = wait_for(client, created["id"])
     assert result["status"] == result["hosts"][0]["status"] == "completed"
     assert (result["completed_hosts"], result["failed_hosts"]) == (1, 0)
-    assert [c["status"] for c in result["hosts"][0]["checks"]] == ["completed"] * 4
-    assert [c["conclusion"] for c in result["hosts"][0]["checks"]] == ["normal", "critical", "normal", "normal"]
+    assert [c["status"] for c in result["hosts"][0]["checks"]] == ["completed"] * 5
+    assert [c["conclusion"] for c in result["hosts"][0]["checks"]] == ["normal", "critical", "normal", "normal", "normal"]
     assert result["config"] == defaults
     assert observed == [(check, defaults["command_timeout_seconds"], defaults["thresholds"]["cpu_critical"],
                          [service["name"] for service in defaults["services"]]) for check in CHECKS]
@@ -158,7 +158,8 @@ def test_catalog_persists_and_tasks_keep_rule_snapshots(client: TestClient, monk
     first = client.get(url).json()
     assert not (client.app.state.data_dir / "inspection-rules.json").exists()
     custom = {**first["defaults"], "command_timeout_seconds": 12, "services": [
-        {"name": "web", "candidates": ["nginx"], "required": True}]}
+        {"name": "web", "candidates": ["nginx"], "required": True}],
+        "logs": {"days": 7, "lines": 25, "paths": ["/var/log/web error.log"]}}
     saved = client.put(url, json=custom)
     assert saved.status_code == 200
     assert saved.json() == {**first, "defaults": custom}
@@ -175,10 +176,42 @@ def test_catalog_persists_and_tasks_keep_rule_snapshots(client: TestClient, monk
     assert inspection_rules.load_rules(client.app.state.data_dir).model_dump(mode="json") == updated
 
 
+def test_existing_rules_without_logs_get_builtin_log_defaults(client: TestClient) -> None:
+    defaults = client.get(f"{ROOT}/catalog").json()["defaults"]
+    old_rules = {key: value for key, value in defaults.items() if key != "logs"}
+    (client.app.state.data_dir / "inspection-rules.json").write_text(
+        InspectionConfig.model_validate(old_rules).model_dump_json(exclude={"logs"}), encoding="utf-8")
+    loaded = client.get(f"{ROOT}/catalog")
+    assert loaded.status_code == 200
+    assert loaded.json()["defaults"] == defaults
+
+
+def test_log_result_is_in_task_and_report(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    fake_connection(monkeypatch)
+    from backend.app.core.ssh_commands import CommandResult
+
+    def run_command(_client, command, timeout, deadline):
+        assert timeout == 30 and deadline is not None
+        return CommandResult("Oct 01 host fatal error\n", "", 0) if "journalctl" in command else CommandResult("", "", 3)
+
+    monkeypatch.setattr(inspection_tasks, "run_command", run_command)
+    task = submit(client, [host], ["log_error"])
+    detail = wait_for(client, task["id"])
+    check = detail["hosts"][0]["checks"][0]
+    assert check["check_id"] == "log_error" and check["status"] == "completed"
+    assert check["conclusion"] == "warning"
+    assert check["payload"]["tables"][0]["rows"] == [["匹配", "Oct 01 host fatal error"]]
+    assert check["payload"]["tables"][1]["rows"] == [["不适用", "日志文件不存在"]]
+    assert "Oct 01 host fatal error" in client.get(f"{ROOT}/tasks/{task['id']}/report").json()["content"]
+
+
 @pytest.mark.parametrize("change", [
     {"thresholds": {"cpu_warning": 96, "cpu_critical": 95}},
     {"services": [{"name": "web", "candidates": ["nginx;id"]}]},
     {"host_timeout_seconds": 9},
+    {"logs": {"days": 0, "lines": 201, "paths": ["/tmp/a;id"]}},
+    {"logs": {"days": 7, "lines": 5, "paths": ["/tmp/../../etc/passwd"]}},
     {"unknown": 1},
 ])
 def test_catalog_rejects_invalid_rules(client: TestClient, change: dict) -> None:
@@ -186,6 +219,14 @@ def test_catalog_rejects_invalid_rules(client: TestClient, change: dict) -> None
     assert client.put(f"{ROOT}/catalog", json={**defaults, **change}).status_code == 422
     assert client.get(f"{ROOT}/catalog").json()["defaults"] == defaults
     assert not (client.app.state.data_dir / "inspection-rules.json").exists()
+
+
+@pytest.mark.parametrize("path", ["/etc/shadow", "/tmp/app.log", "/var/log/../secure", "/var/log//secure"])
+def test_catalog_rejects_unsafe_log_paths(client: TestClient, path: str) -> None:
+    defaults = client.get(f"{ROOT}/catalog").json()["defaults"]
+    response = client.put(f"{ROOT}/catalog", json={**defaults, "logs": {**defaults["logs"], "paths": [path]}})
+    assert response.status_code == 422
+    assert client.get(f"{ROOT}/catalog").json()["defaults"] == defaults
 
 
 def test_catalog_rejects_incomplete_save_without_overwriting_rules(client: TestClient) -> None:
@@ -202,6 +243,8 @@ def test_catalog_rejects_incomplete_save_without_overwriting_rules(client: TestC
     incomplete.extend({**saved, "thresholds": {key: value for key, value in saved["thresholds"].items()
                                                if key != missing}} for missing in saved["thresholds"])
     incomplete.append({**saved, "services": [{"name": "web", "candidates": ["nginx"]}]})
+    incomplete.extend({**saved, "logs": {key: value for key, value in saved["logs"].items()
+                                           if key != missing}} for missing in saved["logs"])
     for body in incomplete:
         response = client.put(url, json=body)
         assert response.status_code == 422, (body, response.text)

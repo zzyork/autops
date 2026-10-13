@@ -43,18 +43,20 @@ CHECK_DEFINITIONS = [
     CheckDefinition(id="system_resources", title="系统资源", description="CPU、内存、磁盘与进程资源"),
     CheckDefinition(id="service_status", title="服务状态", description="配置服务的安装与运行状态"),
     CheckDefinition(id="network_info", title="网络信息", description="网卡地址及本机监听套接字"),
+    CheckDefinition(id="log_error", title="错误日志", description="journal 错误级别与日志文件关键词"),
 ]
 CHECK_TITLES = {definition.id: definition.title for definition in CHECK_DEFINITIONS}
 
 
 def collect(check_id: CheckId, runner: Runner, config: InspectionConfig) -> CheckPayload:
-    from . import basic, network, resources, services
+    from . import basic, logs, network, resources, services
 
     collectors = {
         "server_info": basic.collect,
         "system_resources": resources.collect,
         "service_status": services.collect,
         "network_info": network.collect,
+        "log_error": logs.collect,
     }
     try:
         collector = collectors[check_id]

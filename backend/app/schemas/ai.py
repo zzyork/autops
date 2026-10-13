@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .inspections import CheckId
 
@@ -18,6 +18,13 @@ class ConnectionInput(Input):
     model: str = Field(min_length=1, max_length=200)
     api_key: str | None = Field(default=None, max_length=4096)
     is_default: bool = False
+    is_backup: bool = False
+
+    @model_validator(mode="after")
+    def distinct_roles(self) -> "ConnectionInput":
+        if self.is_default and self.is_backup:
+            raise ValueError("同一连接不能同时作为主模型和备用模型")
+        return self
 
     @field_validator("name", "model")
     @classmethod
@@ -52,12 +59,9 @@ class ConnectionResponse(BaseModel):
     model: str
     has_api_key: bool
     is_default: bool
+    is_backup: bool
     chat_status: Literal["untested", "passed", "failed"]
     tool_status: Literal["untested", "passed", "failed"]
-
-
-class SessionInput(Input):
-    connection_id: int = Field(gt=0)
 
 
 class MessageInput(Input):

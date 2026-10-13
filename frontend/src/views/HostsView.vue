@@ -10,6 +10,7 @@ import { listSSHKeys } from '@/api/ssh_keys'
 import AssetsLayout from '@/components/AssetsLayout.vue'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
+import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTest, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
@@ -49,7 +50,18 @@ const openingHost = ref(false)
 const hostDialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
-const updatedTest = ref<ConnectionTest | null>(null)
+const selectedHosts = ref<Host[]>([])
+const batchHosts = ref<Host[]>([])
+const batchDialog = ref(false)
+const testRecords = ref<Record<number, ConnectionTest>>({})
+function updateTest(record: ConnectionTest) {
+  testRecords.value[record.target_id] = record
+}
+function startBatchTest() {
+  if (hostsLoading.value || hostsLoadFailed.value || !selectedHosts.value.length) return
+  batchHosts.value = [...selectedHosts.value]
+  batchDialog.value = true
+}
 const editingHost = ref<Host | null>(null)
 const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
 const hostAuthChanged = ref(false)
@@ -132,6 +144,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 let hostRequest = 0
 async function refreshHosts() {
   const current = ++hostRequest
+  selectedHosts.value = []
   hostsLoading.value = true
   hostsLoadFailed.value = false
   try {
@@ -150,6 +163,7 @@ async function refreshHosts() {
 
 watch([search, selectedGroup], () => {
   clearTimeout(searchTimer)
+  selectedHosts.value = []
   hostRequest++
   hostsLoading.value = true
   searchTimer = setTimeout(refreshHosts, search.value ? 250 : 0)
@@ -359,15 +373,16 @@ function dateLabel(value: string) {
         </aside>
         <section class="host-section" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span class="host-total">{{ hosts.length }} 台</span></div></div>
-          <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton></div></div>
+          <div class="host-toolbar"><ElButton type="primary" @click="openNewHost">新增主机</ElButton><ElButton :disabled="hostsLoading || hostsLoadFailed || !selectedHosts.length || batchDialog" @click="startBatchTest">批量测试连接{{ selectedHosts.length ? `（${selectedHosts.length}）` : '' }}</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" /><ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton></div></div>
           <div class="host-table-wrap">
-            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'">
+            <ElTable v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
+              <ElTableColumn type="selection" width="44" />
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" :updated-record="updatedTest?.target_id === row.id ? updatedTest : null" /></template></ElTableColumn>
+              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" :updated-record="testRecords[row.id] ?? null" /></template></ElTableColumn>
               <ElTableColumn label="操作" width="210" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
           </div>
@@ -376,7 +391,8 @@ function dateLabel(value: string) {
       </div>
     </main>
 
-    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @record-updated="updatedTest = $event" @closed="refreshHosts" />
+    <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @record-updated="updateTest" @inspect="openConnectionTest" />
+    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @record-updated="updateTest" @closed="refreshHosts" />
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
         <div class="form-section-title">基本信息</div>

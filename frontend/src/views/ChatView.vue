@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElButton, ElInput, ElMessageBox, ElOption, ElSelect, ElTag } from 'element-plus'
+import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
 import AssetsLayout from '@/components/AssetsLayout.vue'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
@@ -20,14 +20,14 @@ const selectedId = ref<string | null>(null)
 const detail = ref<ChatSession | null>(null)
 const detailLoaded = ref(false)
 const detailLoading = ref(false)
-const connectionId = ref<number | null>(null)
 const input = ref('')
 const inputError = ref('')
 const streamingText = ref('')
 const sendingContent = ref('')
 const operation = ref<'create' | 'send' | 'decision' | 'delete' | null>(null)
 const conversation = ref<HTMLElement | null>(null)
-const selectedConnection = computed(() => connections.value.find((item) => item.id === (detail.value?.connection_id ?? connectionId.value)))
+const primaryConnection = computed(() => connections.value.find((item) => item.is_default))
+const selectedConnection = computed(() => connections.value.find((item) => item.id === detail.value?.connection_id))
 let active = true
 let listSequence = 0
 let connectionSequence = 0
@@ -44,7 +44,6 @@ async function loadConnections() {
     if (!active || current !== connectionSequence) return
     connections.value = items
     connectionsLoaded.value = true
-    if (!connectionId.value || !items.some((item) => item.id === connectionId.value)) connectionId.value = items.find((item) => item.is_default)?.id ?? items[0]?.id ?? null
   } catch {
     if (!active || current !== connectionSequence) return
     connectionsLoaded.value = false
@@ -101,47 +100,47 @@ function newChat() {
   input.value = ''
   inputError.value = ''
 }
-async function create() {
-  if (operation.value || !connectionsLoaded.value || connectionId.value === null) return
-  operation.value = 'create'
-  try {
-    const summary = await createSession(connectionId.value)
-    if (!active) return
-    selectedId.value = summary.id
-    detail.value = null
-    void loadSessions()
-    await loadDetail(summary.id)
-  } catch { if (active) showRequestError() }
-  finally { if (active) operation.value = null }
-}
 async function send() {
-  const id = selectedId.value
   const content = input.value.trim()
-  if (operation.value || !id || !detailLoaded.value) return
+  if (operation.value || (selectedId.value ? !detailLoaded.value : !connectionsLoaded.value || !primaryConnection.value)) return
   if (!content || content.length > MAX_MESSAGE_LENGTH) {
     inputError.value = `消息须填写且不超过 ${MAX_MESSAGE_LENGTH} 字符。`
     return
   }
   inputError.value = ''
-  operation.value = 'send'
+  operation.value = selectedId.value ? 'send' : 'create'
   sendingContent.value = content
   streamingText.value = ''
-  const controller = new AbortController()
-  streamController = controller
+  let id = selectedId.value
+  let controller: AbortController | null = null
   try {
-    const session = await sendMessage(id, content, controller.signal, (text) => { if (active && selectedId.value === id && !controller.signal.aborted) streamingText.value += text })
-    if (!active || selectedId.value !== id || controller.signal.aborted) return
+    if (!id) {
+      const summary = await createSession()
+      if (!active) return
+      id = summary.id
+      selectedId.value = id
+      detail.value = { ...summary, messages: [], proposals: [] }
+      detailLoaded.value = true
+      selectInitialSession = false
+      void loadSessions()
+    }
+    operation.value = 'send'
+    const stream = new AbortController()
+    controller = stream
+    streamController = stream
+    const session = await sendMessage(id, content, stream.signal, (text) => { if (active && selectedId.value === id && !stream.signal.aborted) streamingText.value += text })
+    if (!active || selectedId.value !== id || stream.signal.aborted) return
     detail.value = session
     input.value = ''
     void loadSessions()
   } catch {
-    if (active && selectedId.value === id && !controller.signal.aborted) {
+    if (active && selectedId.value === id && !controller?.signal.aborted) {
       showRequestError()
-      if (await loadDetail(id, false)) void loadSessions(false)
+      if (id && await loadDetail(id, false)) void loadSessions(false)
     }
   } finally {
     if (active) { sendingContent.value = ''; streamingText.value = ''; operation.value = null }
-    if (streamController === controller) streamController = null
+    if (controller && streamController === controller) streamController = null
   }
 }
 async function decide(proposalId: string, approve: boolean) {
@@ -231,11 +230,11 @@ onUnmounted(() => {
             <template v-else-if="!selectedId">
               <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取模型连接...</p>
               <p v-else-if="!connectionsLoaded" class="inspection-retry">模型连接未加载。<ElButton @click="loadConnections">重试</ElButton></p>
-              <p v-else-if="!connections.length" class="ai-placeholder">尚未配置模型连接。<RouterLink to="/ai/connections">前往模型配置</RouterLink></p>
-              <div v-else class="ai-new-session"><label for="chat-model">选择模型连接</label><ElSelect id="chat-model" v-model="connectionId" aria-label="选择模型连接"><ElOption v-for="connection in connections" :key="connection.id" :label="`${connection.name}${connection.is_default ? '（默认）' : ''}`" :value="connection.id" /></ElSelect><ElButton type="primary" :loading="operation === 'create'" :disabled="!!operation || connectionId === null" @click="create">创建会话</ElButton></div>
+              <p v-else-if="!primaryConnection" class="ai-placeholder">尚未指定主模型。<RouterLink to="/settings/models">前往模型配置</RouterLink></p>
+              <p v-else class="ai-placeholder">开始对话</p>
             </template>
           </div>
-          <div class="ai-composer"><label for="chat-input">消息</label><ElInput id="chat-input" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="!!inputError" :disabled="!detailLoaded || !!operation" placeholder="输入运维问题" @input="inputError = ''" @keydown.ctrl.enter.prevent="send" /><p v-if="inputError" class="ssh-field-error" role="alert">{{ inputError }}</p><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'send'" :disabled="!detailLoaded || !!operation || !input.trim()" @click="send">发送</ElButton></div></div>
+           <div class="ai-composer"><label for="chat-input">消息</label><ElInput id="chat-input" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="!!inputError" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || !primaryConnection)" placeholder="输入运维问题" @input="inputError = ''" @keydown.ctrl.enter.prevent="send" /><p v-if="inputError" class="ssh-field-error" role="alert">{{ inputError }}</p><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || !primaryConnection) || !input.trim()" @click="send">发送</ElButton></div></div>
         </section>
       </div>
     </main>

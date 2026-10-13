@@ -19,7 +19,7 @@ from ...dependencies import Database, commit
 from ....ai_models import AIConnection, AIProposal, AISession
 from ....repositories import ai as repository
 from ....schemas.ai import (ConnectionInput, ConnectionResponse, DecisionInput, Detail,
-                            MessageInput, SessionInput, Summary)
+                            MessageInput, Summary)
 from ....schemas.inspections import InspectionInput
 from ....services.inspection_rules import load_rules
 from ....services.ai_provider import MAX_TOTAL_SECONDS
@@ -101,8 +101,10 @@ def list_sessions(session: Database) -> list[AISession]:
 
 
 @router.post("/sessions", response_model=Summary, status_code=201)
-def create_session(data: SessionInput, session: Database) -> AISession:
-    record = require_connection(session, data.connection_id)
+def create_session(session: Database) -> AISession:
+    record = repository.primary_connection(session)
+    if record is None:
+        raise HTTPException(409, "请先指定主模型")
     return repository.create_session(session, record)
 
 

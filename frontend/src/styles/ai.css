@@ -20,10 +20,8 @@
 .ai-message-user p { background: var(--ui-primary-soft); }
 .ai-message-role { display: block; color: var(--ui-text-secondary); margin-bottom: 4px; font-size: 12px; }
 .ai-composer { flex: none; padding: 12px 16px; border-top: 1px solid var(--ui-border); display: grid; gap: 8px; }
-.ai-composer > label, .ai-new-session > label { font-weight: 600; }
+.ai-composer > label { font-weight: 600; }
 .ai-composer-actions { display: flex; align-items: center; justify-content: space-between; min-height: 30px; }
-.ai-new-session { display: flex; align-items: center; gap: 8px; }
-.ai-new-session .el-select { width: 260px; }
 .ai-proposal, .ai-task { min-width: 0; border: 1px solid var(--ui-border); background: var(--ui-surface); padding: 12px; display: grid; gap: 10px; overflow-wrap: anywhere; }
 .ai-proposal { width: 100%; }
 .ai-card-heading { display: flex; align-items: center; gap: 8px; }
