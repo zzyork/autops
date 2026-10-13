@@ -54,3 +54,37 @@
 .inspection-metrics dt { color: var(--ui-text-secondary); }
 .inspection-metrics dd { margin: 4px 0 0; font-weight: 600; }
 .inspection-result-table h5 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.inspection-record-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.inspection-record-title h2 { min-width: 0; }
+.inspection-record-title .el-tag { flex: none; }
+.inspection-record-heading > .el-button { flex: none; }
+.inspection-record-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 12px 0; border-top: 1px solid var(--ui-border); border-bottom: 1px solid var(--ui-border); }
+.inspection-record-overview > div { min-width: 0; padding: 0 16px; border-left: 1px solid var(--ui-border); }
+.inspection-record-overview > div:first-child { padding-left: 0; border-left: 0; }
+.inspection-record-overview dt { margin-bottom: 8px; color: var(--ui-text-secondary); font-size: 12px; }
+.inspection-record-overview dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.inspection-record-risks { display: flex; align-items: center; gap: 8px; }
+.inspection-analysis { display: grid; gap: 16px; min-width: 0; }
+.inspection-detail .inspection-analysis-heading h2 { font-size: 14px; }
+.inspection-analysis-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.inspection-analysis-actions { display: flex; align-items: center; gap: 8px; }
+.inspection-analysis-actions .el-button + .el-button { margin-left: 0; }
+.inspection-analysis-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.inspection-analysis-meta > div { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.inspection-analysis-meta dt { color: var(--ui-text-secondary); font-size: 12px; }
+.inspection-analysis-meta dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.inspection-analysis-saved { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--ui-border); background: var(--ui-row-hover); }
+.inspection-analysis-saved-heading, .inspection-analysis-section-heading { display: flex; align-items: baseline; gap: 8px 16px; }
+.inspection-analysis-saved-heading { justify-content: space-between; }
+.inspection-analysis-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.inspection-analysis-stats > div { padding: 0 16px; border-left: 1px solid var(--ui-border); min-width: 0; }
+.inspection-analysis-stats > div:first-child { padding-left: 0; border-left: 0; }
+.inspection-analysis-stats dt { font-size: 12px; color: var(--ui-text-secondary); }
+.inspection-analysis-stats dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.inspection-analysis-stats dd span { font-size: 12px; font-weight: 400; color: var(--ui-text-secondary); }
+.inspection-analysis-provenance { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 12px; border-top: 1px solid var(--ui-border); color: var(--ui-text-secondary); font-size: 12px; }
+.inspection-analysis-section { display: grid; gap: 12px; min-width: 0; }
+.inspection-analysis-section-heading { padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
+.inspection-analysis-section h3, .inspection-analysis-evidence h3 { margin: 0; font-size: 14px; }
+.inspection-analysis :is(p, strong, span, h3) { overflow-wrap: anywhere; }
+.inspection-analysis p { margin: 0; white-space: pre-wrap; }

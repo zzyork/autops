@@ -13,21 +13,17 @@ const summary = computed(() => summarizeChecks(props.task.hosts.flatMap((host) =
 
 <template>
   <section class="inspection-detail" aria-label="巡检记录概览">
-    <div class="section-header">
-      <h2>{{ task.name }}</h2>
-      <ElButton type="primary" @click="router.push({ name: 'inspection-record-detail', params: { taskId: task.id } })">巡检记录详情</ElButton>
+    <div class="section-header inspection-record-heading">
+      <div class="inspection-record-title"><h2>{{ task.name }}</h2><ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></div>
+      <ElButton @click="router.push({ name: 'inspection-record-detail', params: { taskId: task.id } })">巡检记录详情</ElButton>
     </div>
-    <div class="inspection-detail-meta">
-      <span>执行状态 <ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></span>
-      <span>主机 {{ task.completed_hosts }} / {{ task.host_count }} 完成，{{ task.failed_hosts }} 失败</span>
-      <span>开始 {{ timeLabel(task.started_at) }}</span>
-      <span>结束 {{ timeLabel(task.finished_at) }}</span>
-    </div>
-    <div class="inspection-host-summary" aria-label="本次巡检风险概览">
-      <ElTag :type="summary.critical ? 'danger' : 'info'" size="small">重要 {{ summary.critical }}</ElTag>
-      <ElTag :type="summary.warning ? 'warning' : 'info'" size="small">警告 {{ summary.warning }}</ElTag>
-      <span v-if="summary.incomplete" class="inspection-muted">{{ summary.incomplete }} 项检查尚未完成，风险无法完整判定</span>
-    </div>
+    <dl class="inspection-record-overview" aria-label="本次巡检概览">
+      <div><dt>主机进度</dt><dd><strong>{{ task.completed_hosts }} / {{ task.host_count }}</strong> 完成 <span class="inspection-muted">· {{ task.failed_hosts }} 失败</span></dd></div>
+      <div><dt>风险统计</dt><dd class="inspection-record-risks"><ElTag :type="summary.critical ? 'danger' : 'info'" size="small">重要 {{ summary.critical }}</ElTag><ElTag :type="summary.warning ? 'warning' : 'info'" size="small">警告 {{ summary.warning }}</ElTag></dd></div>
+      <div><dt>巡检开始</dt><dd>{{ timeLabel(task.started_at) }}</dd></div>
+      <div><dt>巡检结束</dt><dd>{{ timeLabel(task.finished_at) }}</dd></div>
+    </dl>
+    <p v-if="summary.incomplete" class="inspection-muted">{{ summary.incomplete }} 项检查尚未完成，风险无法完整判定</p>
     <InspectionAnalysisReport :task-id="task.id" :task-status="task.status" />
   </section>
 </template>

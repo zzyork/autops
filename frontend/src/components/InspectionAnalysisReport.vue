@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElButton, ElCollapse, ElCollapseItem, ElTag } from 'element-plus'
+import { ElButton, ElCollapse, ElCollapseItem, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, timeLabel } from '@/components/inspectionDisplay'
@@ -198,23 +198,25 @@ onUnmounted(() => {
 
 <template>
   <section class="inspection-analysis" aria-label="巡检 AI 汇报">
-    <div class="section-header">
+    <div class="section-header inspection-analysis-heading">
       <h2>AI 巡检报告</h2>
+    </div>
+    <div class="inspection-analysis-toolbar">
       <div class="inspection-analysis-actions">
-        <ElButton :loading="loading" :disabled="generating" @click="refresh">刷新</ElButton>
-        <ElButton v-if="loaded && report" @click="exportText">导出汇报</ElButton>
         <ElButton type="primary" :loading="generating" :disabled="!loaded || !response?.can_generate || isActiveRun(taskStatus) || response?.status === 'queued' || response?.status === 'running' || loading" @click="generate">{{ report ? '重新生成' : '生成 AI 汇报' }}</ElButton>
+        <ElButton v-if="loaded && report" @click="exportText">导出汇报</ElButton>
       </div>
+      <ElButton :loading="loading" :disabled="generating" @click="refresh">刷新</ElButton>
     </div>
     <p v-if="loadFailed" class="inspection-muted">汇报未加载，请刷新重试。</p>
     <p v-else-if="!loaded" class="inspection-muted">正在读取汇报状态…</p>
     <template v-else-if="response">
-      <div class="inspection-analysis-meta">
-        <span>本轮状态 <ElTag :type="statusType(response.status)" size="small">{{ statusLabel(response.status) }}</ElTag></span>
-        <span v-if="response.model_name">本轮模型 {{ response.model_name }}<template v-if="response.model_version !== null"> (v{{ response.model_version }})</template></span>
-        <span v-if="response.started_at">开始 {{ timeLabel(response.started_at) }}</span>
-        <span v-if="response.finished_at">结束 {{ timeLabel(response.finished_at) }}</span>
-      </div>
+      <dl class="inspection-analysis-meta">
+        <div><dt>本轮状态</dt><dd><ElTag :type="statusType(response.status)" size="small">{{ statusLabel(response.status) }}</ElTag></dd></div>
+        <div v-if="response.model_name"><dt>本轮模型</dt><dd>{{ response.model_name }}<template v-if="response.model_version !== null"> (v{{ response.model_version }})</template></dd></div>
+        <div v-if="response.started_at"><dt>生成开始</dt><dd>{{ timeLabel(response.started_at) }}</dd></div>
+        <div v-if="response.finished_at"><dt>生成结束</dt><dd>{{ timeLabel(response.finished_at) }}</dd></div>
+      </dl>
       <p v-if="response.status === 'unavailable'" class="inspection-muted">{{ response.can_generate ? '上次生成时主模型不可用，现在可以重新生成。' : '主模型未配置或未通过测试，暂不可生成汇报。' }}</p>
       <p v-else-if="response.status === 'not_generated' && isActiveRun(taskStatus)" class="inspection-muted">巡检进行中，结束后将检查自动生成条件。</p>
       <p v-else-if="response.status === 'not_generated'" class="inspection-muted">尚无 AI 汇报。</p>
@@ -226,11 +228,16 @@ onUnmounted(() => {
       <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="inspection-muted">本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。</p>
       <p v-if="!response.can_generate && !isActiveRun(taskStatus) && response.status !== 'queued' && response.status !== 'running' && response.status !== 'unavailable'" class="inspection-muted">当前无法发起生成，请检查主模型及生成服务状态。</p>
       <template v-if="report">
-        <div class="inspection-analysis-meta inspection-analysis-saved">
-          <strong>{{ response.status === 'completed' ? '已保存汇报' : '上次成功汇报' }}</strong><span>生成 {{ timeLabel(report.generated_at) }}</span><span>模型 {{ report.model_name }} (v{{ report.model_version }})</span>
-          <span>{{ report.host_count }} 台主机 · {{ report.finding_count }} 条发现 · {{ report.log_count }} 条日志 · {{ report.incomplete_count }} 项未完成</span>
-          <span>采集开始 {{ timeLabel(report.inspection_started_at) }} · 结束 {{ timeLabel(report.inspection_finished_at) }}</span>
-        </div>
+        <section class="inspection-analysis-saved" aria-label="已保存汇报摘要">
+          <div class="inspection-analysis-saved-heading"><strong>{{ response.status === 'completed' ? '已保存汇报' : '上次成功汇报' }}</strong><span class="inspection-muted">生成于 {{ timeLabel(report.generated_at) }}</span></div>
+          <dl class="inspection-analysis-stats">
+            <div><dt>分析主机</dt><dd>{{ report.host_count }} <span>台</span></dd></div>
+            <div><dt>巡检发现</dt><dd>{{ report.finding_count }} <span>条</span></dd></div>
+            <div><dt>采集日志</dt><dd>{{ report.log_count }} <span>条</span></dd></div>
+            <div><dt>未完成检查</dt><dd>{{ report.incomplete_count }} <span>项</span></dd></div>
+          </dl>
+          <div class="inspection-analysis-provenance"><span>报告模型：{{ report.model_name }} (v{{ report.model_version }})</span><span>采集时间：{{ timeLabel(report.inspection_started_at) }} 至 {{ timeLabel(report.inspection_finished_at) }}</span></div>
+        </section>
         <section v-if="report.incomplete_count" class="inspection-analysis-section">
           <h3>未完成检查</h3>
           <p>本次有 {{ report.incomplete_count }} 项检查未完成，相关风险无法完整判定。</p>
@@ -243,15 +250,19 @@ onUnmounted(() => {
         </section>
         <p v-if="!report.issues.length" class="inspection-muted">没有可分析的匹配错误日志或巡检风险；正常检查不进行 AI 分析。</p>
         <section v-if="problemTotal" class="inspection-analysis-section">
-          <h3>非错误日志问题 ({{ problemTotal }})</h3>
-          <div v-for="item in visibleProblems" :key="item.id" class="inspection-analysis-issue">
-            <div class="inspection-analysis-issue-title"><ElTag :type="severityType(item.severity)" size="small">{{ severityLabel(item.severity) }}</ElTag><strong>{{ item.host_name }} ({{ item.address }}) · {{ item.check_title }}</strong></div>
-            <p>{{ item.content }}</p>
+          <div class="inspection-analysis-section-heading"><h3>非错误日志问题</h3><span class="inspection-muted">{{ problemTotal }} 项</span></div>
+          <div class="host-table-wrap">
+            <ElTable :data="visibleProblems" row-key="id" class="host-table">
+              <ElTableColumn label="级别" width="90"><template #default="{ row }"><ElTag :type="severityType(row.severity)" size="small">{{ severityLabel(row.severity) }}</ElTag></template></ElTableColumn>
+              <ElTableColumn label="影响主机" min-width="240"><template #default="{ row }"><div class="host-name">{{ row.host_name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
+              <ElTableColumn prop="check_title" label="检查项" min-width="150" />
+              <ElTableColumn label="问题描述" min-width="360"><template #default="{ row }"><p>{{ row.content }}</p></template></ElTableColumn>
+            </ElTable>
           </div>
           <ListPagination v-model:page="problemPage" v-model:page-size="problemPageSize" :total="problemTotal" />
         </section>
         <section v-if="logTotal" class="inspection-analysis-section">
-          <h3>错误日志分析 ({{ logTotal }})</h3>
+          <div class="inspection-analysis-section-heading"><h3>错误日志分析</h3><span class="inspection-muted">{{ logTotal }} 项</span></div>
           <p v-if="legacyLogs" class="inspection-muted">此汇报为旧版汇总，可重新生成诊断组分析。</p>
           <p v-if="logIssues.some((issue) => issueDiagnosticGroups(issue).length)" class="inspection-muted">同类问题可共用一份分析，各报错类型及原始日志完整保留。次数为各来源已采集日志的观察次数，同一事件可能被多个来源记录。</p>
           <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="index" :issue="issue" :host="issueHost(issue)" @evidence="showEvidence(issue)" />
@@ -267,16 +278,3 @@ onUnmounted(() => {
     </template>
   </section>
 </template>
-
-<style scoped>
-.inspection-analysis { display: grid; gap: 12px; min-width: 0; padding-top: 16px; border-top: 1px solid var(--ui-border); }
-.inspection-analysis-actions, .inspection-analysis-meta, .inspection-analysis-issue-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
-.inspection-analysis-meta { color: var(--ui-text-secondary); }
-.inspection-analysis-saved { padding-top: 12px; border-top: 1px solid var(--ui-border); }
-.inspection-analysis-section { display: grid; gap: 8px; min-width: 0; }
-.inspection-analysis-section h3, .inspection-analysis-evidence h3 { margin: 0; font-size: 14px; }
-.inspection-analysis-issue { display: grid; gap: 8px; padding: 8px 0 8px 12px; border-left: 2px solid var(--ui-border); min-width: 0; }
-.inspection-analysis-issue-title strong { min-width: 0; }
-.inspection-analysis :is(p, strong, span, h3) { overflow-wrap: anywhere; }
-.inspection-analysis p { margin: 0; white-space: pre-wrap; }
-</style>
