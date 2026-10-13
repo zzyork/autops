@@ -13,6 +13,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `./` | 项目根目录。 |
+| `scripts/` | 统一存放项目安装与启动脚本。最后同步：2026-10-13。 |
 | `backend/` | FastAPI 后端项目。 |
 | `backend/app/` | 后端应用包。 |
 | `backend/app/api/` | HTTP 接口代码与共用数据库依赖。最后同步：2026-10-10。 |
@@ -41,6 +42,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `.gitignore` | Git 文件忽略配置，忽略运行数据及默认忽略新增的 `backend/tests/*`，例外见 `backend/.gitignore`。最后同步：2026-10-12。 |
+| `.gitattributes` | 固定 Windows 启动脚本使用 CRLF、Shell 启动脚本使用 LF，避免跨平台检出造成解析错误。最后同步：2026-10-13。 |
 | `AGENTS.md` | 项目 Agent 工作约定，要求严格执行前端、后端开发规范及 README 编写、更新和审核规范。最后同步：2026-10-12。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
 | `README.md` | 项目介绍与安装、运行、模型对话及巡检使用入口。最后同步：2026-10-12。 |
@@ -48,6 +50,13 @@
 | `pyproject.toml` | 配置 pytest 测试目录和 Python 导入路径。 |
 | `requirements.txt` | 根目录运行依赖入口，引用后端运行依赖清单。 |
 | `requirements-dev.txt` | 根目录开发依赖入口，引用后端开发依赖清单。 |
+
+## 脚本文件
+
+| 路径 | 用途 |
+| --- | --- |
+| `scripts/start.bat` | Windows 启动脚本，创建或复用根目录 Python 3.13 虚拟环境、安装前后端开发依赖，在独立窗口启动 Uvicorn 与 Vite。最后同步：2026-10-13。 |
+| `scripts/start.sh` | Linux/macOS Bash 启动脚本，创建或复用根目录 Python 3.13 虚拟环境、安装前后端开发依赖，启动并统一清理 Uvicorn 与 Vite 进程组。最后同步：2026-10-13。 |
 
 ## 文档文件
 
