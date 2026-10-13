@@ -47,14 +47,9 @@ if errorlevel 1 goto failed
 call :message "[3/4] \u5b89\u88c5\u524d\u7aef\u4f9d\u8d56..."
 call npm.cmd --prefix frontend install
 if errorlevel 1 goto failed
-call :message "[4/4] \u542f\u52a8\u524d\u540e\u7aef\uff0c\u8bf7\u5728\u670d\u52a1\u7a97\u53e3\u67e5\u770b\u542f\u52a8\u7ed3\u679c\u3002"
-start "autops API" cmd.exe /d /k ""%~f0" --backend"
+call :message "[4/4] \u5728\u5f53\u524d\u7ec8\u7aef\u542f\u52a8\u524d\u540e\u7aef..."
+".venv\Scripts\python.exe" -u scripts\run_dev.py
 if errorlevel 1 goto failed
-start "autops Vite" cmd.exe /d /k ""%~f0" --frontend"
-if errorlevel 1 goto failed
-call :message "\u524d\u7aef: http://127.0.0.1:5173"
-call :message "API \u6587\u6863: http://127.0.0.1:8000/docs"
-call :message "\u5728\u5404\u670d\u52a1\u7a97\u53e3\u6309 Ctrl+C \u505c\u6b62\u670d\u52a1\u3002"
 popd
 exit /b 0
 :backend

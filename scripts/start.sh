@@ -36,35 +36,5 @@ printf '[2/4] 安装后端依赖...\n'
 printf '[3/4] 安装前端依赖...\n'
 npm --prefix frontend install
 
-# 独立进程组确保停止 npm 时也能停止其 Vite 子进程，以及 Uvicorn 的重载进程。
-set -m
-backend_pid=''
-frontend_pid=''
-cleanup() {
-    trap - EXIT INT TERM
-    local service_pid
-    for service_pid in "$backend_pid" "$frontend_pid"; do
-        if [[ -n "$service_pid" ]] && kill -0 -- "-$service_pid" 2>/dev/null; then
-            kill -TERM -- "-$service_pid"
-        fi
-    done
-    # 服务收到终止信号后通常返回非零；回收所有由脚本启动的子进程。
-    wait || true
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
-printf '[4/4] 启动前后端...\n'
-.venv/bin/python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000 &
-backend_pid=$!
-npm --prefix frontend run dev &
-frontend_pid=$!
-printf '前端：http://127.0.0.1:5173\nAPI 文档：http://127.0.0.1:8000/docs\n按 Ctrl+C 停止两个服务。\n'
-
-# 兼容 macOS 自带 Bash 3.2，不使用较新版本才提供的 wait -n。
-while kill -0 "$backend_pid" 2>/dev/null && kill -0 "$frontend_pid" 2>/dev/null; do
-    sleep 1
-done
-printf '[错误] 一个服务已退出，正在停止另一个服务，请查看上方日志。\n' >&2
-exit 1
+printf '[4/4] 在当前终端启动前后端...\n'
+exec .venv/bin/python -u scripts/run_dev.py
