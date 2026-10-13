@@ -3,6 +3,8 @@
 import importlib
 import json
 import time
+from io import BytesIO
+from zipfile import ZipFile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -150,6 +152,86 @@ def test_catalog_completed_critical_and_report_api(client: TestClient, monkeypat
     assert report.json()["filename"] == f"inspection-{created['id']}.md"
     assert "严重" in report.json()["content"]
     assert SECRET not in report.text
+
+
+def test_report_archive_uses_remote_hostname_and_separate_host_reports(client: TestClient) -> None:
+    first = add_host(client, name="asset-name")
+    second = add_host(client, 2, group_id=first["group_id"], name="备用主机")
+    task_id = historical_task(client, [first, second])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        task.created_at = datetime(2026, 9, 30, tzinfo=timezone.utc)
+        task.hosts[0].checks[0].payload = CheckPayload(metrics=[
+            Metric(name="主机名", value="  remote-host  "),
+            Metric(name="独有检查", value="uniquefirstresult")]).model_dump(mode="json")
+        task.hosts[1].checks[0].payload = CheckPayload(metrics=[
+            Metric(name="独有检查", value="uniquesecondresult")]).model_dump(mode="json")
+        session.commit()
+    response = client.get(f"{ROOT}/tasks/{task_id}/reports/archive")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert response.headers["content-disposition"] == f'attachment; filename="inspection-{task_id}.zip"'
+    with ZipFile(BytesIO(response.content)) as archive:
+        assert archive.namelist() == [
+            "production/202609/192.0.2.1_remote-host.md", "production/202609/192.0.2.2_备用主机.md"]
+        first_report, second_report = [archive.read(path).decode("utf-8") for path in archive.namelist()]
+        assert "asset" in first_report and "备用主机" not in first_report
+        assert "备用主机" in second_report and "asset" not in second_report
+        assert "uniquefirstresult" in first_report and "uniquesecondresult" not in first_report
+        assert "uniquesecondresult" in second_report and "uniquefirstresult" not in second_report
+        assert SECRET not in first_report + second_report
+
+
+def test_report_archive_sanitizes_paths_and_exports_failed_host(client: TestClient) -> None:
+    host = add_host(client, name="../备用\\主机:名称")
+    task_id = historical_task(client, [host])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        task.status = task.hosts[0].status = "failed"
+        task.hosts[0].group_name = "../分组\\名称"
+        task.hosts[0].checks[0].status = "failed"
+        session.commit()
+    response = client.get(f"{ROOT}/tasks/{task_id}/reports/archive")
+    assert response.status_code == 200
+    with ZipFile(BytesIO(response.content)) as archive:
+        path = archive.namelist()[0]
+        assert path.split("/")[0] == ".._分组_名称"
+        assert path.endswith("/192.0.2.1_.._备用_主机_名称.md")
+        assert "失败" in archive.read(path).decode("utf-8")
+
+
+def test_report_archive_rejects_duplicate_paths_and_missing_task(client: TestClient) -> None:
+    first = add_host(client)
+    second = add_host(client, 2, group_id=first["group_id"])
+    task_id = historical_task(client, [first, second])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        task.hosts[1].address = task.hosts[0].address
+        task.hosts[0].host_name, task.hosts[1].host_name = "Host", "host"
+        session.commit()
+    assert client.get(f"{ROOT}/tasks/{task_id}/reports/archive").status_code == 409
+    assert client.get(f"{ROOT}/tasks/00000000-0000-0000-0000-000000000001/reports/archive").status_code == 404
+    assert client.get(f"{ROOT}/tasks/not-a-uuid/reports/archive").status_code == 422
+
+
+def test_report_archive_reserved_group_and_hostname(client: TestClient) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    with client.app.state.sessions() as session:
+        run = repository.get_task(session, task_id).hosts[0]
+        run.group_name = "CON"
+        run.checks[0].payload = CheckPayload(metrics=[Metric(name="主机名", value="CON")]).model_dump(mode="json")
+        session.commit()
+    response = client.get(f"{ROOT}/tasks/{task_id}/reports/archive")
+    assert response.status_code == 200
+    with ZipFile(BytesIO(response.content)) as archive:
+        path = archive.namelist()[0]
+        assert path.startswith("_CON/") and path.endswith("/192.0.2.1_CON.md")
+    with client.app.state.sessions() as session:
+        run = repository.get_task(session, task_id).hosts[0]
+        run.checks[0].payload = CheckPayload(metrics=[Metric(name="主机名", value="x" * 250)]).model_dump(mode="json")
+        session.commit()
+    assert client.get(f"{ROOT}/tasks/{task_id}/reports/archive").status_code == 409
 
 
 def test_catalog_persists_and_tasks_keep_rule_snapshots(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -460,6 +542,7 @@ def test_duplicate_queue_and_running_report(client: TestClient, monkeypatch: pyt
     try:
         assert entered.wait(3)
         assert client.get(f"{ROOT}/tasks/{first['id']}/report").status_code == 409
+        assert client.get(f"{ROOT}/tasks/{first['id']}/reports/archive").status_code == 409
         duplicate = client.post(f"{ROOT}/tasks", json={"name": "duplicate", "hosts": [
             {"id": host["id"], "version": host["version"]}], "checks": ["server_info"]})
         assert duplicate.status_code == 409

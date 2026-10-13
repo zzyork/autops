@@ -8,7 +8,7 @@ from ....repositories import inspections as repository
 from ....schemas.inspections import InspectionCatalog, InspectionConfig, InspectionConfigSave, InspectionInput, ReportResponse, TaskDetail, TaskPage, TaskSummary
 from ....schemas.inspection_analysis import AnalysisResponse
 from ....services.inspection_checks import CHECK_DEFINITIONS
-from ....services.inspection_reports import render_report
+from ....services.inspection_reports import render_report, render_report_archive
 from ....services.inspection_rules import load_rules, save_rules
 
 router = APIRouter(prefix="/inspections", tags=["巡检"])
@@ -66,6 +66,21 @@ def report(task_id: UUID, request: Request, session: Database) -> ReportResponse
     if detail.status in ("queued", "running"):
         raise HTTPException(409, "巡检尚未结束")
     return ReportResponse(filename=f"inspection-{detail.id}.md", content=render_report(detail))
+
+
+@router.get("/tasks/{task_id}/reports/archive", response_class=Response,
+            responses={200: {"content": {"application/zip": {}}}})
+def report_archive(task_id: UUID, request: Request, session: Database) -> Response:
+    detail = read_task(task_id, request, session)
+    if detail.status in ("queued", "running"):
+        raise HTTPException(409, "巡检尚未结束")
+    try:
+        content = render_report_archive(detail)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    return Response(content=content, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="inspection-{detail.id}.zip"',
+    })
 
 
 @router.get("/tasks/{task_id}/analysis", response_model=AnalysisResponse)

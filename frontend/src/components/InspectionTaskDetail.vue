@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
-import { getInspectionReport } from '@/api/inspections'
+import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { checkLabel, conclusionLabel, conclusionType, isActiveRun, runLabel, runType, summarizeChecks, timeLabel } from '@/components/inspectionDisplay'
 import type { CheckResponse, TaskDetail } from '@/types/inspections'
@@ -32,14 +32,15 @@ function checkType(check: CheckResponse): 'info' | 'success' | 'warning' | 'dang
 async function exportReport() {
   if (isActiveRun(props.task.status) || exporting.value) return
   const current = session
+  const taskId = props.task.id
   exporting.value = true
   try {
-    const report = await getInspectionReport(props.task.id)
+    const archive = await getInspectionReportArchive(taskId)
     if (current !== session) return
-    const url = URL.createObjectURL(new Blob([report.content], { type: 'text/plain;charset=utf-8' }))
+    const url = URL.createObjectURL(archive)
     const link = document.createElement('a')
     link.href = url
-    link.download = report.filename
+    link.download = `inspection-${taskId}.zip`
     document.body.append(link)
     link.click()
     link.remove()

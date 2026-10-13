@@ -88,7 +88,7 @@
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
 | `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试、巡检和 AI 接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/ssh_connections.py` | SSH 连接测试提交、查询与主机密钥确认接口。最后同步：2026-10-12。 |
-| `backend/app/api/v1/endpoints/inspections.py` | 巡检规则、任务创建/历史分页/详情/删除、原始 Markdown 报告及 AI 报告读取/生成接口。最后同步：2026-10-13。 |
+| `backend/app/api/v1/endpoints/inspections.py` | 巡检规则、任务创建/历史分页/详情/删除、原始 Markdown 报告、逐主机报告 ZIP 下载及 AI 报告读取/生成接口。最后同步：2026-10-13。 |
 | `backend/app/api/v1/endpoints/__init__.py` | 声明接口端点包。 |
 | `backend/app/api/v1/endpoints/health.py` | 提供 v1 健康检查接口。 |
 | `backend/app/api/v1/endpoints/hosts.py` | 主机管理及跳板机关联接口。最后同步：2026-10-10。 |
@@ -113,7 +113,7 @@
 | `backend/app/services/ssh_connections.py` | 有界后台连接测试、持久化结果、事务化密钥确认及并发首次信任。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_rules.py` | 从数据目录读取巡检规则，并以临时文件和原子替换保存生效配置。最后同步：2026-10-12。 |
-| `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容，按原项目 IP_hostname.md 命名和分组/月目录打包逐主机报告；缺少远端 hostname 时使用资产名称。最后同步：2026-10-13。 |
 | `backend/app/schemas/inspection_analysis.py` | AI 报告状态、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成和按任务取消。最后同步：2026-10-13。 |
@@ -149,7 +149,7 @@
 | `frontend/vite.config.ts` | Vite 开发与构建配置。 |
 | `frontend/src/App.vue` | 应用根组件，承载路由视图。 |
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
-| `frontend/src/api/http.ts` | 通用 HTTP 请求封装、可配置超时与 SSE 事件读取和错误转换。最后同步：2026-10-12。 |
+| `frontend/src/api/http.ts` | 通用 HTTP 请求封装、二进制下载、可配置超时与 SSE 事件读取和错误转换。最后同步：2026-10-13。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |

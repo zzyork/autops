@@ -16,13 +16,13 @@ function requestSignal(options: RequestOptions): AbortSignal {
   return options.signal ? AbortSignal.any([timeout, options.signal]) : timeout
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function sendRequest(path: string, options: RequestOptions, accept: string): Promise<Response> {
   let response: Response
   try {
     response = await fetch(`${baseUrl}${path}`, {
       method: options.method || 'GET',
       headers: {
-        Accept: 'application/json',
+        Accept: accept,
         ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -32,6 +32,11 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new HttpError()
   }
   if (!response.ok) throw new HttpError()
+  return response
+}
+
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await sendRequest(path, options, 'application/json')
   if (response.status === 204) return undefined as T
   try {
     return await response.json() as T
@@ -41,6 +46,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 export const get = <T>(path: string) => request<T>(path)
+
+export async function getBlob(path: string, mediaType: string): Promise<Blob> {
+  const response = await sendRequest(path, {}, mediaType)
+  if (response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== mediaType) throw new HttpError()
+  try {
+    return await response.blob()
+  } catch {
+    throw new HttpError()
+  }
+}
 
 export async function streamRequest<T>(path: string, options: RequestOptions & { onToken: (text: string) => void; validateResult: (value: unknown) => value is T }): Promise<T> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
