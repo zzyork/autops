@@ -37,12 +37,13 @@
 .assets-heading h1 { margin: 0; }
 .assets-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; min-height: calc(100vh - 158px); align-items: start; }
 .group-sidebar, .host-section { background: var(--ui-surface); border: 1px solid var(--ui-border); min-width: 0; }
-.group-sidebar { padding: 16px 8px; }
+/* 预留顶栏与标签栏 80px、页面上下留白 40px、标题 26px 和标题间距 16px。 */
+.group-sidebar { display: flex; flex-direction: column; max-height: calc(100vh - 162px); padding: 16px 8px; }
 .host-section { padding: 16px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; min-height: 30px; }
 .section-header h2 { font-size: 14px; line-height: 1.43; font-weight: 600; margin: 0; }
-.group-sidebar .section-header { padding: 0 8px; }
-.group-list { display: grid; gap: 2px; min-height: 70px; align-content: start; }
+.group-sidebar .section-header { flex-shrink: 0; padding: 0 8px; }
+.group-list { display: grid; gap: 2px; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; align-content: start; padding: 2px; }
 .group-item, .group-choice { border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .group-item { width: 100%; min-height: 38px; padding: 8px; font-size: 13px; font-weight: 600; }
 .group-row { display: flex; align-items: center; min-width: 0; }
