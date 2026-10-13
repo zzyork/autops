@@ -39,6 +39,8 @@ class LogGroup:
     source: str
     message: str
     result_indices: list[int]
+    source_table_index: int
+    original_lines: list[str] = field(default_factory=list)
     timestamps: list[tuple[datetime, str, str]] = field(default_factory=list)
 
 
@@ -69,8 +71,10 @@ def build_input(task: InspectionTask) -> AnalysisInput:
     finding_count = log_count = incomplete_count = unassessed_count = 0
 
     def add(host, kind: str, title: str, source: str, content: str, severity: str = "info",
-            incomplete: bool = False, limited: bool = False) -> None:
-        # 证据分段只改变模型输入组织，保留全部字符与结果序号。
+            incomplete: bool = False, limited: bool = False,
+            original_lines: list[str] | None = None, source_table_index: int | None = None,
+            original_indices: list[int] | None = None) -> None:
+        # 分段只改变报告证据组织，诊断组构建时还原，原文与位置保留在首片段。
         parts = [content[index:index + MAX_RECORD_CHARACTERS]
                   for index in range(0, len(content), MAX_RECORD_CHARACTERS)] or [""]
         group_id = f"E{len(evidence) + 1}"
@@ -78,7 +82,10 @@ def build_input(task: InspectionTask) -> AnalysisInput:
             evidence.append(AnalysisEvidence(
                 id=f"E{len(evidence) + 1}", kind=kind, host_name=host.host_name, address=host.address,
                 check_title=title, source=source,
-                content=part, severity=severity, incomplete=incomplete, limited=limited, group_id=group_id))
+                content=part, severity=severity, incomplete=incomplete, limited=limited, group_id=group_id,
+                original_lines=original_lines if index == 0 and original_lines is not None else [],
+                original_indices=original_indices if index == 0 and original_indices is not None else [],
+                source_table_index=source_table_index))
 
     for host in task.hosts:
         for check in host.checks:
@@ -91,17 +98,18 @@ def build_input(task: InspectionTask) -> AnalysisInput:
                                  if len(row) >= 2 and row[0] == "匹配")
                 if check.status != "completed" or limited:
                     continue
-                groups: dict[tuple[str, str], LogGroup] = {}
-                for table in payload.tables:
+                groups: dict[tuple[int, str], LogGroup] = {}
+                for table_index, table in enumerate(payload.tables, 1):
                     for index, row in enumerate(table.rows):
                         if len(row) < 2 or row[0] != "匹配":
                             continue
                         message, stamp = log_message(row[1])
-                        key = (table.name, message)
+                        key = (table_index, message)
                         if key not in groups:
-                            groups[key] = LogGroup(table.name, message, [])
+                            groups[key] = LogGroup(table.name, message, [], table_index)
                         group = groups[key]
                         group.result_indices.append(index + 1)
+                        group.original_lines.append(row[1])
                         if stamp is not None:
                             group.timestamps.append(stamp)
                 for group in groups.values():
@@ -115,7 +123,9 @@ def build_input(task: InspectionTask) -> AnalysisInput:
                     add(host, "log", check.title, group.source, serialize({
                         "occurrences": len(group.result_indices),
                         "first_time": first, "last_time": last,
-                        "result_indices": group.result_indices, "message": group.message}))
+                        "result_indices": group.result_indices, "message": group.message}),
+                        original_lines=group.original_lines, source_table_index=group.source_table_index,
+                        original_indices=group.result_indices)
             elif check.status == "completed" and not limited:
                 for index, finding in enumerate(payload.findings):
                     finding_count += 1

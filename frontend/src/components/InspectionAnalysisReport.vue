@@ -5,8 +5,11 @@ import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspect
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, timeLabel } from '@/components/inspectionDisplay'
 import ListPagination from '@/components/ListPagination.vue'
+import InspectionAnalysisEvidence from '@/components/InspectionAnalysisEvidence.vue'
+import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
+import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
 import { useListPagination } from '@/components/pagination'
-import type { AnalysisEvidence, AnalysisIssue, AnalysisReport, AnalysisResponse, AnalysisSeverity, RunStatus } from '@/types/inspections'
+import type { AnalysisEvidence, AnalysisIssue, AnalysisResponse, RunStatus } from '@/types/inspections'
 
 const props = defineProps<{ taskId: string; taskStatus: RunStatus }>()
 const POLL_INTERVAL_MS = 2000
@@ -17,6 +20,7 @@ const loading = ref(false)
 const generating = ref(false)
 const loadFailed = ref(false)
 const expandedEvidence = ref<string[]>([])
+const selectedEvidenceIds = ref<string[] | null>(null)
 let terminalPolls = 0
 let request = 0
 let session = 0
@@ -36,6 +40,12 @@ function issueHost(issue: AnalysisIssue): string {
   return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
 }
 
+function showEvidence(issue: AnalysisIssue) {
+  selectedEvidenceIds.value = issue.evidence_ids
+  expandedEvidence.value = ['evidence']
+}
+watch(report, () => { selectedEvidenceIds.value = null })
+
 function statusLabel(status: AnalysisResponse['status']): string {
   return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
 }
@@ -44,13 +54,6 @@ function statusType(status: AnalysisResponse['status']): 'info' | 'success' | 'w
   if (status === 'failed' || status === 'interrupted') return 'danger'
   if (status === 'unavailable') return 'warning'
   return 'info'
-}
-function severityLabel(severity: AnalysisSeverity): string {
-  return { critical: '严重', warning: '警告', info: '信息' }[severity]
-}
-function severityType(severity: AnalysisSeverity): 'danger' | 'warning' | 'info' {
-  if (severity === 'critical') return 'danger'
-  return severity
 }
 function kindLabel(kind: AnalysisEvidence['kind']): string {
   return { host: '主机', check: '检查', finding: '风险发现', log: '日志' }[kind]
@@ -126,7 +129,13 @@ function exportText() {
   if (!loaded.value || !value) return
   const issueLines = (issues: AnalysisIssue[]) => issues.flatMap((issue) => [
     `[${severityLabel(issue.severity)}] ${issue.title} · ${issueHost(issue)}`,
-    ...(issue.log_source != null ? [`日志文件路径 / 来源：${issue.log_source}`, `报错内容：${issue.log_message}`] : []),
+    ...(issue.log_source != null ? [`日志文件路径 / 来源：${issue.log_source}`] : []),
+    ...(issue.log_message != null ? [`报错内容：${issue.log_message}`] : []),
+    ...issueDiagnosticGroups(issue).flatMap((group) => [
+      `诊断组：${group.id}；${group.host_count} 台主机；${group.occurrences} 次来源观察`,
+      `报错模板：${group.template}`,
+      ...group.observations.map((item) => `${item.host_name} (${item.address}) · ${item.source} · ${item.occurrences} 次 · ${item.first_time ?? '时间未知'} 至 ${item.last_time ?? '时间未知'}`),
+    ]),
     `报错原因：${issue.analysis}`,
     `处理手段建议：${issue.recommendation}`,
     `证据：${issue.evidence_ids.join('、') || '无'}`,
@@ -139,11 +148,12 @@ function exportText() {
     `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志，${value.incomplete_count} 项未完成，${value.unassessed_count} 项不适用或结论未知`,
     '', '非错误日志问题', ...otherProblems.value.map((item) =>
       `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
-    '', '错误日志分析', ...(legacyLogs.value ? ['此汇报为旧版汇总，请重新生成以获取每个合并报错的独立分析。'] : []),
+    '', '错误日志分析', ...(legacyLogs.value ? ['此汇报为旧版汇总，可重新生成诊断组分析。'] : []),
     ...issueLines(logIssues.value), '日志证据',
     ...value.evidence.filter((item) => item.kind === 'log').flatMap((item) => [
       `[${item.id}] ${severityLabel(item.severity)} / ${kindLabel(item.kind)} / ${item.host_name} (${item.address})`,
-      `${item.check_title} / ${item.source}`, item.content, '',
+      `${item.check_title} / ${item.source}${item.source_table_index != null ? ` / 来源表 ${item.source_table_index}` : ''}`, item.content,
+      ...(item.original_lines ?? []).map((line, index) => item.original_indices?.[index] != null ? `结果行 ${item.original_indices[index]}：${line}` : line), '',
     ]),
   ].join('\n')
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
@@ -166,6 +176,7 @@ watch(() => props.taskId, () => {
   generating.value = false
   loadFailed.value = false
   expandedEvidence.value = []
+  selectedEvidenceIds.value = null
   resetLogs()
   resetProblems()
   terminalPolls = isActiveRun(props.taskStatus) ? 0 : TERMINAL_POLL_COUNT
@@ -188,7 +199,7 @@ onUnmounted(() => {
 <template>
   <section class="inspection-analysis" aria-label="巡检 AI 汇报">
     <div class="section-header">
-      <h2>AI 汇报</h2>
+      <h2>AI 巡检报告</h2>
       <div class="inspection-analysis-actions">
         <ElButton :loading="loading" :disabled="generating" @click="refresh">刷新</ElButton>
         <ElButton v-if="loaded && report" @click="exportText">导出汇报</ElButton>
@@ -209,7 +220,7 @@ onUnmounted(() => {
       <p v-else-if="response.status === 'not_generated'" class="inspection-muted">尚无 AI 汇报。</p>
       <p v-else-if="response.status === 'queued'" class="inspection-muted">本轮汇报排队中。</p>
       <p v-else-if="response.status === 'running'" class="inspection-muted" role="status">
-        <template v-if="response.progress">已完成 {{ response.progress.completed_batches }}/{{ response.progress.total_batches }} 批证据分析；当前：{{ response.progress.current_step }}，本阶段开始 {{ timeLabel(response.progress.step_started_at) }}。</template>
+        <template v-if="response.progress">{{ response.progress.current_step }}，本阶段开始 {{ timeLabel(response.progress.step_started_at) }}。</template>
         <template v-else>正在生成本轮汇报。</template>
       </p>
       <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="inspection-muted">本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。</p>
@@ -241,26 +252,15 @@ onUnmounted(() => {
         </section>
         <section v-if="logTotal" class="inspection-analysis-section">
           <h3>错误日志分析 ({{ logTotal }})</h3>
-          <p v-if="legacyLogs" class="inspection-muted">此汇报为旧版汇总，请重新生成以获取每个合并报错的独立分析。</p>
-          <div v-for="(issue, index) in visibleLogs" :key="index" class="inspection-analysis-issue">
-            <div class="inspection-analysis-issue-title"><ElTag :type="severityType(issue.severity)" size="small">{{ severityLabel(issue.severity) }}</ElTag><strong>{{ issueHost(issue) }}</strong></div>
-            <template v-if="issue.log_source != null">
-              <p><strong>日志文件路径 / 来源：</strong>{{ issue.log_source }}<template v-if="issue.log_source === 'systemd journal'">（未采集具体文件路径）</template></p>
-              <p><strong>报错内容：</strong>{{ issue.log_message }}</p>
-            </template>
-            <p><strong>报错原因：</strong>{{ issue.analysis }}</p><p><strong>处理手段建议：</strong>{{ issue.recommendation }}</p>
-            <p v-if="issue.evidence_ids.length" class="inspection-muted">证据编号：{{ issue.evidence_ids.join('、') }}</p>
-          </div>
+          <p v-if="legacyLogs" class="inspection-muted">此汇报为旧版汇总，可重新生成诊断组分析。</p>
+          <p v-if="logIssues.some((issue) => issueDiagnosticGroups(issue).length)" class="inspection-muted">同类问题可共用一份分析，各报错类型及原始日志完整保留。次数为各来源已采集日志的观察次数，同一事件可能被多个来源记录。</p>
+          <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="index" :issue="issue" :host="issueHost(issue)" @evidence="showEvidence(issue)" />
           <ListPagination v-model:page="logPage" v-model:page-size="logPageSize" :total="logTotal" />
         </section>
         <ElCollapse v-if="logEvidenceIds.size" v-model="expandedEvidence" class="inspection-checks inspection-analysis-evidence">
           <ElCollapseItem name="evidence">
             <template #title><h3>日志证据 ({{ logEvidenceIds.size }})</h3></template>
-            <div v-for="item in report.evidence.filter((evidence) => evidence.kind === 'log')" :key="item.id" class="inspection-analysis-evidence-item">
-              <div class="inspection-analysis-issue-title"><ElTag :type="severityType(item.severity)" size="small">{{ severityLabel(item.severity) }}</ElTag><strong>{{ item.id }} · {{ item.host_name }} ({{ item.address }})</strong></div>
-              <p class="inspection-muted">{{ item.check_title }} · {{ item.source }} · {{ kindLabel(item.kind) }}</p>
-              <p>{{ item.content }}</p>
-            </div>
+            <InspectionAnalysisEvidence :evidence="report.evidence" :selected-ids="selectedEvidenceIds" @clear="selectedEvidenceIds = null" />
           </ElCollapseItem>
         </ElCollapse>
       </template>
@@ -277,8 +277,6 @@ onUnmounted(() => {
 .inspection-analysis-section h3, .inspection-analysis-evidence h3 { margin: 0; font-size: 14px; }
 .inspection-analysis-issue { display: grid; gap: 8px; padding: 8px 0 8px 12px; border-left: 2px solid var(--ui-border); min-width: 0; }
 .inspection-analysis-issue-title strong { min-width: 0; }
-.inspection-analysis-evidence-item { padding: 12px 16px; border-bottom: 1px solid var(--ui-border); }
 .inspection-analysis :is(p, strong, span, h3) { overflow-wrap: anywhere; }
 .inspection-analysis p { margin: 0; white-space: pre-wrap; }
-.inspection-analysis-evidence-item p { margin-top: 8px; }
 </style>

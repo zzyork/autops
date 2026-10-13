@@ -77,6 +77,9 @@
 | `docs/ai-chat.md` | 自选模型、对话巡检、流式协议、数据与执行边界说明。最后同步：2026-10-12。 |
 | `docs/plans/2026-10-12-conversational-ops.md` | 已授权的对话式运维设计、接口契约与实施验收方案。最后同步：2026-10-12。 |
 | `docs/plans/2026-10-13-inspection-ai-report.md` | 已确认并实施的巡检 AI 汇报开源方案检索、全量分析、持久化设计、历史点击流程、接口和验证计划。最后同步：2026-10-13。 |
+| `docs/plans/2026-10-13-inspection-single-request.md` | 已确认的全量合并日志单次请求方案、输出预算、失败边界和验证范围。最后同步：2026-10-13。 |
+| `docs/plans/2026-10-13-inspection-diagnostic-groups.md` | 已确认的诊断组压缩实施计划、Drain3 保护边界、完整原文追溯、接口与验证范围，替代逐精确报错分析粒度。最后同步：2026-10-13。 |
+| `docs/plans/2026-10-13-inspection-ai-merge.md` | 由 AI 在单次请求内按错误机制及处置路径合并问题的提示词、编号覆盖契约、完整证据关联和验证记录。最后同步：2026-10-13。 |
 
 ## 后端文件
 
@@ -85,7 +88,7 @@
 | `backend/.env.example` | 后端环境变量模板。最后同步：2026-10-10。 |
 | `backend/.gitignore` | 从根目录的 `backend/tests/*` 忽略规则中仅放行 `tests/test_inspection_checks.py` 与 `tests/test_inspection_tasks.py` 两个新增测试文件。最后同步：2026-10-12。 |
 | `backend/__init__.py` | 声明后端 Python 包。 |
-| `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接依赖。最后同步：2026-10-12。 |
+| `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接与 Drain3 日志模板提取依赖。最后同步：2026-10-13。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
 | `backend/app/__init__.py` | 声明后端应用包。 |
 | `backend/app/main.py` | FastAPI 入口及连接测试、巡检、AI 对话和巡检报告执行器生命周期管理。最后同步：2026-10-13。 |
@@ -130,11 +133,12 @@
 | `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_rules.py` | 从数据目录读取巡检规则，并以临时文件和原子替换保存生效配置。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容，按原项目 IP_hostname.md 命名和分组/月目录打包逐主机报告；缺少远端 hostname 时使用资产名称。最后同步：2026-10-13。 |
-| `backend/app/schemas/inspection_analysis.py` | AI 报告状态、实时批次进度、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
+| `backend/app/schemas/inspection_analysis.py` | AI 报告状态、进度、原始日志证据及位置、诊断组与来源观察统计、问题和响应模型，兼容历史报告。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、当前生成批次进度与耗时日志和按任务取消。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis_input.py` | 提取匹配错误日志与巡检已有风险，按主机、来源及忽略行首时间戳的报错正文合并日志，保留次数、时间范围和原始序号并完整分批。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis_engine.py` | 复用模型 provider 逐条分析合并错误日志，校验每批证据完整覆盖，关联日志来源、正文、原因与建议；非日志问题直接列出巡检事实和等级。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_input.py` | 提取日志与巡检风险，按主机、来源表及忽略行首时间戳的正文精确合并，保留全部原文、表位置、结果序号、次数与时间。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_groups.py` | 任务内 Drain3 模板提取、显式非诊断标识归一化、精确保护键和来源边界，构建紧凑模型输入与全部证据映射。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_engine.py` | 单次请求由 AI 合并诊断组并分析，校验每个组编号恰好被覆盖一次，关联全部模板与原始证据；非日志问题保留巡检事实。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
@@ -213,6 +217,9 @@
 | `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录入口，默认历史列表，选择记录后展示任务概览、AI 汇报和主机详情入口。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRecordDetailView.vue` | 独立服务器巡检记录详情页面，通过任务路由参数读取、轮询并复用主机检查详情与报告导出；提供返回记录入口。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionRecordSummary.vue` | 巡检记录概览，接收任务详情，展示全任务严重/警告统计及详情跳转，复用状态与时间显示映射。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionAnalysisReport.vue` | 接收任务 ID 与状态，经巡检 API 层生成、读取及轮询 AI 报告，展示问题、未完成检查和折叠证据，区分本轮状态与旧成功报告并导出文本；可复用于记录汇报展示。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisReport.vue` | 经巡检 API 层生成、读取及轮询报告，展示诊断组与来源统计、巡检风险，筛选关联证据并导出完整原文，兼容旧报告。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisEvidence.vue` | 接收报告证据与可选编号筛选，展示原文和来源表/结果行位置，复用 10/20/50 条分页，发出清除筛选事件；可复用于巡检报告证据查看。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisIssue.vue` | 接收问题和主机说明，展示合并分析、来源观察统计与折叠关联模板，发出查看原始证据事件，兼容历史单组问题。最后同步：2026-10-13。 |
+| `frontend/src/components/inspectionAnalysisDisplay.ts` | 报告与问题组件共用的严重程度映射、历史单组及新多组诊断信息读取。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，展示检查项、当前阈值、时限与服务判定，并编辑保存规则。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表；历史页默认终态分页列表，点击后仅显示记录概览与 AI 汇报，支持返回列表、删除和活跃执行轮询。最后同步：2026-10-13。 |

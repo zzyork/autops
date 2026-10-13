@@ -93,6 +93,24 @@ export interface AnalysisIssue {
   evidence_ids: string[]
   log_source: string | null
   log_message: string | null
+  diagnostic_group?: DiagnosticGroup | null
+  diagnostic_groups?: DiagnosticGroup[]
+}
+export interface DiagnosticObservation {
+  host_name: string
+  address: string
+  source: string
+  occurrences: number
+  first_time: string | null
+  last_time: string | null
+}
+export interface DiagnosticGroup {
+  id: string
+  template: string
+  service: string | null
+  occurrences: number
+  host_count: number
+  observations: DiagnosticObservation[]
 }
 export interface AnalysisEvidence {
   id: string
@@ -106,6 +124,9 @@ export interface AnalysisEvidence {
   incomplete: boolean
   limited: boolean
   group_id: string | null
+  original_lines?: string[]
+  original_indices?: number[]
+  source_table_index?: number | null
 }
 export interface AnalysisReport {
   task_name: string

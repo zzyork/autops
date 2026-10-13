@@ -925,17 +925,21 @@ def mock_analysis(monkeypatch: pytest.MonkeyPatch, responder=None) -> list[list[
     observed: list[list[dict]] = []
 
     def request(_client, _protocol, _url, _model, _key, messages, tools, **kwargs):
-        assert tools == [] and kwargs["max_tokens"] == 2048
+        assert tools == []
         assert kwargs["read_timeout_seconds"] == 60
+        assert kwargs["max_context"] == analysis_engine.REPORT_MAX_CONTEXT
+        assert kwargs["max_response"] == 16 * 1024 * 1024
         content = json.loads(messages[1]["content"])
-        assert content and len(content) <= 5
-        assert all(set(item) == {"id", "host", "address", "source", "check", "severity", "content"}
+        assert content
+        assert kwargs["max_tokens"] == min(8192, max(2048, 256 + len(content) * 384))
+        assert all(isinstance(item["template"], str) for item in content)
+        assert all(set(item) == {"id", "template", "service", "occurrences", "host_count", "observations", "samples"}
                                for item in content)
         observed.append(content)
         if responder is not None:
             return responder(content)
         return Reply(json.dumps({"issues": [
-            {"evidence_id": item["id"], "severity": "warning", "analysis": f"cause {item['id']}",
+            {"covered_group_ids": [item["id"]], "title": "错误日志分析", "severity": "warning", "analysis": f"cause {item['id']}",
              "recommendation": f"action {item['id']}"} for item in content]}), [])
 
     monkeypatch.setattr(analysis_engine, "request", request)
@@ -1021,6 +1025,77 @@ def test_analysis_automatic_after_all_hosts_finish_once(client: TestClient, monk
     assert result["report"]["generated_at"].endswith("Z")
 
 
+def test_analysis_diagnostic_groups_keep_all_hosts_sources_and_original_lines(client: TestClient,
+                                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    first = add_host(client)
+    second = add_host(client, 2, group_id=first["group_id"])
+    task_id = historical_task(client, [first, second], ["log_error"])
+    originals = []
+    with client.app.state.sessions() as session:
+        for index, run in enumerate(repository.get_task(session, task_id).hosts):
+            line = f"Oct 13 09:00:00 node-{index} worker[{index + 1}]: failed pid={index + 1} request_id=r{index} code=500"
+            originals.extend([line, line])
+            run.checks[0].conclusion = "warning"
+            run.checks[0].payload = CheckPayload(tables=[
+                ResultTable(name="systemd journal", columns=["状态", "日志"], rows=[["匹配", line]]),
+                ResultTable(name="/var/log/app.log", columns=["状态", "日志"], rows=[["匹配", line]]),
+            ]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert len(observed) == 1 and len(observed[0]) == 1
+    assert len(report["issues"]) == 1
+    issue = report["issues"][0]
+    assert issue["diagnostic_group"]["host_count"] == 2
+    assert issue["diagnostic_group"]["occurrences"] == 4
+    assert len(issue["diagnostic_group"]["observations"]) == 4
+    assert issue["evidence_ids"] == [item["id"] for item in report["evidence"]]
+    assert [line for item in report["evidence"] for line in item["original_lines"]] == originals
+    assert all(item["original_indices"] == [1] for item in report["evidence"])
+    assert "result_indices" not in json.dumps(observed)
+
+
+def test_analysis_ai_merges_different_templates_and_sources_with_complete_evidence(client: TestClient,
+                                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    first = add_host(client)
+    second = add_host(client, 2, group_id=first["group_id"])
+    task_id = historical_task(client, [first, second], ["log_error"])
+    with client.app.state.sessions() as session:
+        for run in repository.get_task(session, task_id).hosts:
+            run.checks[0].conclusion = "warning"
+            run.checks[0].payload = CheckPayload(tables=[
+                ResultTable(name="systemd journal", columns=["状态", "日志"], rows=[
+                    ["匹配", "worker[1]: target connection refused"]]),
+                ResultTable(name="/var/log/app.log", columns=["状态", "日志"], rows=[
+                    ["匹配", "worker[2]: target connect failed error=ECONNREFUSED"]]),
+            ]).model_dump(mode="json")
+        session.commit()
+
+    def merge(content):
+        assert len(content) == 2
+        return Reply(json.dumps({"issues": [{"covered_group_ids": [item["id"] for item in reversed(content)],
+                     "title": "worker 目标连接被拒绝", "severity": "warning", "analysis": "目标连接被拒绝，需核实服务状态。",
+                     "recommendation": "检查目标服务监听与网络策略。"}]}), [])
+
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch, merge)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert len(observed) == len(report["issues"]) == 1
+    issue = report["issues"][0]
+    assert issue["title"] == "worker 目标连接被拒绝"
+    assert issue["diagnostic_group"] is None and issue["log_message"] is None
+    assert [group["id"] for group in issue["diagnostic_groups"]] == ["D1", "D2"]
+    assert sum(group["occurrences"] for group in issue["diagnostic_groups"]) == 4
+    assert set(issue["evidence_ids"]) == {item["id"] for item in report["evidence"]}
+    assert len(issue["evidence_ids"]) == len(set(issue["evidence_ids"])) == 4
+    assert sum(len(item["original_lines"]) for item in report["evidence"]) == 4
+    assert {item["source"] for group in issue["diagnostic_groups"] for item in group["observations"]} == {
+        "systemd journal", "/var/log/app.log"}
+
+
 def test_analysis_historical_manual_unavailable_and_failed_regeneration(client: TestClient,
                                                                           monkeypatch: pytest.MonkeyPatch) -> None:
     observed = mock_analysis(monkeypatch)
@@ -1055,7 +1130,7 @@ def test_analysis_historical_manual_unavailable_and_failed_regeneration(client: 
     assert failed["can_generate"] is True
 
 
-def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestClient,
+def test_analysis_all_hosts_findings_and_200_log_rows_use_one_request(client: TestClient,
                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
     first = add_host(client)
     hosts = [first] + [add_host(client, i, group_id=first["group_id"]) for i in range(2, 33)]
@@ -1079,8 +1154,8 @@ def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestCl
     report = wait_analysis(client, task_id, "completed")["report"]
     assert (report["host_count"], report["finding_count"], report["log_count"]) == (32, 64, 200)
     evidence = report["evidence"]
-    assert len(batches) > 1 and all(1 <= len(batch) <= 5 for batch in batches)
-    assert [item["id"] for batch in batches for item in batch] == [item["id"] for item in evidence if item["kind"] == "log"]
+    assert len(batches) == 1 and len(batches[0]) == 200
+    assert [item["id"] for batch in batches for item in batch] == [f"D{index}" for index in range(1, 201)]
     assert {item["content"] for item in evidence if item["kind"] == "finding"} == {
         f"{severity} {host['name']}" for host in hosts for severity in ("critical", "warning")}
     logs = [item for item in evidence if item["kind"] == "log"]
@@ -1100,8 +1175,8 @@ def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestCl
             assert issue["log_source"] is issue["log_message"] is None
         else:
             assert issue["severity"] == "warning"
-            assert issue["analysis"] == f"cause {item['id']}"
-            assert issue["recommendation"] == f"action {item['id']}"
+            assert issue["analysis"] == f"cause {issue['diagnostic_group']['id']}"
+            assert issue["recommendation"] == f"action {issue['diagnostic_group']['id']}"
             assert len(issue["analysis"] + issue["recommendation"]) <= 1000
             assert issue["log_source"] == item["source"]
             assert issue["log_message"] == json.loads(item["content"])["message"]
@@ -1134,12 +1209,12 @@ def test_analysis_groups_repeated_logs_and_excludes_unassessed_checks(client: Te
         assert issue["evidence_ids"] == [item["id"]]
         assert issue["log_source"] == item["source"] == "journal"
         assert issue["log_message"] == json.loads(item["content"])["message"]
-        assert issue["analysis"] == f"cause {item['id']}"
+        assert issue["analysis"] == f"cause {issue['diagnostic_group']['id']}"
     assert [json.loads(item["content"])["result_indices"] for item in report["evidence"]] == [[1, 2], [3]]
     repeated = json.loads(report["evidence"][0]["content"])
     assert (repeated["occurrences"], repeated["first_time"], repeated["last_time"]) == (
         2, "2026-10-13T12:00:00Z", "2026-10-13T12:05:00Z")
-    assert [item["id"] for batch in observed for item in batch] == [item["id"] for item in report["evidence"]]
+    assert [item["id"] for batch in observed for item in batch] == [issue["diagnostic_group"]["id"] for issue in report["issues"]]
 
 
 @pytest.mark.parametrize("normal", [False, True])
@@ -1176,10 +1251,10 @@ def test_analysis_rejects_invalid_log_reply(client: TestClient, monkeypatch: pyt
     enable_analysis(client)
 
     def bad_reply(batch):
-        assert json.loads(batch[0]["content"])["message"] == "disk full"
+        assert batch[0]["template"] == "disk full"
         if invalid == "json":
             return Reply("not json", [])
-        result = {"evidence_id": batch[0]["id"], "severity": "warning",
+        result = {"covered_group_ids": [batch[0]["id"]], "title": "错误日志分析", "severity": "warning",
                   "analysis": "observed", "recommendation": "investigate"}
         if invalid == "severity":
             result["severity"] = "urgent"
@@ -1193,6 +1268,69 @@ def test_analysis_rejects_invalid_log_reply(client: TestClient, monkeypatch: pyt
     assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
     failed = wait_analysis(client, task_id, "failed")
     assert failed["report"] is None and failed["error_code"] == "analysis_failed"
+
+
+@pytest.mark.parametrize("failure", ["truncated", "transport", "input_limit", "missing_id", "duplicate_id", "unknown_id"])
+def test_single_request_failure_keeps_previous_report(client: TestClient, monkeypatch: pytest.MonkeyPatch,
+                                                      caplog: pytest.LogCaptureFixture, failure: str) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host], ["log_error"])
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+            rows=[["匹配", "disk full"], ["匹配", "connection failed"]])]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    original_request = analysis_engine.request
+    observed = mock_analysis(monkeypatch)
+    url = f"{ROOT}/tasks/{task_id}/analysis"
+    assert client.post(url).status_code == 202
+    previous = wait_analysis(client, task_id, "completed")["report"]
+    assert len(observed) == 1
+    calls = []
+
+    def transport(req):
+        calls.append(req)
+        if failure == "transport":
+            raise httpx.ReadTimeout("private-url", request=req)
+        records = json.loads(json.loads(req.content)["messages"][1]["content"])
+        ids = [item["id"] for item in records]
+        if failure == "missing_id":
+            ids.pop()
+        elif failure == "duplicate_id":
+            ids[1] = ids[0]
+        elif failure == "unknown_id":
+            ids[1] = "E999"
+        result = json.dumps({"issues": [{"covered_group_ids": [item], "title": "错误日志分析", "severity": "warning", "analysis": "原因",
+                                         "recommendation": "核实"} for item in ids]})
+        finish = "length" if failure == "truncated" else "stop"
+        body = "data: " + json.dumps({"choices": [{"delta": {"content": result}, "finish_reason": finish}]})
+        return httpx.Response(200, text=body + "\n\ndata: [DONE]\n\n")
+
+    if failure == "input_limit":
+        with client.app.state.sessions() as session:
+            check = repository.get_task(session, task_id).hosts[0].checks[0]
+            # 巡检每行有长度限制，用多条不同日志触发整份请求超限。
+            check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                rows=[["匹配", f"{index}:" + "x" * 1000]
+                      for index in range(analysis_engine.REPORT_MAX_CONTEXT // 1000 + 1)]
+                )]).model_dump(mode="json")
+            session.commit()
+
+    with httpx.Client(transport=httpx.MockTransport(transport)) as model_client:
+        def request(_client, *args, **kwargs):
+            return original_request(model_client, *args, **kwargs)
+
+        monkeypatch.setattr(analysis_engine, "request", request)
+        assert client.post(url).status_code == 202
+        failed = wait_analysis(client, task_id, "failed")
+    assert failed["report"] == previous and failed["error_code"] == "analysis_failed"
+    assert len(calls) == (0 if failure == "input_limit" else 1)
+    expected_reason = {"input_limit": "会话内容超出限制", "truncated": "输出 token 限额",
+                       "transport": "ReadTimeout"}.get(failure, "日志证据覆盖不完整")
+    assert expected_reason in caplog.text
+    assert "private-url" not in caplog.text
 
 
 def test_analysis_missing_invalid_and_active_task(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1317,7 +1455,7 @@ def test_analysis_incomplete_checks_are_not_sent_to_model(client: TestClient, mo
     assert observed == []
 
 
-def test_analysis_delete_cancels_before_next_batch(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analysis_delete_cancels_single_request_generation(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     host = add_host(client)
     task_id = historical_task(client, [host], ["log_error"])
     with client.app.state.sessions() as session:
@@ -1349,7 +1487,7 @@ def test_analysis_delete_cancels_before_next_batch(client: TestClient, monkeypat
     until = time.monotonic() + 5
     while client.app.state.inspection_analysis.pending and time.monotonic() < until:
         time.sleep(0.02)
-    assert len(observed) == 1  # 已发出的请求无法追回，后续批次必须停止。
+    assert len(observed) == 1  # 已开始的模拟请求返回后，由执行器检查取消状态。
     assert client.app.state.inspection_analysis.pending == 0
 
 
@@ -1408,6 +1546,118 @@ def test_analysis_provider_output_budget_and_truncated_response(protocol: str) -
             provider_request(model_client, protocol, "https://example.invalid/v1", "m", None, messages, [], max_tokens=8192)
 
 
+@pytest.mark.parametrize("protocol", ["openai_compatible", "anthropic"])
+def test_analysis_329_logs_above_chat_input_limit_use_one_request(protocol: str) -> None:
+    from backend.app.schemas.inspection_analysis import AnalysisEvidence
+    from backend.app.services.inspection_analysis_input import AnalysisInput
+    from backend.app.services.ai_provider import MAX_CONTEXT
+    evidence = [AnalysisEvidence(id=f"E{index}", kind="log", host_name="node", address="192.0.2.1",
+        check_title="错误日志", source="journal", severity="info",
+        content=json.dumps({"message": f"error-{index}:" + "x" * 1000, "occurrences": 1,
+                            "first_time": None, "last_time": None, "result_indices": [index]}))
+        for index in range(329)]
+    data = AnalysisInput(evidence, 1, 0, 329, 0, 0, "test", "completed", None, None, ["log_error"])
+    snapshot = analysis_engine.ModelSnapshot(protocol, "https://example.invalid/v1", "m", None, "m", 1)
+    calls = []
+
+    def transport(req):
+        calls.append(req)
+        body = json.loads(req.content)
+        assert MAX_CONTEXT < len(req.content.decode()) < analysis_engine.REPORT_MAX_CONTEXT
+        records = json.loads(body["messages"][-1]["content"])
+        assert len(records) == 329
+        result = json.dumps({"issues": [{"covered_group_ids": [item["id"]], "title": "错误日志分析", "severity": "warning",
+            "analysis": "需核实", "recommendation": "检查服务"} for item in records]})
+        if protocol == "openai_compatible":
+            stream = "data: " + json.dumps({"choices": [{"delta": {"content": result}, "finish_reason": "stop"}]})
+            stream += "\n\ndata: [DONE]\n\n"
+        else:
+            stream = "event: content_block_delta\ndata: " + json.dumps({"index": 0,
+                "delta": {"type": "text_delta", "text": result}})
+            stream += ('\n\nevent: message_delta\ndata: {"delta":{"stop_reason":"end_turn"}}\n\n'
+                       'event: message_stop\ndata: {}\n\n')
+        return httpx.Response(200, text=stream)
+
+    with httpx.Client(transport=httpx.MockTransport(transport)) as model:
+        report = analysis_engine.analyze(model, snapshot, None, data, Event())
+        assert len(report.issues) == 329 and len(calls) == 1
+        # 普通对话仍应受原输入限额约束。
+        with pytest.raises(ProviderError, match="会话内容超出限制"):
+            provider_request(model, protocol, snapshot.base_url, "m", None,
+                             [{"role": "system", "content": "test"},
+                              {"role": "user", "content": "x" * MAX_CONTEXT}], [])
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("limit", [0, True, "1000000", 1_000_001])
+def test_provider_rejects_invalid_input_budget(limit) -> None:
+    with pytest.raises(ProviderError, match="模型输入限额无效"):
+        provider_request(None, "openai_compatible", "https://example.invalid/v1", "m", None,
+                         [], [], max_context=limit)
+
+
+@pytest.mark.parametrize("protocol", ["openai_compatible", "anthropic"])
+def test_report_stream_metadata_above_two_mib_is_independent_of_text(protocol: str) -> None:
+    import math
+    old_limit = 2 * 1024 * 1024
+    if protocol == "openai_compatible":
+        metadata = "data: " + json.dumps({"choices": [{"delta": {"reasoning_content": "x" * 1000}}]}) + "\n\n"
+        ending = 'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+    else:
+        metadata = "event: content_block_delta\ndata: " + json.dumps({"index": 0,
+            "delta": {"type": "thinking_delta", "thinking": "x" * 1000}}) + "\n\n"
+        ending = ('event: content_block_delta\ndata: {"index":0,"delta":{"type":"text_delta","text":"ok"}}\n\n'
+                  'event: message_delta\ndata: {"delta":{"stop_reason":"end_turn"}}\n\n'
+                  'event: message_stop\ndata: {}\n\n')
+    repeats = math.ceil(old_limit / len(metadata.encode())) + 1
+
+    class Events(httpx.SyncByteStream):
+        def __iter__(self):
+            for _ in range(repeats):
+                yield metadata.encode()
+            yield ending.encode()
+
+    assert old_limit < repeats * len(metadata.encode()) < analysis_engine.REPORT_MAX_RESPONSE
+    calls = []
+
+    def transport(req):
+        calls.append(req)
+        return httpx.Response(200, stream=Events())
+
+    with httpx.Client(transport=httpx.MockTransport(transport)) as model:
+        messages = [{"role": "system", "content": "test"}]
+        reply = provider_request(model, protocol, "https://example.invalid/v1", "m", None, messages, [],
+                                 max_response=analysis_engine.REPORT_MAX_RESPONSE,
+                                 max_text=analysis_engine.REPORT_MAX_TEXT)
+        assert reply.text == "ok" and len(calls) == 1
+        with pytest.raises(ProviderError, match="模型流式响应超出限制"):
+            provider_request(model, protocol, "https://example.invalid/v1", "m", None, messages, [])
+
+
+def test_report_stream_remains_bounded_and_reports_parsed_text_size() -> None:
+    limit = analysis_engine.REPORT_MAX_RESPONSE
+
+    class Events(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
+            comment = b":" + b"x" * 4094 + b"\n"
+            for _ in range(limit // len(comment) + 1):
+                yield comment
+
+    with httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, stream=Events()))) as model:
+        with pytest.raises(ProviderError, match="模型流式响应超出限制") as caught:
+            provider_request(model, "openai_compatible", "https://example.invalid/v1", "m", None, [], [],
+                             max_response=limit, max_text=analysis_engine.REPORT_MAX_TEXT)
+    assert f"/{limit} 字节" in str(caught.value)
+    assert f"已解析正文 2/{analysis_engine.REPORT_MAX_TEXT} 字符" in str(caught.value)
+
+
+@pytest.mark.parametrize("option", [{"max_response": 16 * 1024 * 1024 + 1}, {"max_response": True}])
+def test_provider_rejects_excessive_stream_budget(option) -> None:
+    with pytest.raises(ProviderError, match="模型响应限额无效"):
+        provider_request(None, "openai_compatible", "https://example.invalid/v1", "m", None, [], [], **option)
+
+
 @pytest.mark.parametrize("conclusion", ["not_applicable", "unknown"])
 def test_analysis_unassessed_checks_are_not_sent_to_model(client: TestClient, monkeypatch: pytest.MonkeyPatch,
                                                           conclusion: str) -> None:
@@ -1449,7 +1699,7 @@ def test_analysis_rejects_incomplete_log_id_coverage(client: TestClient,
         calls.append(content)
         ids = [item["id"] for item in content]
         returned = ids[:1] if invalid == "missing" else (ids + ids[:1] if invalid == "duplicate" else ids + ["E999"])
-        return Reply(json.dumps({"issues": [{"evidence_id": evidence_id, "severity": "warning",
+        return Reply(json.dumps({"issues": [{"covered_group_ids": [evidence_id], "title": "错误日志分析", "severity": "warning",
                                               "analysis": "cause", "recommendation": "action"}
                                              for evidence_id in returned]}), [])
 
@@ -1458,7 +1708,7 @@ def test_analysis_rejects_incomplete_log_id_coverage(client: TestClient,
     with pytest.raises(ProviderError):
         analysis_engine.analyze(client.app.state.inspection_analysis.client, snapshot, None, data, Event())
     assert len(calls) == 1
-    assert [item["id"] for item in calls[0]] == [item.id for item in data.evidence]
+    assert [item["id"] for item in calls[0]] == ["D1", "D2"]
 
 
 def test_analysis_dispatch_compensation_failure_sets_persistence_gate(client: TestClient,
@@ -1502,4 +1752,4 @@ def test_analysis_long_log_fragments_remain_one_issue(client: TestClient, monkey
     assert issue["log_source"] == "/var/log/messages" and issue["log_message"] == message
     assert issue["evidence_ids"] == [item["id"] for item in report["evidence"]]
     assert len(observed) == 1 and len(observed[0]) == 1
-    assert json.loads(observed[0][0]["content"])["occurrences"] == 2
+    assert observed[0][0]["occurrences"] == 2

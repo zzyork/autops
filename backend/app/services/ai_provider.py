@@ -9,10 +9,12 @@ import httpx
 
 MAX_RESPONSE = 256_000
 MAX_TEXT = 16_000
-MAX_RESPONSE_BUDGET = 2 * 1024 * 1024
+MAX_RESPONSE_BUDGET = 16 * 1024 * 1024
 MAX_TEXT_BUDGET = 65_536
 MAX_CALLS = 4
 MAX_CONTEXT = 128_000
+MAX_CONTEXT_BUDGET = 1_000_000
+MAX_OUTPUT_TOKENS = 8192
 MAX_TOTAL_SECONDS = 300
 DEFAULT_READ_TIMEOUT_SECONDS = 20
 MAX_READ_TIMEOUT_SECONDS = 60
@@ -33,14 +35,17 @@ def request(client: httpx.Client, protocol: str, base_url: str, model: str,
             on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
              deadline: float | None = None, max_tokens: int = 1024,
               max_text: int = MAX_TEXT, max_response: int = MAX_RESPONSE,
-              read_timeout_seconds: int = DEFAULT_READ_TIMEOUT_SECONDS) -> Reply:
-    if type(max_tokens) is not int or not 1 <= max_tokens <= 8192:
+               read_timeout_seconds: int = DEFAULT_READ_TIMEOUT_SECONDS,
+               max_context: int = MAX_CONTEXT) -> Reply:
+    if type(max_tokens) is not int or not 1 <= max_tokens <= MAX_OUTPUT_TOKENS:
         raise ProviderError("模型输出限额无效")
     if (type(max_text) is not int or not 1 <= max_text <= MAX_TEXT_BUDGET
             or type(max_response) is not int or not 1 <= max_response <= MAX_RESPONSE_BUDGET):
         raise ProviderError("模型响应限额无效")
     if type(read_timeout_seconds) is not int or not 1 <= read_timeout_seconds <= MAX_READ_TIMEOUT_SECONDS:
         raise ProviderError("模型读取时限无效")
+    if type(max_context) is not int or not 1 <= max_context <= MAX_CONTEXT_BUDGET:
+        raise ProviderError("模型输入限额无效")
     if protocol == "openai_compatible":
         url = base_url + "/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -75,8 +80,9 @@ def request(client: httpx.Client, protocol: str, base_url: str, model: str,
         if tools:
             body["tools"] = [{"name": item["name"], "description": item["description"],
                                "input_schema": item["parameters"]} for item in tools]
-    if len(json.dumps(body, ensure_ascii=False)) > MAX_CONTEXT:
-        raise ProviderError("会话内容超出限制")
+    context_size = len(json.dumps(body, ensure_ascii=False))
+    if context_size > max_context:
+        raise ProviderError(f"会话内容超出限制（{context_size}/{max_context} 字符）")
     deadline = deadline if deadline is not None else time.monotonic() + MAX_TOTAL_SECONDS
     text_parts: list[str] = []
     text_length = 0
@@ -188,7 +194,8 @@ def request(client: httpx.Client, protocol: str, base_url: str, model: str,
                 check()
                 total_bytes += len(chunk)
                 if total_bytes > max_response:
-                    raise ProviderError(f"模型流式响应超出限制（{total_bytes}/{max_response} 字节）")
+                    raise ProviderError(f"模型流式响应超出限制（{total_bytes}/{max_response} 字节；"
+                                        f"已解析正文 {text_length}/{max_text} 字符）")
                 buffer.extend(chunk)
                 while b"\n" in buffer:
                     raw, _, buffer = buffer.partition(b"\n")

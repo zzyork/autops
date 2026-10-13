@@ -21,6 +21,27 @@ class AnalysisEvidence(BaseModel):
     incomplete: bool = False
     limited: bool = False
     group_id: str | None = None
+    original_lines: list[str] = Field(default_factory=list)
+    original_indices: list[int] = Field(default_factory=list)
+    source_table_index: int | None = None
+
+
+class DiagnosticObservation(BaseModel):
+    host_name: str
+    address: str
+    source: str
+    occurrences: int = Field(ge=1)
+    first_time: str | None = None
+    last_time: str | None = None
+
+
+class DiagnosticGroup(BaseModel):
+    id: str
+    template: str
+    service: str | None = None
+    occurrences: int = Field(ge=1)
+    host_count: int = Field(ge=1)
+    observations: list[DiagnosticObservation]
 
 
 class AnalysisIssue(BaseModel):
@@ -33,6 +54,8 @@ class AnalysisIssue(BaseModel):
     evidence_ids: list[str] = Field(min_length=1)
     log_source: str | None = None
     log_message: str | None = None
+    diagnostic_group: DiagnosticGroup | None = None
+    diagnostic_groups: list[DiagnosticGroup] = Field(default_factory=list)
 
 
 class BatchAnalysis(BaseModel):
