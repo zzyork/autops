@@ -27,11 +27,14 @@
 .inspection-service-row > .el-button { margin-bottom: 4px; }
 .inspection-detail { display: grid; gap: 16px; min-width: 0; }
 .inspection-detail .section-header { margin-bottom: 0; }
-.inspection-detail .section-header h2 { overflow-wrap: anywhere; }
+.inspection-detail .section-header h2 { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .inspection-detail-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; color: var(--ui-text-secondary); }
 .inspection-host-choice { display: flex; align-items: center; gap: 8px; }
 .inspection-host-choice .el-select { width: 300px; }
 .inspection-host-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; border-bottom: 1px solid var(--ui-border); overflow-wrap: anywhere; }
+.inspection-host-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; margin: 0; font-size: 16px; font-weight: 600; }
+.inspection-host-name { font-size: 13px; font-weight: 400; color: var(--ui-text-secondary); }
+.inspection-host-connection { font-size: 12px; color: var(--ui-text-secondary); }
 .inspection-key-alert a { text-decoration: underline; }
 .inspection-host-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .inspection-collapse-actions { display: flex; gap: 8px; margin-left: auto; }
@@ -42,7 +45,7 @@
 .inspection-check-result { display: grid; gap: 16px; padding: 16px; min-width: 0; }
 .inspection-check-result p { margin: 0; }
 .inspection-check-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
-.inspection-check-header h3 { margin: 0; font-size: 14px; }
+.inspection-check-header h4 { margin: 0; font-size: 14px; font-weight: 600; }
 .inspection-finding { display: flex; align-items: flex-start; gap: 8px; padding: 8px; overflow-wrap: anywhere; }
 .inspection-finding-warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .inspection-finding-critical { background: var(--ui-danger-soft); color: var(--ui-danger); }
@@ -50,4 +53,4 @@
 .inspection-metric { padding-left: 12px; border-left: 2px solid var(--ui-border); min-width: 0; }
 .inspection-metrics dt { color: var(--ui-text-secondary); }
 .inspection-metrics dd { margin: 4px 0 0; font-weight: 600; }
-.inspection-result-table h4 { font-size: 13px; margin: 0 0 8px; }
+.inspection-result-table h5 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }

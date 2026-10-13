@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
-import { checkLabel, conclusionLabel, conclusionType, isActiveRun, runLabel, runType, summarizeChecks, timeLabel } from '@/components/inspectionDisplay'
+import { checkLabel, conclusionLabel, conclusionType, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runType, summarizeChecks, timeLabel } from '@/components/inspectionDisplay'
 import type { CheckResponse, TaskDetail } from '@/types/inspections'
 
 const props = defineProps<{ task: TaskDetail }>()
@@ -12,6 +12,7 @@ const exporting = ref(false)
 const selectedHost = computed(() => props.task.hosts.find((host) => host.id === hostId.value) ?? null)
 const expandedChecks = ref<string[]>([])
 const hostSummary = computed(() => summarizeChecks(selectedHost.value?.checks ?? []))
+const visibleChecks = computed(() => displayChecks(selectedHost.value?.checks ?? []))
 let session = 0
 watch(() => props.task.id, () => {
   session++
@@ -64,11 +65,11 @@ async function exportReport() {
     <template v-if="task.hosts.length">
       <div class="inspection-host-choice"><span>查看主机</span><ElSelect v-model="hostId" aria-label="选择巡检主机"><ElOption v-for="host in task.hosts" :key="host.id" :label="`${host.host_name} · ${host.address}`" :value="host.id" /></ElSelect></div>
       <template v-if="selectedHost">
-        <div class="inspection-host-meta"><strong>{{ selectedHost.host_name }}</strong><span>{{ selectedHost.group_name }} · {{ selectedHost.username }}@{{ selectedHost.address }}:{{ selectedHost.port }}</span><ElTag :type="runType(selectedHost.status)" size="small">{{ runLabel(selectedHost.status) }}</ElTag></div>
+        <div class="inspection-host-meta"><h3 class="inspection-host-title">{{ selectedHost.address }}<span v-if="selectedHost.host_name !== selectedHost.address" class="inspection-host-name">{{ selectedHost.host_name }}</span></h3><span class="inspection-host-connection">{{ selectedHost.group_name }} · {{ selectedHost.username }}@{{ selectedHost.address }}:{{ selectedHost.port }}</span><ElTag :type="runType(selectedHost.status)" size="small">{{ runLabel(selectedHost.status) }}</ElTag></div>
         <div class="inspection-host-summary" aria-label="主机检查概览">
           <span>检查完成 <strong>{{ hostSummary.completed }} / {{ selectedHost.checks.length }}</strong></span>
-          <ElTag :type="hostSummary.critical ? 'danger' : 'info'" size="small">严重发现 {{ hostSummary.critical }}</ElTag>
-          <ElTag :type="hostSummary.warning ? 'warning' : 'info'" size="small">警告发现 {{ hostSummary.warning }}</ElTag>
+          <ElTag :type="hostSummary.critical ? 'danger' : 'info'" size="small">重要 {{ hostSummary.critical }}</ElTag>
+          <ElTag :type="hostSummary.warning ? 'warning' : 'info'" size="small">警告 {{ hostSummary.warning }}</ElTag>
           <span v-if="hostSummary.incomplete" class="inspection-muted">{{ hostSummary.incomplete }} 项尚未完成，风险无法完整判定</span>
           <div class="inspection-collapse-actions"><ElButton link type="primary" @click="expandedChecks = selectedHost.checks.map((check) => check.check_id)">全部展开</ElButton><ElButton link @click="expandedChecks = []">全部折叠</ElButton></div>
         </div>
@@ -78,17 +79,17 @@ async function exportReport() {
         <p v-else-if="selectedHost.failure_code" class="inspection-muted">该主机未完成巡检（{{ selectedHost.failure_code }}），无法判定风险。</p>
         <p v-if="!selectedHost.checks.length" class="inspection-muted">检查项尚未开始。</p>
         <ElCollapse v-model="expandedChecks" class="inspection-checks">
-        <ElCollapseItem v-for="check in selectedHost.checks" :key="`${selectedHost.id}-${check.check_id}`" :name="check.check_id">
-          <template #title><div class="inspection-check-header"><h3>{{ check.title }}</h3><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="inspection-muted">{{ check.payload.findings.length }} 条风险发现</span></div></template>
+        <ElCollapseItem v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`" :name="check.check_id">
+          <template #title><div class="inspection-check-header"><h4>{{ check.title }}</h4><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="inspection-muted">{{ check.payload.findings.length }} 条风险发现</span></div></template>
           <section class="inspection-check-result" :aria-label="check.title">
           <p v-if="check.status === 'failed' || check.status === 'interrupted' || check.status === 'skipped'" class="inspection-muted">{{ check.status === 'skipped' ? '检查已跳过' : '检查未完成' }}{{ check.error_code ? `（${check.error_code}）` : '' }}，无法判定风险。</p>
           <p v-else-if="check.status === 'queued'" class="inspection-muted">检查尚未开始。</p>
           <p v-else-if="check.status === 'running'" class="inspection-muted">正在检查，结果尚未确定。</p>
           <p v-if="check.status !== 'completed' && check.payload.findings.length" class="inspection-muted">以下为已返回的风险线索，检查尚未完成，不能视为完整结论。</p>
-          <p v-for="(finding, index) in check.payload.findings" :key="index" class="inspection-finding" :class="`inspection-finding-${finding.severity}`"><ElTag :type="finding.severity === 'critical' ? 'danger' : 'warning'" size="small">{{ finding.severity === 'critical' ? '严重' : '警告' }}</ElTag>{{ finding.message }}</p>
+          <p v-for="(finding, index) in check.payload.findings" :key="index" class="inspection-finding" :class="`inspection-finding-${finding.severity}`"><ElTag :type="finding.severity === 'critical' ? 'danger' : 'warning'" size="small">{{ finding.severity === 'critical' ? '严重' : '警告' }}</ElTag>{{ findingLabel(finding.message) }}</p>
           <template v-if="check.status === 'completed'">
-            <dl v-if="check.payload.metrics.length" class="inspection-metrics"><div v-for="(metric, index) in check.payload.metrics" :key="index" class="inspection-metric"><dt>{{ metric.name }}</dt><dd>{{ metric.value ?? '未记录' }}{{ metric.value !== null && metric.unit ? ` ${metric.unit}` : '' }}</dd></div></dl>
-            <div v-for="(table, index) in check.payload.tables" :key="index" class="inspection-result-table"><h4>{{ table.name }}</h4><div class="host-table-wrap"><ElTable :data="table.rows" class="host-table" :empty-text="'无数据'"><ElTableColumn v-for="(column, columnIndex) in table.columns" :key="columnIndex" :label="column" min-width="140"><template #default="{ row }">{{ row[columnIndex] ?? '' }}</template></ElTableColumn></ElTable></div></div>
+            <dl v-if="check.payload.metrics.length" class="inspection-metrics"><div v-for="(metric, index) in check.payload.metrics" :key="index" class="inspection-metric"><dt>{{ metric.name }}</dt><dd>{{ metricLabel(metric) }}</dd></div></dl>
+            <div v-for="(table, index) in check.payload.tables" :key="index" class="inspection-result-table"><h5>{{ table.name }}</h5><div class="host-table-wrap"><ElTable :data="table.rows" class="host-table" :empty-text="'无数据'"><ElTableColumn v-for="(column, columnIndex) in table.columns" :key="columnIndex" :label="column" min-width="140"><template #default="{ row }">{{ row[columnIndex] ?? '' }}</template></ElTableColumn></ElTable></div></div>
             <p v-if="!check.payload.findings.length && !check.payload.metrics.length && !check.payload.tables.length" class="inspection-muted">无详细数据。</p>
           </template>
           </section>
