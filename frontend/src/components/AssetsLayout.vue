@@ -40,7 +40,7 @@ const settingsExpanded = ref(true)
       </button>
       <nav v-show="inspectionsExpanded" id="inspections-navigation" aria-label="巡检管理">
         <RouterLink to="/inspections" class="console-menu-item" aria-label="巡检任务" title="巡检任务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 10l2 2 4-4M8 16h8" /></svg><span v-if="!menuCollapsed">巡检任务</span></RouterLink>
-        <RouterLink to="/inspections/records" class="console-menu-item" aria-label="巡检记录" title="巡检记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 7h8M8 12h8M8 17h5" /></svg><span v-if="!menuCollapsed">巡检记录</span></RouterLink>
+        <RouterLink to="/inspections/records" class="console-menu-item" :class="{ 'router-link-exact-active': route.name === 'inspection-record-detail' }" :aria-current="route.name === 'inspection-record-detail' ? 'location' : undefined" aria-label="巡检记录" title="巡检记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 7h8M8 12h8M8 17h5" /></svg><span v-if="!menuCollapsed">巡检记录</span></RouterLink>
       </nav>
       <button class="console-menu-label" type="button" :aria-expanded="settingsExpanded" aria-controls="settings-navigation" :aria-label="settingsExpanded ? '收起配置管理菜单' : '展开配置管理菜单'" title="配置管理" @click="settingsExpanded = !settingsExpanded">
         <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h4" /></svg>

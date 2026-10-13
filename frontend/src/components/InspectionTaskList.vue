@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElButton, ElLoading, ElMessageBox, ElPagination, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { deleteInspectionTask, getInspectionTask, listInspectionTasks } from '@/api/inspections'
 import InspectionCreateDialog from '@/components/InspectionCreateDialog.vue'
-import InspectionTaskDetail from '@/components/InspectionTaskDetail.vue'
+import InspectionRecordSummary from '@/components/InspectionRecordSummary.vue'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, runType, timeLabel } from '@/components/inspectionDisplay'
 import type { TaskDetail, TaskSummary } from '@/types/inspections'
@@ -56,7 +56,7 @@ async function loadList(poll = false) {
   if (!poll) listFailures = 0
   listLoading.value = true
   try {
-    const result = await listInspectionTasks(PAGE_SIZE, (page.value - 1) * PAGE_SIZE)
+    const result = await listInspectionTasks(PAGE_SIZE, (page.value - 1) * PAGE_SIZE, props.records === true)
     if (!active || current !== listRequest) return
     tasks.value = result.items
     total.value = result.total
@@ -79,7 +79,7 @@ async function loadDetail(id: string, poll = false) {
   const current = ++detailRequest
   const wasActive = detail.value !== null && isActiveRun(detail.value.status)
   if (!poll) detailFailures = 0
-  detailLoading.value = true
+  if (!poll) detailLoading.value = true
   try {
     const result = await getInspectionTask(id)
     if (!active || current !== detailRequest || selectedId.value !== id) return
@@ -112,7 +112,6 @@ function selectRecord(id: string) {
 }
 function changePage(next: number) {
   page.value = next
-  if (props.records) void router.replace({ path: '/inspections/records' })
   listLoaded.value = false
   void loadList()
 }
@@ -170,9 +169,14 @@ async function removeRecord(task: TaskSummary) {
     if (active && selectedId.value === task.id && !detailLoaded.value) void loadDetail(task.id)
   }
 }
-watch(() => route.query.task, (id) => {
+watch(() => route.query.task, (id, previous) => {
   if (!props.records) return
-  if (typeof id === 'string' && id) selectRecord(id)
+  if (typeof id === 'string' && id) {
+    clearTimeout(listTimer)
+    listRequest++
+    listLoading.value = false
+    selectRecord(id)
+  }
   else {
     clearTimeout(detailTimer)
     detailRequest++
@@ -180,9 +184,10 @@ watch(() => route.query.task, (id) => {
     detail.value = null
     detailLoaded.value = false
     detailLoading.value = false
+    if (previous) void loadList()
   }
 }, { immediate: true })
-onMounted(() => { void loadList() })
+onMounted(() => { if (!props.records || !selectedId.value) void loadList() })
 onUnmounted(() => {
   active = false
   listRequest++
@@ -193,14 +198,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-      <div v-if="records && selectedId" v-loading="detailLoading" class="host-section inspection-record-detail">
-        <InspectionTaskDetail v-if="detailLoaded && detail" :task="detail" />
+      <section v-if="records && selectedId" v-loading="detailLoading" class="host-section inspection-record-detail" aria-label="巡检记录概览">
+        <div class="section-header"><ElButton @click="router.push({ path: '/inspections/records' })">返回历史记录</ElButton></div>
+        <InspectionRecordSummary v-if="detailLoaded && detail" :task="detail" />
         <p v-else-if="!detailLoading" class="inspection-retry">详情未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
-      </div>
-      <section class="host-section" :aria-label="records ? '巡检记录列表' : '巡检任务列表'">
+      </section>
+      <section v-else class="host-section" :aria-label="records ? '巡检记录列表' : '巡检任务列表'">
         <div class="host-toolbar"><div><ElButton v-if="!records" type="primary" @click="creating = true">创建巡检</ElButton></div><ElButton :loading="listLoading" @click="loadList()">刷新</ElButton></div>
         <div v-loading="listLoading" class="host-table-wrap">
-          <ElTable v-if="listLoaded" :data="tasks" row-key="id" class="host-table" :empty-text="records ? '暂无巡检记录' : '暂无巡检任务'">
+           <ElTable v-if="listLoaded" :data="tasks" row-key="id" class="host-table" :empty-text="records ? '暂无历史记录' : '暂无巡检任务'">
             <ElTableColumn label="任务名称" min-width="210"><template #default="{ row }"><ElButton link type="primary" class="inspection-name" @click="selectTask(row.id)">{{ row.name }}</ElButton></template></ElTableColumn>
             <ElTableColumn label="执行状态" width="115"><template #default="{ row }"><ElTag :type="runType(row.status)" size="small">{{ runLabel(row.status) }}</ElTag></template></ElTableColumn>
             <ElTableColumn label="主机进度" width="160"><template #default="{ row }">{{ row.completed_hosts }} / {{ row.host_count }} 完成 · {{ row.failed_hosts }} 失败</template></ElTableColumn>
@@ -209,7 +215,7 @@ onUnmounted(() => {
             <ElTableColumn v-if="!records" label="操作" width="110" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="selectTask(row.id)">查看记录</ElButton></template></ElTableColumn>
             <ElTableColumn v-else label="操作" width="110" fixed="right"><template #default="{ row }"><span :title="isActiveRun(row.status) ? '执行中的记录不可删除' : undefined"><ElButton link type="danger" :loading="deletingId === row.id" :disabled="isActiveRun(row.status) || deletingId !== null" @click="removeRecord(row as TaskSummary)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
-          <p v-else-if="!listLoading" class="inspection-retry">任务列表未加载。<ElButton @click="loadList()">重试</ElButton></p>
+           <p v-else-if="!listLoading" class="inspection-retry">{{ records ? '历史记录' : '任务列表' }}未加载。<ElButton @click="loadList()">重试</ElButton></p>
         </div>
         <div v-if="listLoaded && total > PAGE_SIZE" class="inspection-pagination"><ElPagination :current-page="page" :page-size="PAGE_SIZE" :total="total" layout="total, prev, pager, next" @current-change="changePage" /></div>
       </section>

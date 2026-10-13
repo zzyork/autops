@@ -27,11 +27,13 @@ class Reply:
 def request(client: httpx.Client, protocol: str, base_url: str, model: str,
             api_key: str | None, messages: list[dict], tools: list[dict],
             on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
-            deadline: float | None = None) -> Reply:
+             deadline: float | None = None, max_tokens: int = 1024) -> Reply:
+    if type(max_tokens) is not int or not 1 <= max_tokens <= 8192:
+        raise ProviderError("模型输出限额无效")
     if protocol == "openai_compatible":
         url = base_url + "/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-        body = {"model": model, "messages": messages, "max_tokens": 1024, "stream": True}
+        body = {"model": model, "messages": messages, "max_tokens": max_tokens, "stream": True}
         if tools:
             body["tools"] = [{"type": "function", "function": item} for item in tools]
     else:
@@ -57,7 +59,7 @@ def request(client: httpx.Client, protocol: str, base_url: str, model: str,
                 converted.append({"role": "assistant", "content": content})
             else:
                 converted.append({"role": role, "content": message["content"]})
-        body = {"model": model, "max_tokens": 1024, "system": messages[0]["content"],
+        body = {"model": model, "max_tokens": max_tokens, "system": messages[0]["content"],
                 "messages": converted, "stream": True}
         if tools:
             body["tools"] = [{"name": item["name"], "description": item["description"],

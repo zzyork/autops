@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from ...dependencies import Database
 from ....repositories import inspections as repository
 from ....schemas.inspections import InspectionCatalog, InspectionConfig, InspectionConfigSave, InspectionInput, ReportResponse, TaskDetail, TaskPage, TaskSummary
+from ....schemas.inspection_analysis import AnalysisResponse
 from ....services.inspection_checks import CHECK_DEFINITIONS
 from ....services.inspection_reports import render_report
 from ....services.inspection_rules import load_rules, save_rules
@@ -32,9 +33,9 @@ def start_task(data: InspectionInput, request: Request, session: Database) -> Ta
 
 @router.get("/tasks", response_model=TaskPage)
 def list_tasks(request: Request, session: Database, limit: Annotated[int, Query(ge=1, le=50)] = 20,
-               offset: Annotated[int, Query(ge=0)] = 0) -> TaskPage:
+               offset: Annotated[int, Query(ge=0)] = 0, records_only: bool = False) -> TaskPage:
     request.app.state.inspections.ensure_available()
-    items, total = repository.page_tasks(session, limit, offset)
+    items, total = repository.page_tasks(session, limit, offset, records_only)
     return TaskPage(items=[TaskSummary.model_validate(item) for item in items], total=total)
 
 
@@ -55,6 +56,7 @@ def delete_task(task_id: UUID, request: Request, session: Database) -> Response:
         raise HTTPException(404, "巡检任务不存在")
     if result == "active":
         raise HTTPException(409, "巡检尚未结束")
+    request.app.state.inspection_analysis.cancel(str(task_id))
     return Response(status_code=204)
 
 
@@ -64,3 +66,17 @@ def report(task_id: UUID, request: Request, session: Database) -> ReportResponse
     if detail.status in ("queued", "running"):
         raise HTTPException(409, "巡检尚未结束")
     return ReportResponse(filename=f"inspection-{detail.id}.md", content=render_report(detail))
+
+
+@router.get("/tasks/{task_id}/analysis", response_model=AnalysisResponse)
+def read_analysis(task_id: UUID, request: Request, session: Database) -> AnalysisResponse:
+    request.app.state.inspections.ensure_available()
+    return request.app.state.inspection_analysis.read(session, str(task_id))
+
+
+@router.post("/tasks/{task_id}/analysis", response_model=AnalysisResponse, status_code=202)
+def generate_analysis(task_id: UUID, request: Request, session: Database) -> AnalysisResponse:
+    request.app.state.inspections.ensure_available()
+    request.app.state.inspection_analysis.start(str(task_id))
+    session.expire_all()
+    return request.app.state.inspection_analysis.read(session, str(task_id))

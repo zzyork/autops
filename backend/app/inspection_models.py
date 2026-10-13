@@ -62,3 +62,17 @@ class InspectionCheckRun(Base):
     error_code: Mapped[str | None]
     started_at: Mapped[datetime | None]
     finished_at: Mapped[datetime | None]
+
+
+class InspectionAIReport(Base):
+    __tablename__ = "inspection_ai_reports"
+
+    task_id: Mapped[str] = mapped_column(ForeignKey("inspection_tasks.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str]
+    generation_id: Mapped[str] = mapped_column(String(36))
+    model_name: Mapped[str | None]
+    model_version: Mapped[int | None]
+    started_at: Mapped[datetime | None]
+    finished_at: Mapped[datetime | None]
+    error_code: Mapped[str | None]
+    report: Mapped[dict | None] = mapped_column(JSON)

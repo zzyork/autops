@@ -24,9 +24,11 @@ MAX_PENDING_HOSTS = 64
 
 
 class InspectionManager:
-    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet):
+    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet,
+                 on_completed: Callable[[str], None] | None = None):
         self.sessions = sessions
         self.cipher = cipher
+        self.on_completed = on_completed
         self.lock = threading.Lock()
         self.stopping = threading.Event()
         self.active: set[int] = set()
@@ -74,7 +76,10 @@ class InspectionManager:
                             self.persistence_failed.set()
                             raise
                     session.expire_all()
-                    return repository.get_task(session, task_id)
+                    recovered = repository.get_task(session, task_id)
+                    if recovered.status in repository.TERMINAL and self.on_completed is not None:
+                        self.on_completed(task_id)
+                    return recovered
         return task
 
     def close(self) -> None:
@@ -164,7 +169,9 @@ class InspectionManager:
                 host.failure_code = failure_code or ("check_failed" if host.status != "completed" else None)
                 host.finished_at = utc_now()
                 save(session)
-                repository.summarize_task(session, task_id)
+                completed = repository.summarize_task(session, task_id)
+            if completed and self.on_completed is not None:
+                self.on_completed(task_id)
         except Exception as exc:
             # 落库失败后不继续接受任务或展示陈旧状态；恢复数据库并重启后标记未完成项中断。
             self.persistence_failed.set()

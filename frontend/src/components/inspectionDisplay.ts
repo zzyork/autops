@@ -1,6 +1,16 @@
-import type { CheckStatus, Conclusion, RunStatus } from '@/types/inspections'
+import type { CheckResponse, CheckStatus, Conclusion, RunStatus } from '@/types/inspections'
 
 export const isActiveRun = (status: RunStatus) => status === 'queued' || status === 'running'
+
+export function summarizeChecks(checks: CheckResponse[]) {
+  const findings = checks.flatMap((check) => check.payload.findings)
+  return {
+    completed: checks.filter((check) => check.status === 'completed').length,
+    critical: findings.filter((finding) => finding.severity === 'critical').length,
+    warning: findings.filter((finding) => finding.severity === 'warning').length,
+    incomplete: checks.filter((check) => check.status !== 'completed').length,
+  }
+}
 
 export function runLabel(status: RunStatus): string {
   return { queued: '排队中', running: '执行中', completed: '已完成', partial: '部分完成', failed: '执行失败', interrupted: '已中断' }[status]

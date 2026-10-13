@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { getInspectionReport } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
-import { checkLabel, conclusionLabel, conclusionType, isActiveRun, runLabel, runType, timeLabel } from '@/components/inspectionDisplay'
+import { checkLabel, conclusionLabel, conclusionType, isActiveRun, runLabel, runType, summarizeChecks, timeLabel } from '@/components/inspectionDisplay'
 import type { CheckResponse, TaskDetail } from '@/types/inspections'
 
 const props = defineProps<{ task: TaskDetail }>()
@@ -11,15 +11,7 @@ const hostId = ref<string | null>(null)
 const exporting = ref(false)
 const selectedHost = computed(() => props.task.hosts.find((host) => host.id === hostId.value) ?? null)
 const expandedChecks = ref<string[]>([])
-const hostSummary = computed(() => {
-  const checks = selectedHost.value?.checks ?? []
-  return {
-    completed: checks.filter((check) => check.status === 'completed').length,
-    critical: checks.flatMap((check) => check.payload.findings).filter((finding) => finding.severity === 'critical').length,
-    warning: checks.flatMap((check) => check.payload.findings).filter((finding) => finding.severity === 'warning').length,
-    incomplete: checks.filter((check) => check.status !== 'completed').length,
-  }
-})
+const hostSummary = computed(() => summarizeChecks(selectedHost.value?.checks ?? []))
 let session = 0
 watch(() => props.task.id, () => {
   session++

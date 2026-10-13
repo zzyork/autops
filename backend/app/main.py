@@ -14,6 +14,7 @@ from .schemas.health import HealthResponse
 from .services.ssh_connections import ConnectionTestManager
 from .services.inspection_tasks import InspectionManager
 from .services.ai_chat import ChatManager
+from .services.inspection_analysis import InspectionAnalysisManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -27,23 +28,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         manager = None
         inspections = None
         ai = None
+        analysis = None
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
-            inspections = await run_in_threadpool(InspectionManager, sessions, cipher)
+            analysis = await run_in_threadpool(InspectionAnalysisManager, sessions, cipher)
+            application.state.inspection_analysis = analysis
+            inspections = await run_in_threadpool(InspectionManager, sessions, cipher, analysis.automatic)
             application.state.inspections = inspections
             ai = await run_in_threadpool(ChatManager, sessions, cipher)
             application.state.ai = ai
             yield
         finally:
+            if analysis is not None:
+                analysis.stop_accepting()
             try:
                 try:
                     try:
                         if ai is not None:
                             await run_in_threadpool(ai.close)
                     finally:
-                        if inspections is not None:
-                            await run_in_threadpool(inspections.close)
+                        try:
+                            if inspections is not None:
+                                await run_in_threadpool(inspections.close)
+                        finally:
+                            if analysis is not None:
+                                await run_in_threadpool(analysis.close)
                 finally:
                     if manager is not None:
                         await run_in_threadpool(manager.close)

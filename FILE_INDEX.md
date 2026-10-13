@@ -60,6 +60,7 @@
 | `docs/ssh-connections.md` | 单台与批量 SSH 身份策略、首次自动信任边界、结果与接口说明。最后同步：2026-10-13。 |
 | `docs/ai-chat.md` | 自选模型、对话巡检、流式协议、数据与执行边界说明。最后同步：2026-10-12。 |
 | `docs/plans/2026-10-12-conversational-ops.md` | 已授权的对话式运维设计、接口契约与实施验收方案。最后同步：2026-10-12。 |
+| `docs/plans/2026-10-13-inspection-ai-report.md` | 已确认并实施的巡检 AI 汇报开源方案检索、全量分析、持久化设计、历史点击流程、接口和验证计划。最后同步：2026-10-13。 |
 
 ## 后端文件
 
@@ -71,15 +72,15 @@
 | `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接依赖。最后同步：2026-10-12。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
 | `backend/app/__init__.py` | 声明后端应用包。 |
-| `backend/app/main.py` | FastAPI 入口及连接测试、巡检和 AI HTTP 客户端生命周期管理。最后同步：2026-10-12。 |
+| `backend/app/main.py` | FastAPI 入口及连接测试、巡检、AI 对话和巡检报告执行器生命周期管理。最后同步：2026-10-13。 |
 | `backend/app/connection_models.py` | 连接测试策略、新增信任历史与服务器主机密钥信任数据库模型。最后同步：2026-10-13。 |
-| `backend/app/inspection_models.py` | 巡检任务、主机执行和检查结果的数据库模型。最后同步：2026-10-12。 |
+| `backend/app/inspection_models.py` | 巡检任务、主机执行、检查结果及独立 AI 报告数据库模型。最后同步：2026-10-13。 |
 | `backend/app/models.py` | 主机、分组、跳板机与 SSH 密钥数据库模型。最后同步：2026-10-10。 |
 | `backend/app/ai_models.py` | 模型连接、会话、消息、批次工具历史与待确认巡检计划模型。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/ai.py` | AI 表及批次历史、执行中状态的幂等迁移。最后同步：2026-10-12。 |
 | `backend/app/schemas/ai.py` | 模型配置、会话消息、计划与决策接口校验。最后同步：2026-10-12。 |
 | `backend/app/repositories/ai.py` | 模型连接、会话、消息、工具历史、计划持久化与中断标记。最后同步：2026-10-12。 |
-| `backend/app/services/ai_provider.py` | OpenAI 兼容及 Anthropic 流式协议适配、有限输出和终止验证。最后同步：2026-10-12。 |
+| `backend/app/services/ai_provider.py` | OpenAI 兼容及 Anthropic 流式协议适配、可校验输出限额和正常终止验证。最后同步：2026-10-13。 |
 | `backend/app/services/ai_chat.py` | LangGraph 对话编排、能力验证、资产与巡检工具、会话互斥。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/ai.py` | 模型连接、会话、SSE 回复及巡检计划确认接口。最后同步：2026-10-12。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
@@ -87,7 +88,7 @@
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
 | `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试、巡检和 AI 接口。最后同步：2026-10-12。 |
 | `backend/app/api/v1/endpoints/ssh_connections.py` | SSH 连接测试提交、查询与主机密钥确认接口。最后同步：2026-10-12。 |
-| `backend/app/api/v1/endpoints/inspections.py` | 巡检目录读取/保存、任务创建/查询/删除与 Markdown 报告 JSON 接口。最后同步：2026-10-12。 |
+| `backend/app/api/v1/endpoints/inspections.py` | 巡检规则、任务创建/历史分页/详情/删除、原始 Markdown 报告及 AI 报告读取/生成接口。最后同步：2026-10-13。 |
 | `backend/app/api/v1/endpoints/__init__.py` | 声明接口端点包。 |
 | `backend/app/api/v1/endpoints/health.py` | 提供 v1 健康检查接口。 |
 | `backend/app/api/v1/endpoints/hosts.py` | 主机管理及跳板机关联接口。最后同步：2026-10-10。 |
@@ -103,7 +104,7 @@
 | `backend/app/core/ssh_network.py` | DNS 与 TCP 建连、整体超时及网络资源清理。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/__init__.py` | 声明数据库迁移包。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/ssh_connections.py` | 幂等创建连接与信任表，为历史记录补齐错误文本、身份策略与新增信任字段。最后同步：2026-10-13。 |
-| `backend/app/core/migrations/inspections.py` | 幂等创建巡检任务、主机执行及检查结果表。最后同步：2026-10-12。 |
+| `backend/app/core/migrations/inspections.py` | 幂等创建巡检任务、主机执行、检查结果和 AI 报告表。最后同步：2026-10-13。 |
 | `backend/app/repositories/__init__.py` | 声明仓储包。最后同步：2026-10-12。 |
 | `backend/app/repositories/ssh_connections.py` | SSH 资产、密钥、信任与测试历史查询及重启状态更新。最后同步：2026-10-12。 |
 | `backend/app/repositories/inspections.py` | 巡检任务与执行记录持久化、分页、终态删除、状态汇总和中断恢复。最后同步：2026-10-12。 |
@@ -113,6 +114,11 @@
 | `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_rules.py` | 从数据目录读取巡检规则，并以临时文件和原子替换保存生效配置。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容。最后同步：2026-10-12。 |
+| `backend/app/schemas/inspection_analysis.py` | AI 报告状态、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
+| `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成和按任务取消。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_input.py` | 从巡检原始快照提取全量发现、日志、检查和主机证据，保留结果序号并完整分批。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_engine.py` | 复用模型 provider 分批分析、证据覆盖校验、分层汇总并生成结构化报告。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
@@ -148,7 +154,7 @@
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/api/ssh_connections.ts` | SSH 连接测试提交、历史、状态与信任接口调用。最后同步：2026-10-12。 |
-| `frontend/src/api/inspections.ts` | 巡检目录读取/保存、任务创建/分页/详情/删除和报告接口调用。最后同步：2026-10-12。 |
+| `frontend/src/api/inspections.ts` | 巡检规则、任务创建/历史分页/详情/删除、原始报告及 AI 汇报读取/生成接口调用。最后同步：2026-10-13。 |
 | `frontend/src/api/ai.ts` | AI 配置、会话、流事件校验和计划决策接口调用。最后同步：2026-10-12。 |
 | `frontend/src/types/ai.ts` | 模型能力、会话消息状态及巡检计划类型。最后同步：2026-10-12。 |
 | `frontend/src/components/ChatProposalCard.vue` | 显示计划执行范围，发出确认或拒绝事件。最后同步：2026-10-12。 |
@@ -183,6 +189,9 @@
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |
 | `frontend/src/views/InspectionsView.vue` | 独立巡检任务页面，提供创建、任务进度与记录跳转。最后同步：2026-10-12。 |
-| `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录页面，承载执行详情、终态记录删除与报告导出。最后同步：2026-10-12。 |
+| `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录入口，默认历史列表，选择记录后展示任务概览、AI 汇报和主机详情入口。最后同步：2026-10-13。 |
+| `frontend/src/views/InspectionRecordDetailView.vue` | 独立服务器巡检记录详情页面，通过任务路由参数读取、轮询并复用主机检查详情与报告导出；提供返回记录入口。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionRecordSummary.vue` | 巡检记录概览，接收任务详情，展示全任务严重/警告统计及详情跳转，复用状态与时间显示映射。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisReport.vue` | 接收任务 ID 与状态，经巡检 API 层生成、读取及轮询 AI 报告，展示问题、未完成检查和折叠证据，区分本轮状态与旧成功报告并导出文本；可复用于记录汇报展示。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，展示检查项、当前阈值、时限与服务判定，并编辑保存规则。最后同步：2026-10-12。 |
-| `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表，复用创建入口、记录选择、终态记录确认删除和活跃执行轮询。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表；历史页默认终态分页列表，点击后仅显示记录概览与 AI 汇报，支持返回列表、删除和活跃执行轮询。最后同步：2026-10-13。 |

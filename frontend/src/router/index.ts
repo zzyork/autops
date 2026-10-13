@@ -16,6 +16,7 @@ export default createRouter({
     { path: '/assets/groups', name: 'host-groups', component: () => import('@/views/HostGroupsView.vue') },
     { path: '/inspections', name: 'inspections', component: () => import('@/views/InspectionsView.vue') },
     { path: '/inspections/records', name: 'inspection-records', component: () => import('@/views/InspectionRecordsView.vue') },
+    { path: '/inspections/records/:taskId', name: 'inspection-record-detail', component: () => import('@/views/InspectionRecordDetailView.vue') },
     { path: '/inspections/rules', redirect: '/settings/inspection-rules' },
     { path: '/:pathMatch(.*)*', redirect: '/ai/chat' },
   ],

@@ -63,11 +63,16 @@ def interrupt_unsubmitted(session: Session, task_id: str, run_ids: list[str]) ->
     summarize_task(session, task_id)
 
 
-def page_tasks(session: Session, limit: int, offset: int) -> tuple[list[InspectionTask], int]:
+def page_tasks(session: Session, limit: int, offset: int, records_only: bool = False) -> tuple[list[InspectionTask], int]:
     # 列表只读取任务摘要，不将所有检查结果随分页重复加载。
-    query = select(InspectionTask).options(noload(InspectionTask.hosts)).order_by(
+    query = select(InspectionTask).options(noload(InspectionTask.hosts))
+    count_query = select(func.count()).select_from(InspectionTask)
+    if records_only:
+        query = query.where(InspectionTask.status.in_(TERMINAL))
+        count_query = count_query.where(InspectionTask.status.in_(TERMINAL))
+    query = query.order_by(
         InspectionTask.created_at.desc(), InspectionTask.id.desc()).limit(limit).offset(offset)
-    total = session.scalar(select(func.count()).select_from(InspectionTask))
+    total = session.scalar(count_query)
     return list(session.scalars(query)), total
 
 
@@ -91,13 +96,14 @@ def delete_task(session: Session, task_id: str) -> Literal["missing", "active", 
         raise
 
 
-def summarize_task(session: Session, task_id: str) -> None:
+def summarize_task(session: Session, task_id: str) -> bool:
     session.rollback()
     # 各主机并发结束时串行汇总，避免较旧统计覆盖最新结果。
     session.execute(text("BEGIN IMMEDIATE"))
     task = session.get(InspectionTask, task_id, options=[selectinload(InspectionTask.hosts)])
     if task is None:
         raise ValueError("巡检任务不存在")
+    was_active = task.status in ACTIVE
     statuses = [host.status for host in task.hosts]
     task.completed_hosts = sum(status in TERMINAL for status in statuses)
     task.failed_hosts = sum(status in ("partial", "failed", "interrupted") for status in statuses)
@@ -117,7 +123,9 @@ def summarize_task(session: Session, task_id: str) -> None:
             task.started_at = min(starts)
     if task.status in TERMINAL:
         task.finished_at = utc_now()
+    became_terminal = was_active and task.status in TERMINAL
     session.commit()
+    return became_terminal
 
 
 def interrupt_unfinished(session: Session) -> None:

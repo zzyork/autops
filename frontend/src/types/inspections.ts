@@ -82,3 +82,54 @@ export interface TaskPage { items: TaskSummary[]; total: number }
 export interface CheckDefinition { id: CheckId; title: string; description: string }
 export interface InspectionCatalog { checks: CheckDefinition[]; defaults: InspectionConfig }
 export interface ReportResponse { filename: string; content: string }
+
+export type AnalysisStatus = 'not_generated' | 'unavailable' | 'queued' | 'running' | 'completed' | 'failed' | 'interrupted'
+export type AnalysisSeverity = 'critical' | 'warning' | 'info'
+export interface AnalysisIssue {
+  title: string
+  severity: AnalysisSeverity
+  analysis: string
+  recommendation: string
+  evidence_ids: string[]
+}
+export interface AnalysisEvidence {
+  id: string
+  kind: 'host' | 'check' | 'finding' | 'log'
+  host_name: string
+  address: string
+  check_title: string
+  source: string
+  content: string
+  severity: AnalysisSeverity
+  incomplete: boolean
+  limited: boolean
+}
+export interface AnalysisReport {
+  task_name: string
+  task_status: RunStatus
+  inspection_started_at: string | null
+  inspection_finished_at: string | null
+  check_ids: CheckId[]
+  summary: string
+  issues: AnalysisIssue[]
+  evidence: AnalysisEvidence[]
+  host_count: number
+  finding_count: number
+  log_count: number
+  incomplete_count: number
+  unassessed_count: number
+  generated_at: string
+  model_name: string
+  model_version: number
+}
+export interface AnalysisResponse {
+  task_id: string
+  status: AnalysisStatus
+  model_name: string | null
+  model_version: number | null
+  started_at: string | null
+  finished_at: string | null
+  error_code: string | null
+  report: AnalysisReport | null
+  can_generate: boolean
+}

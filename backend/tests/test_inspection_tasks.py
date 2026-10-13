@@ -1,14 +1,18 @@
 """Local, isolated API and persistence checks for the first inspection batch."""
 
 import importlib
+import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Lock, current_thread
 from types import SimpleNamespace
 from collections.abc import Iterator
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
@@ -17,12 +21,16 @@ from backend.app.core import config as app_config
 from backend.app.core.ssh import HostKeyRequired, SSHConnectionError
 from backend.app.core.ssh_commands import CommandExecutionError
 from backend.app.core.storage import initialize_storage
-from backend.app.inspection_models import InspectionCheckRun, InspectionHostRun, InspectionTask
+from backend.app.ai_models import AIConnection
+from backend.app.inspection_models import InspectionAIReport, InspectionCheckRun, InspectionHostRun, InspectionTask
 from backend.app.models import Host, SSHKey
 from backend.app.repositories import inspections as repository
 from backend.app.schemas.inspections import CheckPayload, Finding, InspectionConfig, InspectionInput, Metric, ResultTable
 from backend.app.services import inspection_tasks
 from backend.app.services import inspection_rules
+from backend.app.services import inspection_analysis_engine as analysis_engine
+from backend.app.services.inspection_analysis import InspectionAnalysisManager
+from backend.app.services.ai_provider import ProviderError, Reply, request as provider_request
 from backend.app.services.inspection_checks import InspectionCheckError
 
 ROOT = "/api/v1/inspections"
@@ -821,3 +829,468 @@ def test_existing_asset_database_gains_inspection_tables_without_data_loss(tmp_p
         assert inspect(engine).has_table("inspection_tasks")
     finally:
         engine.dispose()
+
+
+def enable_analysis(client: TestClient, *, tool_status: str = "failed") -> None:
+    with client.app.state.sessions() as session:
+        session.add(AIConnection(name="local model", protocol="openai_compatible", base_url="https://example.invalid/v1",
+                                 model="offline", is_default=True, chat_status="passed", tool_status=tool_status))
+        session.commit()
+
+
+def mock_analysis(monkeypatch: pytest.MonkeyPatch, responder=None) -> list[list[dict]]:
+    observed: list[list[dict]] = []
+
+    def request(_client, _protocol, _url, _model, _key, messages, tools, **kwargs):
+        assert tools == [] and kwargs["max_tokens"] == 8192
+        content = json.loads(messages[1]["content"])
+        if isinstance(content, dict) or (content and isinstance(content[0], str)):
+            return Reply(json.dumps({"summary": "consolidated"}), [])
+        observed.append(content)
+        if responder is not None:
+            return responder(content)
+        issues = [{"title": "observed risk", "severity": item["severity"] if item["kind"] != "log" else "warning",
+                   "analysis": "observed evidence", "recommendation": "investigate",
+                   "evidence_ids": [item["id"]]} for item in content
+                  if item["kind"] in ("finding", "log") or item["severity"] != "info" or item["incomplete"] or item["limited"]]
+        return Reply(json.dumps({"summary": "batch", "covered_ids": [item["id"] for item in content],
+                                 "issues": issues}), [])
+
+    monkeypatch.setattr(analysis_engine, "request", request)
+    return observed
+
+
+def wait_analysis(client: TestClient, task_id: str, status: str) -> dict:
+    url = f"{ROOT}/tasks/{task_id}/analysis"
+    until = time.monotonic() + 8
+    while time.monotonic() < until:
+        response = client.get(url)
+        assert response.status_code == 200, response.text
+        if response.json()["status"] == status:
+            return response.json()
+        time.sleep(0.02)
+    pytest.fail(f"analysis {task_id} did not reach {status}: {response.json()}")
+
+
+def historical_task(client: TestClient, hosts: list[dict], checks: list[str] | None = None) -> str:
+    checks = checks or ["server_info"]
+    with client.app.state.sessions() as session:
+        task = repository.create_task(session, InspectionInput(name="historical", hosts=[
+            {"id": host["id"], "version": host["version"]} for host in hosts], checks=checks), [
+                {"host_id": host["id"], "host_name": host["name"], "address": host["address"], "port": 22,
+                 "username": host["username"], "group_name": "production", "asset_snapshot": "offline"}
+                for host in hosts], InspectionConfig())
+        task.status = "completed"
+        for run in task.hosts:
+            run.status = "completed"
+            for check in run.checks:
+                check.status = "completed"
+        task.completed_hosts = len(hosts)
+        task.finished_at = datetime.now(timezone.utc)
+        task_id = task.id
+        session.commit()
+    return task_id
+
+
+def test_analysis_automatic_after_all_hosts_finish_once(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    enable_analysis(client)
+    batches = mock_analysis(monkeypatch)
+    first = add_host(client)
+    second = add_host(client, 2, group_id=first["group_id"])
+    entered, release = Event(), Event()
+    fake_connection(monkeypatch, lambda target: (entered.set(), release.wait(5)) if target.address == second["address"] else None)
+    monkeypatch.setattr(inspection_tasks, "collect", lambda *_: CheckPayload(
+        conclusion="critical", findings=[Finding(severity="critical", message="CPU high")]))
+    manager = client.app.state.inspections
+    submissions = []
+    original = manager.on_completed
+
+    def completed(task_id):
+        submissions.append(task_id)
+        original(task_id)
+
+    manager.on_completed = completed
+    task = submit(client, [first, second], ["system_resources"])
+    url = f"{ROOT}/tasks/{task['id']}/analysis"
+    try:
+        assert entered.wait(3)
+        assert client.get(url).json()["status"] == "not_generated"
+        assert client.post(url).status_code == 409
+    finally:
+        release.set()
+    assert wait_for(client, task["id"])["status"] == "completed"
+    result = wait_analysis(client, task["id"], "completed")
+    assert submissions == [task["id"]]
+    assert result["model_name"] == "local model / offline"
+    assert result["report"]["host_count"] == result["report"]["finding_count"] == 2
+    assert {item["host_name"] for item in result["report"]["evidence"]} == {first["name"], second["name"]}
+    assert len(batches) >= 1
+    assert result["report"]["generated_at"].endswith("Z")
+
+
+def test_analysis_historical_manual_unavailable_and_failed_regeneration(client: TestClient,
+                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_analysis(monkeypatch)
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    url = f"{ROOT}/tasks/{task_id}/analysis"
+    assert client.get(url).json() == {"task_id": task_id, "status": "not_generated", "model_name": None,
+                                      "model_version": None, "started_at": None, "finished_at": None,
+                                      "error_code": None, "report": None, "can_generate": False}
+    assert client.post(url).status_code == 409
+    assert wait_analysis(client, task_id, "unavailable")["error_code"] == "model_unavailable"
+    enable_analysis(client)  # A failed tool test does not prevent text-only reports.
+    assert client.get(url).json()["can_generate"] is True
+    assert client.post(url).status_code == 202
+    previous = wait_analysis(client, task_id, "completed")["report"]
+    assert previous["summary"] == "consolidated" and previous["model_version"] == 1
+
+    monkeypatch.setattr(analysis_engine, "request", lambda *args, **kwargs: Reply("not json", []))
+    assert client.post(url).status_code == 202
+    failed = wait_analysis(client, task_id, "failed")
+    assert failed["error_code"] == "analysis_failed"
+    assert failed["report"] == previous
+    assert failed["can_generate"] is True
+
+
+def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestClient,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    first = add_host(client)
+    hosts = [first] + [add_host(client, i, group_id=first["group_id"]) for i in range(2, 33)]
+    task_id = historical_task(client, hosts, ["system_resources", "log_error"])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        for run in task.hosts:
+            run.checks[0].conclusion = "critical"
+            run.checks[0].payload = CheckPayload(conclusion="critical", findings=[
+                Finding(severity="critical", message=f"critical {run.host_name}"),
+                Finding(severity="warning", message=f"warning {run.host_name}")]).model_dump(mode="json")
+        task.hosts[0].checks[1].payload = CheckPayload(tables=[ResultTable(
+            name="journal", columns=["状态", "日志"], rows=[
+                ["匹配", f"unique-log-{i:03d}"] for i in range(200)])]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    batches = mock_analysis(monkeypatch)
+    response = client.post(f"{ROOT}/tasks/{task_id}/analysis")
+    assert response.status_code == 202, response.text
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert (report["host_count"], report["finding_count"], report["log_count"]) == (32, 64, 200)
+    evidence = report["evidence"]
+    assert len(batches) > 1 and all(len(batch) <= 40 for batch in batches)
+    assert [item["id"] for batch in batches for item in batch] == [item["id"] for item in evidence]
+    assert {item["content"] for item in evidence if item["kind"] == "finding"} == {
+        f"{severity} {host['name']}" for host in hosts for severity in ("critical", "warning")}
+    logs = [item for item in evidence if item["kind"] == "log"]
+    assert len(logs) == 200
+    assert all(f"unique-log-{i:03d}" in logs[i]["content"] for i in range(200))
+    assert {item["source"] for item in logs} == {f"journal · 结果序号 {i}" for i in range(1, 201)}
+    assert {evidence_id for issue in report["issues"] for evidence_id in issue["evidence_ids"]} >= {
+        item["id"] for item in evidence if item["kind"] in ("finding", "log")}
+    assert report["summary"] == "consolidated"
+
+
+@pytest.mark.parametrize("invalid", ["missing_covered_ids", "incomplete_coverage", "unknown_reference", "downgrade"])
+def test_analysis_rejects_invalid_model_evidence(client: TestClient, monkeypatch: pytest.MonkeyPatch,
+                                                 invalid: str) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "critical"
+        check.payload = CheckPayload(conclusion="critical", findings=[
+            Finding(severity="critical", message="disk full")]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+
+    def bad_reply(batch):
+        finding = next(item for item in batch if item["kind"] == "finding")
+        result = {"summary": "invalid", "issues": [{
+            "title": "risk", "severity": "info" if invalid == "downgrade" else "critical",
+            "analysis": "observed", "recommendation": "investigate",
+            "evidence_ids": ["E9999"] if invalid == "unknown_reference" else [finding["id"]]}]}
+        if invalid != "missing_covered_ids":
+            result["covered_ids"] = ([finding["id"]] if invalid == "incomplete_coverage"
+                                     else [item["id"] for item in batch])
+        return Reply(json.dumps(result), [])
+
+    mock_analysis(monkeypatch, bad_reply)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    failed = wait_analysis(client, task_id, "failed")
+    assert failed["report"] is None and failed["error_code"] == "analysis_failed"
+
+
+def test_analysis_missing_invalid_and_active_task(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    enable_analysis(client)
+    mock_analysis(monkeypatch)
+    host = add_host(client)
+    entered, release = Event(), Event()
+    fake_connection(monkeypatch, lambda _target: (entered.set(), release.wait(5)))
+    task = submit(client, [host], ["server_info"])
+    try:
+        assert entered.wait(3)
+        url = f"{ROOT}/tasks/{task['id']}/analysis"
+        assert client.get(url).json()["can_generate"] is False
+        assert client.post(url).status_code == 409
+        assert client.post(f"{ROOT}/tasks/00000000-0000-0000-0000-000000000001/analysis").status_code == 404
+        assert client.get(f"{ROOT}/tasks/00000000-0000-0000-0000-000000000001/analysis").status_code == 404
+        for method in (client.get, client.post):
+            assert method(f"{ROOT}/tasks/not-a-uuid/analysis").status_code == 422
+    finally:
+        release.set()
+
+
+def test_analysis_duplicate_claim_and_delete_during_generation(client: TestClient,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    enable_analysis(client)
+    entered, release = Event(), Event()
+    batches = mock_analysis(monkeypatch)
+    original = analysis_engine.request
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(analysis_engine, "request", blocked)
+    url = f"{ROOT}/tasks/{task_id}"
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(client.post, f"{url}/analysis")
+            assert entered.wait(3)
+            duplicate = pool.submit(client.post, f"{url}/analysis")
+            assert first.result().status_code == 202
+            assert duplicate.result().status_code == 409
+        assert client.get(f"{url}/analysis").json()["can_generate"] is False
+        with client.app.state.sessions() as session:
+            assert session.get(InspectionAIReport, task_id).status == "running"
+        assert client.delete(url).status_code == 204
+    finally:
+        release.set()
+    until = time.monotonic() + 5
+    while client.app.state.inspection_analysis.pending and time.monotonic() < until:
+        time.sleep(0.02)
+    assert client.app.state.inspection_analysis.pending == 0
+    assert len(batches) == 1
+    with client.app.state.sessions() as session:
+        assert session.get(InspectionAIReport, task_id) is None
+        assert session.get(InspectionTask, task_id) is None
+    assert client.get(f"{url}/analysis").status_code == 404
+
+
+def test_analysis_restart_marks_queued_and_running_interrupted(client: TestClient) -> None:
+    host = add_host(client)
+    tasks = [historical_task(client, [host]) for _ in range(2)]
+    with client.app.state.sessions() as session:
+        session.add_all([InspectionAIReport(task_id=task_id, status=status, generation_id=f"batch-{index}")
+                         for index, (task_id, status) in enumerate(zip(tasks, ("queued", "running")))])
+        session.commit()
+    restarted = InspectionAnalysisManager(client.app.state.sessions, client.app.state.cipher)
+    try:
+        for task_id in tasks:
+            result = client.get(f"{ROOT}/tasks/{task_id}/analysis").json()
+            assert result["status"] == result["error_code"] == "interrupted"
+            assert datetime.fromisoformat(result["finished_at"].replace("Z", "+00:00")).tzinfo is not None
+            assert result["report"] is None
+    finally:
+        restarted.close()
+
+
+def test_records_only_filters_terminal_before_count_and_paging(client: TestClient) -> None:
+    host = add_host(client)
+    tasks = [historical_task(client, [host]) for _ in range(6)]
+    statuses = ("queued", "completed", "running", "partial", "failed", "interrupted")
+    with client.app.state.sessions() as session:
+        for index, (task_id, status) in enumerate(zip(tasks, statuses)):
+            task = repository.get_task(session, task_id)
+            task.status = status
+            task.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc).replace(day=index + 1)
+        session.commit()
+    response = client.get(f"{ROOT}/tasks", params={"records_only": "true", "limit": 2, "offset": 1})
+    assert response.status_code == 200
+    assert response.json()["total"] == 4
+    assert [item["id"] for item in response.json()["items"]] == [tasks[4], tasks[3]]
+    assert client.get(f"{ROOT}/tasks", params={"records_only": "true", "limit": 2, "offset": 4}).json() == {
+        "items": [], "total": 4}
+    assert client.get(f"{ROOT}/tasks", params={"records_only": "false"}).json()["total"] == 6
+
+
+def test_analysis_incomplete_checks_cannot_be_omitted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        task.status = task.hosts[0].status = "failed"
+        task.hosts[0].checks[0].status = "skipped"
+        session.commit()
+    enable_analysis(client)
+    mock_analysis(monkeypatch, lambda batch: Reply(json.dumps({
+        "summary": "healthy", "covered_ids": [item["id"] for item in batch], "issues": []}), []))
+    url = f"{ROOT}/tasks/{task_id}/analysis"
+    assert client.post(url).status_code == 202
+    assert wait_analysis(client, task_id, "failed")["report"] is None
+    mock_analysis(monkeypatch)
+    assert client.post(url).status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert report["incomplete_count"] == 1 and report["task_status"] == "failed"
+    assert report["inspection_finished_at"].endswith("Z")
+    required = {item["id"] for item in report["evidence"] if item["incomplete"]}
+    assert required <= {ref for issue in report["issues"] for ref in issue["evidence_ids"]}
+
+
+def test_analysis_delete_cancels_before_next_batch(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host], ["log_error"])
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                       rows=[["匹配", f"error {index}"] for index in range(100)])]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch)
+    original = analysis_engine.request
+    entered, release = Event(), Event()
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(analysis_engine, "request", blocked)
+    url = f"{ROOT}/tasks/{task_id}"
+    try:
+        assert client.post(f"{url}/analysis").status_code == 202
+        assert entered.wait(3)
+        cancel = client.app.state.inspection_analysis.cancellations[task_id]
+        assert client.delete(url).status_code == 204
+        assert cancel.is_set()
+    finally:
+        release.set()
+    until = time.monotonic() + 5
+    while client.app.state.inspection_analysis.pending and time.monotonic() < until:
+        time.sleep(0.02)
+    assert len(observed) == 1  # 已发出的请求无法追回，后续批次必须停止。
+    assert client.app.state.inspection_analysis.pending == 0
+
+
+def test_analysis_queue_and_persistence_failures_are_separate_from_inspection(client: TestClient) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    enable_analysis(client)
+    manager = client.app.state.inspection_analysis
+    manager.pending = 8
+    url = f"{ROOT}/tasks/{task_id}"
+    try:
+        assert client.post(f"{url}/analysis").status_code == 503
+        response = client.get(f"{url}/analysis").json()
+        assert response["status"] == "failed" and response["error_code"] == "queue_full"
+        assert response["can_generate"] is False and response["report"] is None
+        assert client.get(url).json()["status"] == "completed"
+    finally:
+        manager.pending = 0
+    manager.persistence_failed.set()
+    try:
+        assert client.get(f"{url}/analysis").status_code == 503
+        assert client.post(f"{url}/analysis").status_code == 503
+        assert client.get(url).status_code == 200
+        assert client.get(f"{ROOT}/tasks").status_code == 200
+    finally:
+        manager.persistence_failed.clear()
+
+
+@pytest.mark.parametrize("protocol", ["openai_compatible", "anthropic"])
+def test_analysis_provider_output_budget_and_truncated_response(protocol: str) -> None:
+    observed = []
+
+    def transport(req):
+        observed.append(json.loads(req.content)["max_tokens"])
+        if protocol == "openai_compatible":
+            body = 'data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+        else:
+            body = ('event: content_block_start\ndata: {"index":0,"content_block":{"type":"text","text":"done"}}\n\n'
+                    'event: message_delta\ndata: {"delta":{"stop_reason":"end_turn"}}\n\n'
+                    'event: message_stop\ndata: {}\n\n')
+        return httpx.Response(200, text=body)
+
+    messages = [{"role": "system", "content": "policy"}, {"role": "user", "content": "analyze"}]
+    with httpx.Client(transport=httpx.MockTransport(transport)) as model_client:
+        for budget in (1024, 8192):
+            assert provider_request(model_client, protocol, "https://example.invalid/v1", "m", None,
+                                    messages, [], max_tokens=budget).text == "done"
+        with pytest.raises(ProviderError):
+            provider_request(model_client, protocol, "https://example.invalid/v1", "m", None, messages, [], max_tokens=8193)
+    assert observed == [1024, 8192]
+    truncated = ('data: {"choices":[{"delta":{"content":"partial"},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n'
+                 if protocol == "openai_compatible" else
+                 'event: message_delta\ndata: {"delta":{"stop_reason":"max_tokens"}}\n\nevent: message_stop\ndata: {}\n\n')
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, text=truncated))) as model_client:
+        with pytest.raises(ProviderError, match="模型响应未完成"):
+            provider_request(model_client, protocol, "https://example.invalid/v1", "m", None, messages, [], max_tokens=8192)
+
+
+def test_analysis_not_applicable_requires_report_scope_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host], ["log_error"])
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "not_applicable"
+        session.commit()
+    enable_analysis(client)
+    mock_analysis(monkeypatch, lambda batch: Reply(json.dumps({
+        "summary": "healthy", "covered_ids": [item["id"] for item in batch], "issues": []}), []))
+    url = f"{ROOT}/tasks/{task_id}/analysis"
+    assert client.post(url).status_code == 202
+    assert wait_analysis(client, task_id, "failed")["report"] is None
+    mock_analysis(monkeypatch)
+    assert client.post(url).status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert report["incomplete_count"] == 0 and report["unassessed_count"] == 1
+    assert any(item["limited"] for item in report["evidence"])
+
+
+def test_analysis_nonshrinking_summaries_fail_without_repeated_calls(client: TestClient,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.app.services.inspection_analysis_input import build_input
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    with client.app.state.sessions() as session:
+        task = repository.get_task(session, task_id)
+        task.hosts[0].checks[0].conclusion = "normal"
+        data = build_input(task)
+    monkeypatch.setattr(analysis_engine, "batches", lambda evidence: [[item] for item in evidence])
+    monkeypatch.setattr(analysis_engine, "MAX_BATCH_CHARACTERS", 20)
+    calls = []
+
+    def reply(*args, **kwargs):
+        content = json.loads(args[5][1]["content"])
+        calls.append(content)
+        return Reply(json.dumps({"summary": "long-summary-that-will-not-shrink", "issues": [],
+                                 "covered_ids": [item["id"] for item in content]}), [])
+
+    monkeypatch.setattr(analysis_engine, "request", reply)
+    snapshot = analysis_engine.ModelSnapshot("openai_compatible", "https://example.invalid/v1", "m", None, "m", 1)
+    with pytest.raises(ProviderError, match="无法在限额内汇总"):
+        analysis_engine.analyze(client.app.state.inspection_analysis.client, snapshot, None, data, Event())
+    assert len(calls) == len(data.evidence)
+
+
+def test_analysis_dispatch_compensation_failure_sets_persistence_gate(client: TestClient,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.app.repositories import inspection_analysis as reports
+    host = add_host(client)
+    task_id = historical_task(client, [host])
+    enable_analysis(client)
+    manager = client.app.state.inspection_analysis
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("test-only dispatch or persistence fault")
+
+    monkeypatch.setattr(manager.executor, "submit", fail)
+    monkeypatch.setattr(reports, "finish", fail)
+    url = f"{ROOT}/tasks/{task_id}"
+    assert client.post(f"{url}/analysis").status_code == 503
+    assert manager.persistence_failed.is_set()
+    assert manager.pending == 0 and not manager.cancellations
+    assert client.get(f"{url}/analysis").status_code == 503
+    assert client.get(url).status_code == 200
