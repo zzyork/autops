@@ -19,7 +19,12 @@ withDefaults(defineProps<{ status: TestStatus; description: string; focusable?: 
           <path d="M7.5 8a2.5 2.5 0 0 1 5 0c0 1.5-2.5 1.5-2.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           <circle cx="10" cy="14.5" r="0.75" fill="currentColor" />
         </g>
-        <text v-else x="10" y="10.5" text-anchor="middle" dominant-baseline="middle" fill="currentColor">{{ status === 'warning' ? '!' : '…' }}</text>
+        <g v-else-if="status === 'pending'" fill="currentColor">
+          <circle cx="6.5" cy="10" r="0.9" />
+          <circle cx="10" cy="10" r="0.9" />
+          <circle cx="13.5" cy="10" r="0.9" />
+        </g>
+        <text v-else x="10" y="10.5" text-anchor="middle" dominant-baseline="middle" fill="currentColor">!</text>
       </svg>
     </span>
   </ElTooltip>
