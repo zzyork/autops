@@ -13,6 +13,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `./` | 项目根目录。 |
+| `.vscode/` | VS Code 前后端调试与联合启动配置。最后同步：2026-10-13。 |
 | `scripts/` | 统一存放项目安装与启动脚本。最后同步：2026-10-13。 |
 | `backend/` | FastAPI 后端项目。 |
 | `backend/app/` | 后端应用包。 |
@@ -26,7 +27,7 @@
 | `backend/app/services/inspection_checks/` | 四类巡检采集器、结果校验与分发。最后同步：2026-10-12。 |
 | `backend/app/schemas/` | 接口数据模型。 |
 | `backend/tests/` | 已跟踪的主机与分组接口测试及显式放行的巡检检查、任务测试；其他新测试默认被根目录忽略规则排除。最后同步：2026-10-12。 |
-| `docs/` | 项目文档及 AI 前端、后端开发约束和 README 编写规范。最后同步：2026-10-12。 |
+| `docs/` | 项目文档及 AI 前端、后端开发约束。最后同步：2026-10-12。 |
 | `frontend/` | Vue、TypeScript、Vite 前端项目。 |
 | `docs/plans/` | 已授权功能设计、接口契约和实施计划。最后同步：2026-10-12。 |
 | `frontend/src/` | 前端应用源码。 |
@@ -51,6 +52,12 @@
 | `requirements.txt` | 根目录运行依赖入口，引用后端运行依赖清单。 |
 | `requirements-dev.txt` | 根目录开发依赖入口，引用后端开发依赖清单。 |
 
+## VS Code 配置
+
+| 路径 | 用途 |
+| --- | --- |
+| `.vscode/launch.json` | VS Code F5 在单个终端启动 FastAPI 与 Vite 并合并日志，复用已有依赖，前后端均就绪时打开浏览器，保留分别调试入口。最后同步：2026-10-13。 |
+
 ## 脚本文件
 
 | 路径 | 用途 |
@@ -65,7 +72,6 @@
 | --- | --- |
 | `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准，包含统一测试状态图标与 tooltip 复用要求。最后同步：2026-10-13。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
-| `docs/README-编写规范.md` | README 强制执行要求、验收清单及《写好 README 的完整指南：从项目门面到开发者体验》文章全文。最后同步：2026-10-12。 |
 | `docs/inspections.md` | 主机巡检使用、检查口径、执行边界、接口及报告说明。最后同步：2026-10-12。 |
 | `docs/ssh-connections.md` | 单台与批量 SSH 身份策略、首次自动信任边界、结果与接口说明。最后同步：2026-10-13。 |
 | `docs/ai-chat.md` | 自选模型、对话巡检、流式协议、数据与执行边界说明。最后同步：2026-10-12。 |
@@ -127,8 +133,8 @@
 | `backend/app/schemas/inspection_analysis.py` | AI 报告状态、实时批次进度、证据、问题、采集范围、批次校验和响应模型。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、当前生成批次进度与耗时日志和按任务取消。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis_input.py` | 从巡检原始快照提取全量发现、日志、检查和主机证据，保留结果序号并完整分批。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis_engine.py` | 复用模型 provider 分批分析、证据覆盖校验、分层汇总并生成结构化报告。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_input.py` | 提取匹配错误日志与巡检已有风险，按主机、来源及忽略行首时间戳的报错正文合并日志，保留次数、时间范围和原始序号并完整分批。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_engine.py` | 复用模型 provider 逐条分析合并错误日志，校验每批证据完整覆盖，关联日志来源、正文、原因与建议；非日志问题直接列出巡检事实和等级。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |

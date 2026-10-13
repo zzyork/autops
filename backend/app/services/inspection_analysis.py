@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -9,7 +10,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..repositories import ai, inspection_analysis as repository, inspections
-from ..schemas.inspection_analysis import AnalysisResponse
+from ..schemas.inspection_analysis import AnalysisProgress, AnalysisResponse
+from .ai_provider import ProviderError
 from .inspection_analysis_engine import ModelSnapshot, analyze
 from .inspection_analysis_input import build_input
 
@@ -26,6 +28,7 @@ class InspectionAnalysisManager:
         self.persistence_failed = threading.Event()
         self.pending = 0
         self.cancellations: dict[str, threading.Event] = {}
+        self.progress: dict[str, tuple[str, AnalysisProgress]] = {}
         self.client = httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False,
                                    limits=httpx.Limits(max_connections=MAX_ANALYSIS_WORKERS), trust_env=False)
         with sessions() as session:
@@ -47,12 +50,15 @@ class InspectionAnalysisManager:
         with self.guard:
             can_generate = (ready and task.status not in inspections.ACTIVE and not self.stopping.is_set()
                             and self.pending < MAX_PENDING_ANALYSES and (row is None or row.status not in repository.ACTIVE))
+            current = self.progress.get(task_id)
+            progress = (current[1] if row is not None and row.status == "running"
+                        and current is not None and current[0] == row.generation_id else None)
         if row is None:
             return AnalysisResponse(task_id=task_id, status="not_generated", can_generate=can_generate)
         return AnalysisResponse(task_id=task_id, status=row.status, model_name=row.model_name,
                                 model_version=row.model_version, started_at=row.started_at,
                                 finished_at=row.finished_at, error_code=row.error_code,
-                                report=row.report, can_generate=can_generate)
+                                report=row.report, can_generate=can_generate, progress=progress)
 
     def automatic(self, task_id: str) -> None:
         try:
@@ -123,6 +129,16 @@ class InspectionAnalysisManager:
                     raise HTTPException(503, "AI汇报队列不可用") from None
 
     def _run(self, task_id: str, generation_id: str, snapshot: ModelSnapshot, cancel: threading.Event) -> None:
+        started = time.monotonic()
+
+        def update_progress(value: AnalysisProgress) -> None:
+            with self.guard:
+                if self.cancellations.get(task_id) is cancel:
+                    self.progress[task_id] = (generation_id, value)
+            logger.info("Inspection AI report %s generation %s progress: %s, batches %s/%s, elapsed %.1fs",
+                        task_id, generation_id, value.current_step, value.completed_batches,
+                        value.total_batches, time.monotonic() - started)
+
         try:
             with self.sessions() as session:
                 if not repository.running(session, task_id, generation_id):
@@ -132,14 +148,19 @@ class InspectionAnalysisManager:
                     return
                 data = build_input(task)
             key = self.cipher.decrypt(snapshot.encrypted_key.encode()).decode() if snapshot.encrypted_key else None
-            report = analyze(self.client, snapshot, key, data, cancel)
+            report = analyze(self.client, snapshot, key, data, cancel, on_progress=update_progress)
             with self.sessions() as session:
                 if cancel.is_set():
                     repository.finish(session, task_id, generation_id, "interrupted", "interrupted")
                 else:
                     repository.finish(session, task_id, generation_id, "completed", report=report.model_dump(mode="json"))
+            logger.info("Inspection AI report %s generation %s finished in %.1fs",
+                        task_id, generation_id, time.monotonic() - started)
         except Exception as exc:
-            logger.warning("Inspection AI report %s failed: %s", task_id, type(exc).__name__)
+            # ProviderError 的原因由适配器和分析校验生成；其他异常不输出可能含凭据的原文。
+            reason = str(exc) if isinstance(exc, ProviderError) else type(exc).__name__
+            logger.warning("Inspection AI report %s generation %s failed: %s: %s",
+                           task_id, generation_id, type(exc).__name__, reason)
             try:
                 with self.sessions() as session:
                     interrupted = cancel.is_set()
@@ -153,6 +174,9 @@ class InspectionAnalysisManager:
                 self.pending -= 1
                 if self.cancellations.get(task_id) is cancel:
                     self.cancellations.pop(task_id, None)
+                current = self.progress.get(task_id)
+                if current is not None and current[0] == generation_id:
+                    self.progress.pop(task_id, None)
 
     def cancel(self, task_id: str) -> None:
         with self.guard:

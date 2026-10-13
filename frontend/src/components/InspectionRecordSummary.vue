@@ -24,8 +24,8 @@ const summary = computed(() => summarizeChecks(props.task.hosts.flatMap((host) =
       <span>结束 {{ timeLabel(task.finished_at) }}</span>
     </div>
     <div class="inspection-host-summary" aria-label="本次巡检风险概览">
-      <ElTag :type="summary.critical ? 'danger' : 'info'" size="small">严重发现 {{ summary.critical }}</ElTag>
-      <ElTag :type="summary.warning ? 'warning' : 'info'" size="small">警告发现 {{ summary.warning }}</ElTag>
+      <ElTag :type="summary.critical ? 'danger' : 'info'" size="small">重要 {{ summary.critical }}</ElTag>
+      <ElTag :type="summary.warning ? 'warning' : 'info'" size="small">警告 {{ summary.warning }}</ElTag>
       <span v-if="summary.incomplete" class="inspection-muted">{{ summary.incomplete }} 项检查尚未完成，风险无法完整判定</span>
     </div>
     <InspectionAnalysisReport :task-id="task.id" :task-status="task.status" />

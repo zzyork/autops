@@ -925,19 +925,18 @@ def mock_analysis(monkeypatch: pytest.MonkeyPatch, responder=None) -> list[list[
     observed: list[list[dict]] = []
 
     def request(_client, _protocol, _url, _model, _key, messages, tools, **kwargs):
-        assert tools == [] and kwargs["max_tokens"] == 8192
+        assert tools == [] and kwargs["max_tokens"] == 2048
+        assert kwargs["read_timeout_seconds"] == 60
         content = json.loads(messages[1]["content"])
-        if isinstance(content, dict) or (content and isinstance(content[0], str)):
-            return Reply(json.dumps({"summary": "consolidated"}), [])
+        assert content and len(content) <= 5
+        assert all(set(item) == {"id", "host", "address", "source", "check", "severity", "content"}
+                               for item in content)
         observed.append(content)
         if responder is not None:
             return responder(content)
-        issues = [{"title": "observed risk", "severity": item["severity"] if item["kind"] != "log" else "warning",
-                   "analysis": "observed evidence", "recommendation": "investigate",
-                   "evidence_ids": [item["id"]]} for item in content
-                  if item["kind"] in ("finding", "log") or item["severity"] != "info" or item["incomplete"] or item["limited"]]
-        return Reply(json.dumps({"summary": "batch", "covered_ids": [item["id"] for item in content],
-                                 "issues": issues}), [])
+        return Reply(json.dumps({"issues": [
+            {"evidence_id": item["id"], "severity": "warning", "analysis": f"cause {item['id']}",
+             "recommendation": f"action {item['id']}"} for item in content]}), [])
 
     monkeypatch.setattr(analysis_engine, "request", request)
     return observed
@@ -955,7 +954,8 @@ def wait_analysis(client: TestClient, task_id: str, status: str) -> dict:
     pytest.fail(f"analysis {task_id} did not reach {status}: {response.json()}")
 
 
-def historical_task(client: TestClient, hosts: list[dict], checks: list[str] | None = None) -> str:
+def historical_task(client: TestClient, hosts: list[dict], checks: list[str] | None = None,
+                    *, risk: bool = False) -> str:
     checks = checks or ["server_info"]
     with client.app.state.sessions() as session:
         task = repository.create_task(session, InspectionInput(name="historical", hosts=[
@@ -968,6 +968,10 @@ def historical_task(client: TestClient, hosts: list[dict], checks: list[str] | N
             run.status = "completed"
             for check in run.checks:
                 check.status = "completed"
+            if risk:
+                run.checks[0].conclusion = "warning"
+                run.checks[0].payload = CheckPayload(conclusion="warning", findings=[
+                    Finding(severity="warning", message="test-only warning")]).model_dump(mode="json")
         task.completed_hosts = len(hosts)
         task.finished_at = datetime.now(timezone.utc)
         task_id = task.id
@@ -1007,26 +1011,41 @@ def test_analysis_automatic_after_all_hosts_finish_once(client: TestClient, monk
     assert result["model_name"] == "local model / offline"
     assert result["report"]["host_count"] == result["report"]["finding_count"] == 2
     assert {item["host_name"] for item in result["report"]["evidence"]} == {first["name"], second["name"]}
-    assert len(batches) >= 1
+    assert batches == []
+    assert len(result["report"]["issues"]) == 2
+    for evidence, issue in zip(result["report"]["evidence"], result["report"]["issues"]):
+        assert (issue["title"], issue["analysis"], issue["severity"], issue["recommendation"]) == (
+            evidence["check_title"], evidence["content"], "critical", "")
+        assert issue["evidence_ids"] == [evidence["id"]]
+        assert issue["log_source"] is issue["log_message"] is None
     assert result["report"]["generated_at"].endswith("Z")
 
 
 def test_analysis_historical_manual_unavailable_and_failed_regeneration(client: TestClient,
                                                                           monkeypatch: pytest.MonkeyPatch) -> None:
-    mock_analysis(monkeypatch)
+    observed = mock_analysis(monkeypatch)
     host = add_host(client)
-    task_id = historical_task(client, [host])
+    task_id = historical_task(client, [host], ["server_info", "log_error"], risk=True)
     url = f"{ROOT}/tasks/{task_id}/analysis"
     assert client.get(url).json() == {"task_id": task_id, "status": "not_generated", "model_name": None,
                                       "model_version": None, "started_at": None, "finished_at": None,
-                                      "error_code": None, "report": None, "can_generate": False}
+                                      "error_code": None, "report": None, "can_generate": False, "progress": None}
     assert client.post(url).status_code == 409
     assert wait_analysis(client, task_id, "unavailable")["error_code"] == "model_unavailable"
     enable_analysis(client)  # A failed tool test does not prevent text-only reports.
     assert client.get(url).json()["can_generate"] is True
     assert client.post(url).status_code == 202
     previous = wait_analysis(client, task_id, "completed")["report"]
-    assert previous["summary"] == "consolidated" and previous["model_version"] == 1
+    assert previous["summary"] == "" and previous["model_version"] == 1
+    assert len(previous["issues"]) == 1 and previous["issues"][0]["severity"] == "warning"
+    assert previous["issues"][0]["recommendation"] == "" and observed == []
+
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[1]
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                        rows=[["匹配", "test-only error"]])]).model_dump(mode="json")
+        session.commit()
 
     monkeypatch.setattr(analysis_engine, "request", lambda *args, **kwargs: Reply("not json", []))
     assert client.post(url).status_code == 202
@@ -1048,6 +1067,7 @@ def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestCl
             run.checks[0].payload = CheckPayload(conclusion="critical", findings=[
                 Finding(severity="critical", message=f"critical {run.host_name}"),
                 Finding(severity="warning", message=f"warning {run.host_name}")]).model_dump(mode="json")
+        task.hosts[0].checks[1].conclusion = "warning"
         task.hosts[0].checks[1].payload = CheckPayload(tables=[ResultTable(
             name="journal", columns=["状态", "日志"], rows=[
                 ["匹配", f"unique-log-{i:03d}"] for i in range(200)])]).model_dump(mode="json")
@@ -1059,42 +1079,115 @@ def test_analysis_all_hosts_findings_and_200_log_rows_are_batched(client: TestCl
     report = wait_analysis(client, task_id, "completed")["report"]
     assert (report["host_count"], report["finding_count"], report["log_count"]) == (32, 64, 200)
     evidence = report["evidence"]
-    assert len(batches) > 1 and all(len(batch) <= 40 for batch in batches)
-    assert [item["id"] for batch in batches for item in batch] == [item["id"] for item in evidence]
+    assert len(batches) > 1 and all(1 <= len(batch) <= 5 for batch in batches)
+    assert [item["id"] for batch in batches for item in batch] == [item["id"] for item in evidence if item["kind"] == "log"]
     assert {item["content"] for item in evidence if item["kind"] == "finding"} == {
         f"{severity} {host['name']}" for host in hosts for severity in ("critical", "warning")}
     logs = [item for item in evidence if item["kind"] == "log"]
     assert len(logs) == 200
     assert all(f"unique-log-{i:03d}" in logs[i]["content"] for i in range(200))
-    assert {item["source"] for item in logs} == {f"journal · 结果序号 {i}" for i in range(1, 201)}
-    assert {evidence_id for issue in report["issues"] for evidence_id in issue["evidence_ids"]} >= {
-        item["id"] for item in evidence if item["kind"] in ("finding", "log")}
-    assert report["summary"] == "consolidated"
+    assert {tuple(json.loads(item["content"])["result_indices"]) for item in logs} == {
+        (i,) for i in range(1, 201)}
+    assert len(report["issues"]) == 264 and report["summary"] == ""
+    issues_by_id = {issue["evidence_ids"][0]: issue for issue in report["issues"]}
+    assert len(issues_by_id) == len(evidence)
+    for item in evidence:
+        issue = issues_by_id[item["id"]]
+        assert issue["evidence_ids"] == [item["id"]]
+        if item["kind"] == "finding":
+            assert (issue["title"], issue["analysis"], issue["severity"], issue["recommendation"]) == (
+                item["check_title"], item["content"], item["severity"], "")
+            assert issue["log_source"] is issue["log_message"] is None
+        else:
+            assert issue["severity"] == "warning"
+            assert issue["analysis"] == f"cause {item['id']}"
+            assert issue["recommendation"] == f"action {item['id']}"
+            assert len(issue["analysis"] + issue["recommendation"]) <= 1000
+            assert issue["log_source"] == item["source"]
+            assert issue["log_message"] == json.loads(item["content"])["message"]
 
 
-@pytest.mark.parametrize("invalid", ["missing_covered_ids", "incomplete_coverage", "unknown_reference", "downgrade"])
-def test_analysis_rejects_invalid_model_evidence(client: TestClient, monkeypatch: pytest.MonkeyPatch,
-                                                 invalid: str) -> None:
+def test_analysis_groups_repeated_logs_and_excludes_unassessed_checks(client: TestClient,
+                                                                        monkeypatch: pytest.MonkeyPatch) -> None:
     host = add_host(client)
-    task_id = historical_task(client, [host])
+    task_id = historical_task(client, [host], ["server_info", "system_resources", "log_error"])
+    with client.app.state.sessions() as session:
+        checks = repository.get_task(session, task_id).hosts[0].checks
+        checks[0].conclusion = "normal"
+        checks[0].payload = CheckPayload(conclusion="normal", metrics=[Metric(name="CPU", value=10)]).model_dump(mode="json")
+        checks[1].conclusion = "unknown"
+        checks[1].payload = CheckPayload(findings=[Finding(severity="critical", message="ignored unknown")]).model_dump(mode="json")
+        checks[2].conclusion = "warning"
+        checks[2].payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"], rows=[
+            ["匹配", "2026-10-13T12:00:00Z disk error"],
+            ["匹配", "2026-10-13T12:05:00Z disk error"],
+            ["匹配", "2026-10-13T12:06:00Z network error"]])]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert report["log_count"] == 3 and report["unassessed_count"] == 1
+    assert report["finding_count"] == 0 and len(report["evidence"]) == 2
+    assert len(report["issues"]) == 2
+    for item, issue in zip(report["evidence"], report["issues"]):
+        assert issue["evidence_ids"] == [item["id"]]
+        assert issue["log_source"] == item["source"] == "journal"
+        assert issue["log_message"] == json.loads(item["content"])["message"]
+        assert issue["analysis"] == f"cause {item['id']}"
+    assert [json.loads(item["content"])["result_indices"] for item in report["evidence"]] == [[1, 2], [3]]
+    repeated = json.loads(report["evidence"][0]["content"])
+    assert (repeated["occurrences"], repeated["first_time"], repeated["last_time"]) == (
+        2, "2026-10-13T12:00:00Z", "2026-10-13T12:05:00Z")
+    assert [item["id"] for batch in observed for item in batch] == [item["id"] for item in report["evidence"]]
+
+
+@pytest.mark.parametrize("normal", [False, True])
+def test_analysis_without_findings_produces_empty_report_without_ai(client: TestClient,
+                                                                    monkeypatch: pytest.MonkeyPatch,
+                                                                    normal: bool) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host])  # 默认 unknown 不能被当作健康证据。
+    if normal:
+        with client.app.state.sessions() as session:
+            check = repository.get_task(session, task_id).hosts[0].checks[0]
+            check.conclusion = "normal"
+            check.payload = CheckPayload(conclusion="normal", metrics=[Metric(name="CPU", value=10)]).model_dump(mode="json")
+            session.commit()
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert report["issues"] == report["evidence"] == [] and report["summary"] == ""
+    assert report["model_name"] == "local model / offline" and observed == []
+
+
+@pytest.mark.parametrize("invalid", ["json", "severity", "empty_analysis", "over_limit"])
+def test_analysis_rejects_invalid_log_reply(client: TestClient, monkeypatch: pytest.MonkeyPatch,
+                                            invalid: str) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host], ["log_error"])
     with client.app.state.sessions() as session:
         check = repository.get_task(session, task_id).hosts[0].checks[0]
-        check.conclusion = "critical"
-        check.payload = CheckPayload(conclusion="critical", findings=[
-            Finding(severity="critical", message="disk full")]).model_dump(mode="json")
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                        rows=[["匹配", "disk full"]])]).model_dump(mode="json")
         session.commit()
     enable_analysis(client)
 
     def bad_reply(batch):
-        finding = next(item for item in batch if item["kind"] == "finding")
-        result = {"summary": "invalid", "issues": [{
-            "title": "risk", "severity": "info" if invalid == "downgrade" else "critical",
-            "analysis": "observed", "recommendation": "investigate",
-            "evidence_ids": ["E9999"] if invalid == "unknown_reference" else [finding["id"]]}]}
-        if invalid != "missing_covered_ids":
-            result["covered_ids"] = ([finding["id"]] if invalid == "incomplete_coverage"
-                                     else [item["id"] for item in batch])
-        return Reply(json.dumps(result), [])
+        assert json.loads(batch[0]["content"])["message"] == "disk full"
+        if invalid == "json":
+            return Reply("not json", [])
+        result = {"evidence_id": batch[0]["id"], "severity": "warning",
+                  "analysis": "observed", "recommendation": "investigate"}
+        if invalid == "severity":
+            result["severity"] = "urgent"
+        elif invalid == "empty_analysis":
+            result["analysis"] = ""
+        else:
+            result["analysis"] = "x" * 995
+        return Reply(json.dumps({"issues": [result]}), [])
 
     mock_analysis(monkeypatch, bad_reply)
     assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
@@ -1125,7 +1218,13 @@ def test_analysis_missing_invalid_and_active_task(client: TestClient, monkeypatc
 def test_analysis_duplicate_claim_and_delete_during_generation(client: TestClient,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     host = add_host(client)
-    task_id = historical_task(client, [host])
+    task_id = historical_task(client, [host], ["log_error"])
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                        rows=[["匹配", "test-only error"]])]).model_dump(mode="json")
+        session.commit()
     enable_analysis(client)
     entered, release = Event(), Event()
     batches = mock_analysis(monkeypatch)
@@ -1199,7 +1298,7 @@ def test_records_only_filters_terminal_before_count_and_paging(client: TestClien
     assert client.get(f"{ROOT}/tasks", params={"records_only": "false"}).json()["total"] == 6
 
 
-def test_analysis_incomplete_checks_cannot_be_omitted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analysis_incomplete_checks_are_not_sent_to_model(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     host = add_host(client)
     task_id = historical_task(client, [host])
     with client.app.state.sessions() as session:
@@ -1208,18 +1307,14 @@ def test_analysis_incomplete_checks_cannot_be_omitted(client: TestClient, monkey
         task.hosts[0].checks[0].status = "skipped"
         session.commit()
     enable_analysis(client)
-    mock_analysis(monkeypatch, lambda batch: Reply(json.dumps({
-        "summary": "healthy", "covered_ids": [item["id"] for item in batch], "issues": []}), []))
+    observed = mock_analysis(monkeypatch)
     url = f"{ROOT}/tasks/{task_id}/analysis"
-    assert client.post(url).status_code == 202
-    assert wait_analysis(client, task_id, "failed")["report"] is None
-    mock_analysis(monkeypatch)
     assert client.post(url).status_code == 202
     report = wait_analysis(client, task_id, "completed")["report"]
     assert report["incomplete_count"] == 1 and report["task_status"] == "failed"
     assert report["inspection_finished_at"].endswith("Z")
-    required = {item["id"] for item in report["evidence"] if item["incomplete"]}
-    assert required <= {ref for issue in report["issues"] for ref in issue["evidence_ids"]}
+    assert report["issues"] == report["evidence"] == [] and report["summary"] == ""
+    assert observed == []
 
 
 def test_analysis_delete_cancels_before_next_batch(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1227,8 +1322,9 @@ def test_analysis_delete_cancels_before_next_batch(client: TestClient, monkeypat
     task_id = historical_task(client, [host], ["log_error"])
     with client.app.state.sessions() as session:
         check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "warning"
         check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
-                                                       rows=[["匹配", f"error {index}"] for index in range(100)])]).model_dump(mode="json")
+                                                        rows=[["匹配", f"error {index}"] for index in range(100)])]).model_dump(mode="json")
         session.commit()
     enable_analysis(client)
     observed = mock_analysis(monkeypatch)
@@ -1312,50 +1408,57 @@ def test_analysis_provider_output_budget_and_truncated_response(protocol: str) -
             provider_request(model_client, protocol, "https://example.invalid/v1", "m", None, messages, [], max_tokens=8192)
 
 
-def test_analysis_not_applicable_requires_report_scope_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("conclusion", ["not_applicable", "unknown"])
+def test_analysis_unassessed_checks_are_not_sent_to_model(client: TestClient, monkeypatch: pytest.MonkeyPatch,
+                                                          conclusion: str) -> None:
     host = add_host(client)
     task_id = historical_task(client, [host], ["log_error"])
     with client.app.state.sessions() as session:
         check = repository.get_task(session, task_id).hosts[0].checks[0]
-        check.conclusion = "not_applicable"
+        check.conclusion = conclusion
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                        rows=[["匹配", "not assessed error"]])]).model_dump(mode="json")
         session.commit()
     enable_analysis(client)
-    mock_analysis(monkeypatch, lambda batch: Reply(json.dumps({
-        "summary": "healthy", "covered_ids": [item["id"] for item in batch], "issues": []}), []))
+    observed = mock_analysis(monkeypatch)
     url = f"{ROOT}/tasks/{task_id}/analysis"
-    assert client.post(url).status_code == 202
-    assert wait_analysis(client, task_id, "failed")["report"] is None
-    mock_analysis(monkeypatch)
     assert client.post(url).status_code == 202
     report = wait_analysis(client, task_id, "completed")["report"]
     assert report["incomplete_count"] == 0 and report["unassessed_count"] == 1
-    assert any(item["limited"] for item in report["evidence"])
+    assert report["issues"] == report["evidence"] == [] and report["summary"] == ""
+    assert observed == []
 
 
-def test_analysis_nonshrinking_summaries_fail_without_repeated_calls(client: TestClient,
-                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("invalid", ["missing", "duplicate", "unknown"])
+def test_analysis_rejects_incomplete_log_id_coverage(client: TestClient,
+                                                       monkeypatch: pytest.MonkeyPatch, invalid: str) -> None:
     from backend.app.services.inspection_analysis_input import build_input
     host = add_host(client)
-    task_id = historical_task(client, [host])
+    task_id = historical_task(client, [host], ["log_error"])
     with client.app.state.sessions() as session:
-        task = repository.get_task(session, task_id)
-        task.hosts[0].checks[0].conclusion = "normal"
-        data = build_input(task)
-    monkeypatch.setattr(analysis_engine, "batches", lambda evidence: [[item] for item in evidence])
-    monkeypatch.setattr(analysis_engine, "MAX_BATCH_CHARACTERS", 20)
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="journal", columns=["状态", "日志"],
+                                                        rows=[["匹配", "first error"], ["匹配", "second error"]])]).model_dump(mode="json")
+        data = build_input(repository.get_task(session, task_id))
+    assert len(data.evidence) == 2
     calls = []
 
     def reply(*args, **kwargs):
         content = json.loads(args[5][1]["content"])
         calls.append(content)
-        return Reply(json.dumps({"summary": "long-summary-that-will-not-shrink", "issues": [],
-                                 "covered_ids": [item["id"] for item in content]}), [])
+        ids = [item["id"] for item in content]
+        returned = ids[:1] if invalid == "missing" else (ids + ids[:1] if invalid == "duplicate" else ids + ["E999"])
+        return Reply(json.dumps({"issues": [{"evidence_id": evidence_id, "severity": "warning",
+                                              "analysis": "cause", "recommendation": "action"}
+                                             for evidence_id in returned]}), [])
 
     monkeypatch.setattr(analysis_engine, "request", reply)
     snapshot = analysis_engine.ModelSnapshot("openai_compatible", "https://example.invalid/v1", "m", None, "m", 1)
-    with pytest.raises(ProviderError, match="无法在限额内汇总"):
+    with pytest.raises(ProviderError):
         analysis_engine.analyze(client.app.state.inspection_analysis.client, snapshot, None, data, Event())
-    assert len(calls) == len(data.evidence)
+    assert len(calls) == 1
+    assert [item["id"] for item in calls[0]] == [item.id for item in data.evidence]
 
 
 def test_analysis_dispatch_compensation_failure_sets_persistence_gate(client: TestClient,
@@ -1377,3 +1480,26 @@ def test_analysis_dispatch_compensation_failure_sets_persistence_gate(client: Te
     assert manager.pending == 0 and not manager.cancellations
     assert client.get(f"{url}/analysis").status_code == 503
     assert client.get(url).status_code == 200
+
+
+def test_analysis_long_log_fragments_remain_one_issue(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    host = add_host(client)
+    task_id = historical_task(client, [host], ["log_error"])
+    message = "disk error " + "x" * 9000
+    with client.app.state.sessions() as session:
+        check = repository.get_task(session, task_id).hosts[0].checks[0]
+        check.conclusion = "warning"
+        check.payload = CheckPayload(tables=[ResultTable(name="/var/log/messages", columns=["状态", "日志"], rows=[
+            ["匹配", "2026-10-13T12:00:00Z " + message],
+            ["匹配", "2026-10-13T12:05:00Z " + message]])]).model_dump(mode="json")
+        session.commit()
+    enable_analysis(client)
+    observed = mock_analysis(monkeypatch)
+    assert client.post(f"{ROOT}/tasks/{task_id}/analysis").status_code == 202
+    report = wait_analysis(client, task_id, "completed")["report"]
+    assert len(report["issues"]) == 1 and len(report["evidence"]) == 2
+    issue = report["issues"][0]
+    assert issue["log_source"] == "/var/log/messages" and issue["log_message"] == message
+    assert issue["evidence_ids"] == [item["id"] for item in report["evidence"]]
+    assert len(observed) == 1 and len(observed[0]) == 1
+    assert json.loads(observed[0][0]["content"])["occurrences"] == 2

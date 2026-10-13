@@ -91,6 +91,8 @@ export interface AnalysisIssue {
   analysis: string
   recommendation: string
   evidence_ids: string[]
+  log_source: string | null
+  log_message: string | null
 }
 export interface AnalysisEvidence {
   id: string
@@ -103,6 +105,7 @@ export interface AnalysisEvidence {
   severity: AnalysisSeverity
   incomplete: boolean
   limited: boolean
+  group_id: string | null
 }
 export interface AnalysisReport {
   task_name: string
@@ -132,4 +135,11 @@ export interface AnalysisResponse {
   error_code: string | null
   report: AnalysisReport | null
   can_generate: boolean
+  progress: {
+    phase: 'analyzing' | 'summarizing'
+    completed_batches: number
+    total_batches: number
+    current_step: string
+    step_started_at: string
+  } | null
 }

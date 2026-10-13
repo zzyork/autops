@@ -20,6 +20,7 @@ class AnalysisEvidence(BaseModel):
     severity: Severity
     incomplete: bool = False
     limited: bool = False
+    group_id: str | None = None
 
 
 class AnalysisIssue(BaseModel):
@@ -27,9 +28,11 @@ class AnalysisIssue(BaseModel):
 
     title: str = Field(min_length=1, max_length=200)
     severity: Severity
-    analysis: str = Field(min_length=1, max_length=4000)
-    recommendation: str = Field(min_length=1, max_length=2000)
-    evidence_ids: list[str] = Field(min_length=1, max_length=40)
+    analysis: str = Field(min_length=1, max_length=8000)
+    recommendation: str = Field(max_length=2000)
+    evidence_ids: list[str] = Field(min_length=1)
+    log_source: str | None = None
+    log_message: str | None = None
 
 
 class BatchAnalysis(BaseModel):
@@ -59,6 +62,14 @@ class AnalysisReport(BaseModel):
     model_version: int
 
 
+class AnalysisProgress(BaseModel):
+    phase: Literal["analyzing", "summarizing"]
+    completed_batches: int = Field(ge=0)
+    total_batches: int = Field(ge=1)
+    current_step: str
+    step_started_at: datetime
+
+
 class AnalysisResponse(TimestampResponse):
     task_id: str
     status: AnalysisStatus
@@ -69,3 +80,4 @@ class AnalysisResponse(TimestampResponse):
     error_code: str | None = None
     report: AnalysisReport | None = None
     can_generate: bool = False
+    progress: AnalysisProgress | None = None

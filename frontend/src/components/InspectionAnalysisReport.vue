@@ -4,6 +4,8 @@ import { ElButton, ElCollapse, ElCollapseItem, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, timeLabel } from '@/components/inspectionDisplay'
+import ListPagination from '@/components/ListPagination.vue'
+import { useListPagination } from '@/components/pagination'
 import type { AnalysisEvidence, AnalysisIssue, AnalysisReport, AnalysisResponse, AnalysisSeverity, RunStatus } from '@/types/inspections'
 
 const props = defineProps<{ taskId: string; taskStatus: RunStatus }>()
@@ -24,10 +26,15 @@ let timer: ReturnType<typeof setTimeout> | undefined
 const report = computed(() => response.value?.report ?? null)
 const logEvidenceIds = computed(() => new Set(report.value?.evidence.filter((item) => item.kind === 'log').map((item) => item.id) ?? []))
 const logIssues = computed(() => report.value?.issues.filter((issue) => issue.evidence_ids.some((id) => logEvidenceIds.value.has(id))) ?? [])
-const otherIssues = computed(() => report.value?.issues.filter((issue) => !issue.evidence_ids.some((id) => logEvidenceIds.value.has(id))) ?? [])
-const criticalIssues = computed(() => otherIssues.value.filter((issue) => issue.severity === 'critical'))
-const warningIssues = computed(() => otherIssues.value.filter((issue) => issue.severity === 'warning'))
-const infoIssues = computed(() => otherIssues.value.filter((issue) => issue.severity === 'info'))
+const otherProblems = computed(() => report.value?.evidence.filter((item) => item.kind === 'finding' && item.severity !== 'info') ?? [])
+const { page: logPage, pageSize: logPageSize, total: logTotal, pageItems: visibleLogs, resetPage: resetLogs } = useListPagination(logIssues)
+const { page: problemPage, pageSize: problemPageSize, total: problemTotal, pageItems: visibleProblems, resetPage: resetProblems } = useListPagination(otherProblems)
+const legacyLogs = computed(() => logIssues.value.some((issue) => issue.log_source === null || issue.log_source === undefined))
+
+function issueHost(issue: AnalysisIssue): string {
+  const items = report.value?.evidence.filter((evidence) => issue.evidence_ids.includes(evidence.id)) ?? []
+  return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
+}
 
 function statusLabel(status: AnalysisResponse['status']): string {
   return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
@@ -118,9 +125,10 @@ function exportText() {
   const value = report.value
   if (!loaded.value || !value) return
   const issueLines = (issues: AnalysisIssue[]) => issues.flatMap((issue) => [
-    `[${severityLabel(issue.severity)}] ${issue.title}`,
-    `分析：${issue.analysis}`,
-    `建议：${issue.recommendation}`,
+    `[${severityLabel(issue.severity)}] ${issue.title} · ${issueHost(issue)}`,
+    ...(issue.log_source != null ? [`日志文件路径 / 来源：${issue.log_source}`, `报错内容：${issue.log_message}`] : []),
+    `报错原因：${issue.analysis}`,
+    `处理手段建议：${issue.recommendation}`,
     `证据：${issue.evidence_ids.join('、') || '无'}`,
     '',
   ])
@@ -129,10 +137,11 @@ function exportText() {
     `采集开始：${timeLabel(value.inspection_started_at)}；结束：${timeLabel(value.inspection_finished_at)}`,
     `生成时间：${timeLabel(value.generated_at)}`, `模型：${value.model_name} (v${value.model_version})`,
     `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志，${value.incomplete_count} 项未完成，${value.unassessed_count} 项不适用或结论未知`,
-    '', '总体分析', value.summary, '', '严重问题', ...issueLines(criticalIssues.value),
-    '警告问题', ...issueLines(warningIssues.value), '日志问题', ...issueLines(logIssues.value),
-    '其他问题', ...issueLines(infoIssues.value), '证据',
-    ...value.evidence.flatMap((item) => [
+    '', '非错误日志问题', ...otherProblems.value.map((item) =>
+      `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
+    '', '错误日志分析', ...(legacyLogs.value ? ['此汇报为旧版汇总，请重新生成以获取每个合并报错的独立分析。'] : []),
+    ...issueLines(logIssues.value), '日志证据',
+    ...value.evidence.filter((item) => item.kind === 'log').flatMap((item) => [
       `[${item.id}] ${severityLabel(item.severity)} / ${kindLabel(item.kind)} / ${item.host_name} (${item.address})`,
       `${item.check_title} / ${item.source}`, item.content, '',
     ]),
@@ -157,6 +166,8 @@ watch(() => props.taskId, () => {
   generating.value = false
   loadFailed.value = false
   expandedEvidence.value = []
+  resetLogs()
+  resetProblems()
   terminalPolls = isActiveRun(props.taskStatus) ? 0 : TERMINAL_POLL_COUNT
   void load()
 }, { immediate: true })
@@ -196,7 +207,11 @@ onUnmounted(() => {
       <p v-if="response.status === 'unavailable'" class="inspection-muted">{{ response.can_generate ? '上次生成时主模型不可用，现在可以重新生成。' : '主模型未配置或未通过测试，暂不可生成汇报。' }}</p>
       <p v-else-if="response.status === 'not_generated' && isActiveRun(taskStatus)" class="inspection-muted">巡检进行中，结束后将检查自动生成条件。</p>
       <p v-else-if="response.status === 'not_generated'" class="inspection-muted">尚无 AI 汇报。</p>
-      <p v-else-if="response.status === 'queued' || response.status === 'running'" class="inspection-muted">正在生成本轮汇报。</p>
+      <p v-else-if="response.status === 'queued'" class="inspection-muted">本轮汇报排队中。</p>
+      <p v-else-if="response.status === 'running'" class="inspection-muted" role="status">
+        <template v-if="response.progress">已完成 {{ response.progress.completed_batches }}/{{ response.progress.total_batches }} 批证据分析；当前：{{ response.progress.current_step }}，本阶段开始 {{ timeLabel(response.progress.step_started_at) }}。</template>
+        <template v-else>正在生成本轮汇报。</template>
+      </p>
       <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="inspection-muted">本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。</p>
       <p v-if="!response.can_generate && !isActiveRun(taskStatus) && response.status !== 'queued' && response.status !== 'running' && response.status !== 'unavailable'" class="inspection-muted">当前无法发起生成，请检查主模型及生成服务状态。</p>
       <template v-if="report">
@@ -215,25 +230,33 @@ onUnmounted(() => {
           <p>本次有 {{ report.unassessed_count }} 项检查不适用或结论未知，不能作为健康依据。</p>
           <p v-for="item in report.evidence.filter((evidence) => evidence.limited)" :key="item.id" class="inspection-muted">{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：不适用或结论未知。</p>
         </section>
-        <section class="inspection-analysis-section"><h3>总体分析</h3><p>{{ report.summary }}</p></section>
-        <p v-if="!report.issues.length" class="inspection-muted">暂无报告问题。</p>
-        <section v-for="group in [
-          { label: '严重问题', issues: criticalIssues },
-          { label: '警告问题', issues: warningIssues },
-          { label: '日志问题', issues: logIssues },
-          { label: '其他问题', issues: infoIssues },
-        ]" v-show="group.issues.length" :key="group.label" class="inspection-analysis-section">
-          <h3>{{ group.label }} ({{ group.issues.length }})</h3>
-          <div v-for="(issue, index) in group.issues" :key="index" class="inspection-analysis-issue">
-            <div class="inspection-analysis-issue-title"><ElTag :type="severityType(issue.severity)" size="small">{{ severityLabel(issue.severity) }}</ElTag><strong>{{ issue.title }}</strong></div>
-            <p>{{ issue.analysis }}</p><p><strong>建议：</strong>{{ issue.recommendation }}</p>
+        <p v-if="!report.issues.length" class="inspection-muted">没有可分析的匹配错误日志或巡检风险；正常检查不进行 AI 分析。</p>
+        <section v-if="problemTotal" class="inspection-analysis-section">
+          <h3>非错误日志问题 ({{ problemTotal }})</h3>
+          <div v-for="item in visibleProblems" :key="item.id" class="inspection-analysis-issue">
+            <div class="inspection-analysis-issue-title"><ElTag :type="severityType(item.severity)" size="small">{{ severityLabel(item.severity) }}</ElTag><strong>{{ item.host_name }} ({{ item.address }}) · {{ item.check_title }}</strong></div>
+            <p>{{ item.content }}</p>
+          </div>
+          <ListPagination v-model:page="problemPage" v-model:page-size="problemPageSize" :total="problemTotal" />
+        </section>
+        <section v-if="logTotal" class="inspection-analysis-section">
+          <h3>错误日志分析 ({{ logTotal }})</h3>
+          <p v-if="legacyLogs" class="inspection-muted">此汇报为旧版汇总，请重新生成以获取每个合并报错的独立分析。</p>
+          <div v-for="(issue, index) in visibleLogs" :key="index" class="inspection-analysis-issue">
+            <div class="inspection-analysis-issue-title"><ElTag :type="severityType(issue.severity)" size="small">{{ severityLabel(issue.severity) }}</ElTag><strong>{{ issueHost(issue) }}</strong></div>
+            <template v-if="issue.log_source != null">
+              <p><strong>日志文件路径 / 来源：</strong>{{ issue.log_source }}<template v-if="issue.log_source === 'systemd journal'">（未采集具体文件路径）</template></p>
+              <p><strong>报错内容：</strong>{{ issue.log_message }}</p>
+            </template>
+            <p><strong>报错原因：</strong>{{ issue.analysis }}</p><p><strong>处理手段建议：</strong>{{ issue.recommendation }}</p>
             <p v-if="issue.evidence_ids.length" class="inspection-muted">证据编号：{{ issue.evidence_ids.join('、') }}</p>
           </div>
+          <ListPagination v-model:page="logPage" v-model:page-size="logPageSize" :total="logTotal" />
         </section>
-        <ElCollapse v-if="report.evidence.length" v-model="expandedEvidence" class="inspection-checks inspection-analysis-evidence">
+        <ElCollapse v-if="logEvidenceIds.size" v-model="expandedEvidence" class="inspection-checks inspection-analysis-evidence">
           <ElCollapseItem name="evidence">
-            <template #title><h3>证据 ({{ report.evidence.length }})</h3></template>
-            <div v-for="item in report.evidence" :key="item.id" class="inspection-analysis-evidence-item">
+            <template #title><h3>日志证据 ({{ logEvidenceIds.size }})</h3></template>
+            <div v-for="item in report.evidence.filter((evidence) => evidence.kind === 'log')" :key="item.id" class="inspection-analysis-evidence-item">
               <div class="inspection-analysis-issue-title"><ElTag :type="severityType(item.severity)" size="small">{{ severityLabel(item.severity) }}</ElTag><strong>{{ item.id }} · {{ item.host_name }} ({{ item.address }})</strong></div>
               <p class="inspection-muted">{{ item.check_title }} · {{ item.source }} · {{ kindLabel(item.kind) }}</p>
               <p>{{ item.content }}</p>
