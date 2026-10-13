@@ -1,7 +1,7 @@
-import type { ConnectionTargetType, ConnectionTest } from '@/types/api'
+import type { ConnectionTargetType, ConnectionTest, ConnectionTestInput } from '@/types/api'
 import { get, request } from './http'
 
-export const startConnectionTest = (body: { target_type: ConnectionTargetType; target_id: number; version: number }) =>
+export const startConnectionTest = (body: ConnectionTestInput) =>
   request<ConnectionTest>('/ssh/connection-tests', { method: 'POST', body })
 
 export const getConnectionTest = (id: string) => get<ConnectionTest>(`/ssh/connection-tests/${id}`)

@@ -189,6 +189,7 @@ function dateLabel(value: string) {
          <ElButton type="primary" :loading="submitting" :disabled="!loaded || loading || trusting || hasActiveTest" @click="startTest">开始测试</ElButton>
         <ElButton :disabled="loading || submitting || trusting" @click="loadHistory">刷新记录</ElButton>
       </div>
+      <p class="ssh-test-muted">新测试首次连接会自动保存主机及关联跳板机的服务器公钥，已有密钥变化仍会拦截；请在可信网络使用。</p>
       <template v-if="loaded && !loading">
         <section aria-label="最近测试记录">
           <h2>最近测试记录</h2>
@@ -205,10 +206,19 @@ function dateLabel(value: string) {
           <dl class="ssh-test-details">
             <dt>目标</dt><dd>{{ selected.target_name }} · {{ selected.address }}:{{ selected.port }}</dd>
             <dt>登录用户</dt><dd>{{ selected.username }}{{ selected.via_jump_host ? '（目标主机）' : '' }}</dd>
+            <dt>身份策略</dt><dd>{{ selected.host_key_policy === 'accept_new' ? '首次自动信任' : '人工确认（历史记录）' }}</dd>
             <dt>开始时间</dt><dd>{{ selected.started_at ? dateLabel(selected.started_at) : '尚未开始' }}</dd>
             <dt>耗时</dt><dd>{{ selected.duration_ms !== null ? `${selected.duration_ms} ms` : (selected.status === 'running' ? '计时中' : '未记录') }}</dd>
             <template v-if="selected.status === 'failed'"><dt>结果</dt><dd class="ssh-test-error">{{ selected.failure_message === null ? '该记录未保存具体错误，请重新测试' : selected.failure_message }}</dd></template>
           </dl>
+        </section>
+        <section v-if="selected && !recordLoadFailed && selected.auto_trusted_keys.length" class="ssh-test-challenge" aria-label="本次自动信任的服务器身份">
+          <h2>本次新增信任（{{ selected.auto_trusted_keys.length }}）</h2>
+          <p>以下公钥已保存供后续连接校验，连接是否成功以测试结果为准。</p>
+          <div v-for="identity in selected.auto_trusted_keys" :key="`${identity.target_type}:${identity.target_id}:${identity.fingerprint}`">
+            <p>{{ identity.target_type === 'jump_host' ? '跳板机' : '目标主机' }} · {{ identity.address }}:{{ identity.port }} · {{ identity.key_type }}</p>
+            <p class="ssh-fingerprint">指纹：{{ identity.fingerprint }}</p>
+          </div>
         </section>
         <section v-if="selected && !recordLoadFailed && selected.challenge" class="ssh-test-challenge" aria-label="服务器身份核对">
             <h2>服务器身份核对</h2>

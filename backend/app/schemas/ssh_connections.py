@@ -12,6 +12,7 @@ class ConnectionTestInput(BaseModel):
     target_type: TargetType
     target_id: int = Field(gt=0)
     version: int = Field(gt=0)
+    host_key_policy: Literal["accept_new"] = "accept_new"
 
 
 class HostKeyChallenge(BaseModel):
@@ -43,6 +44,8 @@ class ConnectionTestResponse(BaseModel):
     finished_at: datetime | None
     duration_ms: int | None
     challenge: HostKeyChallenge | None
+    host_key_policy: Literal["strict", "accept_new"]
+    auto_trusted_keys: list[HostKeyChallenge]
 
     @field_validator("created_at", "started_at", "finished_at")
     @classmethod

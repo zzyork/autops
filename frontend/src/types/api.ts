@@ -104,6 +104,14 @@ export type HostInput = Omit<Host, 'id' | 'has_password' | 'created_at' | 'updat
 export type HostUpdateInput = HostInput & { version: number }
 
 export type ConnectionTargetType = 'host' | 'jump_host'
+export type HostKeyPolicy = 'strict' | 'accept_new'
+
+export interface ConnectionTestInput {
+  target_type: ConnectionTargetType
+  target_id: number
+  version: number
+  host_key_policy?: 'accept_new'
+}
 
 export interface ConnectionTestTarget {
   target_type: ConnectionTargetType
@@ -140,4 +148,6 @@ export interface ConnectionTest {
   finished_at: string | null
   duration_ms: number | null
   challenge: ConnectionTestChallenge | null
+  host_key_policy: HostKeyPolicy
+  auto_trusted_keys: ConnectionTestChallenge[]
 }

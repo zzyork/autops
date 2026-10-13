@@ -40,6 +40,8 @@ class ConnectionTest(Base):
     username: Mapped[str]
     via_jump_host: Mapped[str | None]
     snapshot: Mapped[str]
+    host_key_policy: Mapped[str] = mapped_column(String(16), default="accept_new")
+    auto_trusted_keys: Mapped[list[dict[str, str | int | None]]] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(default="queued")
     stage: Mapped[str | None]
     failure_code: Mapped[str | None]
