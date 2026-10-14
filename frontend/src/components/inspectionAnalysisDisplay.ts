@@ -1,4 +1,8 @@
-import type { AnalysisEvidence, AnalysisIssue, AnalysisSeverity, DiagnosticGroup } from '@/types/inspections'
+import type { AnalysisEvidence, AnalysisIssue, AnalysisSeverity, AnalysisStatus, DiagnosticGroup } from '@/types/inspections'
+
+export function analysisStatusLabel(status: AnalysisStatus): string {
+  return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
+}
 
 interface LogDetail {
   id: string

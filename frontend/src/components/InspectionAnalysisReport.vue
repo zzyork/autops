@@ -6,7 +6,7 @@ import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, timeLabel } from '@/components/inspectionDisplay'
 import ListPagination from '@/components/ListPagination.vue'
 import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
-import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
+import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, analysisStatusLabel as statusLabel, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
 import { useListPagination } from '@/components/pagination'
 import type { AnalysisEvidence, AnalysisIssue, AnalysisResponse, RunStatus } from '@/types/inspections'
 
@@ -37,9 +37,6 @@ function issueHost(issue: AnalysisIssue): string {
   return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
 }
 
-function statusLabel(status: AnalysisResponse['status']): string {
-  return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
-}
 function statusType(status: AnalysisResponse['status']): 'info' | 'success' | 'warning' | 'danger' {
   if (status === 'completed') return 'success'
   if (status === 'failed' || status === 'interrupted') return 'danger'

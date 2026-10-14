@@ -13,8 +13,10 @@ const labels: Record<CheckId, string> = {
 <template>
   <section class="ai-proposal" :aria-label="`巡检计划 ${proposal.name}`">
     <div class="ai-card-heading"><strong>{{ proposal.name }}</strong><ElTag :type="proposal.status === 'confirmed' ? 'success' : proposal.status === 'cancelled' ? 'info' : 'warning'" size="small">{{ proposal.status === 'confirmed' ? '已确认' : proposal.status === 'cancelled' ? '已拒绝' : '待确认' }}</ElTag></div>
-    <p>检查项：{{ proposal.checks.map((id) => labels[id]).join('、') }}</p>
-    <div class="ai-proposal-hosts"><div v-for="host in proposal.hosts" :key="host.id">{{ host.name }} · {{ host.address }} <span class="inspection-muted">(ID {{ host.id }} / 版本 {{ host.version }})</span></div></div>
+    <template v-if="proposal.status === 'pending'">
+      <p>检查项：{{ proposal.checks.map((id) => labels[id]).join('、') }}</p>
+      <div class="ai-proposal-hosts"><div v-for="host in proposal.hosts" :key="host.id">{{ host.name }} · {{ host.address }} <span class="inspection-muted">(ID {{ host.id }} / 版本 {{ host.version }})</span></div></div>
+    </template>
     <div v-if="proposal.status === 'pending'" class="ai-proposal-actions"><ElButton :disabled="busy" @click="emit('decide', proposal.id, false)">拒绝</ElButton><ElButton type="primary" :loading="busy" :disabled="busy" @click="emit('decide', proposal.id, true)">确认并执行巡检</ElButton></div>
   </section>
 </template>
