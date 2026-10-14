@@ -5,6 +5,7 @@ import { getInspectionTask } from '@/api/inspections'
 import { showRequestError } from '@/components/feedback'
 import { isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
 import InspectionTaskDetail from '@/components/InspectionTaskDetail.vue'
+import DisclosurePanel from '@/components/DisclosurePanel.vue'
 import type { TaskDetail } from '@/types/inspections'
 import '@/styles/inspections.css'
 
@@ -45,8 +46,7 @@ onUnmounted(() => { active = false; sequence++; clearTimeout(timer) })
     <template v-if="loaded && task">
       <div class="ai-card-heading"><strong>{{ task.name }}</strong><ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></div>
       <p class="inspection-muted">主机 {{ task.completed_hosts }} / {{ task.host_count }} 完成，{{ task.failed_hosts }} 失败</p>
-      <ElButton link type="primary" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? '收起详情' : '查看详情' }}</ElButton>
-      <InspectionTaskDetail v-if="expanded" :task="task" />
+      <DisclosurePanel v-model="expanded" label="巡检任务详情" :context="task.name"><InspectionTaskDetail :task="task" /></DisclosurePanel>
     </template>
     <p v-else-if="loading" class="inspection-muted">正在读取任务...</p>
     <p v-else class="inspection-retry">任务未加载。<ElButton @click="load">重试</ElButton></p>

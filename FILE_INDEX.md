@@ -179,6 +179,7 @@
 | `frontend/src/types/ai.ts` | 模型能力、会话消息状态及巡检计划类型。最后同步：2026-10-12。 |
 | `frontend/src/components/ChatProposalCard.vue` | 显示计划执行范围，发出确认或拒绝事件。最后同步：2026-10-12。 |
 | `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务进度并复用已有详情组件。最后同步：2026-10-12。 |
+| `frontend/src/components/DisclosurePanel.vue` | 单项详情共用展开入口，接收名称、可选上下文、双向展开状态与内容插槽，使用中性描边按钮、左侧状态箭头和唯一内容关联；按需挂载详情。最后同步：2026-10-14。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入。最后同步：2026-10-12。 |
 | `frontend/src/views/ChatView.vue` | 对话首页，会话历史、首次发送自动使用主模型创建会话、流式输入输出和计划决策。最后同步：2026-10-12。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |

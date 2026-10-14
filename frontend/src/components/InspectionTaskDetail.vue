@@ -71,16 +71,17 @@ async function exportReport() {
           <ElTag :type="hostSummary.critical ? 'danger' : 'info'" size="small">重要 {{ hostSummary.critical }}</ElTag>
           <ElTag :type="hostSummary.warning ? 'warning' : 'info'" size="small">警告 {{ hostSummary.warning }}</ElTag>
           <span v-if="hostSummary.incomplete" class="inspection-muted">{{ hostSummary.incomplete }} 项尚未完成，风险无法完整判定</span>
-          <div class="inspection-collapse-actions"><ElButton link type="primary" @click="expandedChecks = selectedHost.checks.map((check) => check.check_id)">全部展开</ElButton><ElButton link @click="expandedChecks = []">全部折叠</ElButton></div>
+          <div v-if="visibleChecks.length" class="inspection-collapse-actions"><ElButton native-type="button" @click="expandedChecks = visibleChecks.map((check) => check.check_id)">全部展开</ElButton><ElButton native-type="button" @click="expandedChecks = []">全部收起</ElButton></div>
         </div>
         <ElAlert v-if="selectedHost.failure_code === 'host_key_required'" type="warning" :closable="false" show-icon class="inspection-key-alert">
           <template #title>该主机因主机密钥尚未确认而未完成巡检。请到 <RouterLink to="/assets/hosts">资产管理</RouterLink> 对该主机进行连接测试并独立核对身份。</template>
         </ElAlert>
         <p v-else-if="selectedHost.failure_code" class="inspection-muted">该主机未完成巡检（{{ selectedHost.failure_code }}），无法判定风险。</p>
         <p v-if="!selectedHost.checks.length" class="inspection-muted">检查项尚未开始。</p>
-        <ElCollapse v-model="expandedChecks" class="inspection-checks">
+        <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="left" class="inspection-checks ui-collapse">
         <ElCollapseItem v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`" :name="check.check_id">
-          <template #title><div class="inspection-check-header"><h4>{{ check.title }}</h4><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="inspection-muted">{{ check.payload.findings.length }} 条风险发现</span></div></template>
+          <template #title="{ isActive }"><div class="inspection-check-header"><h4>{{ check.title }}</h4><span class="ui-collapse-action">{{ isActive ? '收起' : '展开' }}</span><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="inspection-muted">{{ check.payload.findings.length }} 条风险发现</span></div></template>
+          <template #icon="{ isActive }"><svg class="ui-collapse-arrow" :class="{ 'is-expanded': isActive }" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="m5 3 4 4-4 4" /></svg></template>
           <section class="inspection-check-result" :aria-label="check.title">
           <p v-if="check.status === 'failed' || check.status === 'interrupted' || check.status === 'skipped'" class="inspection-muted">{{ check.status === 'skipped' ? '检查已跳过' : '检查未完成' }}{{ check.error_code ? `（${check.error_code}）` : '' }}，无法判定风险。</p>
           <p v-else-if="check.status === 'queued'" class="inspection-muted">检查尚未开始。</p>

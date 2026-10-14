@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ElCollapse, ElCollapseItem, ElTag } from 'element-plus'
+import { ElTag } from 'element-plus'
+import DisclosurePanel from '@/components/DisclosurePanel.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { useListPagination } from '@/components/pagination'
 import { analysisSeverityLabel, analysisSeverityType, issueLogDetails } from '@/components/inspectionAnalysisDisplay'
@@ -24,8 +25,7 @@ const { page, pageSize, total, pageItems } = useListPagination(details)
       <section><h5>处理建议</h5><p>{{ issue.recommendation }}</p></section>
     </div>
     <div class="issue-footer">
-    <ElCollapse v-if="total" class="issue-groups">
-      <ElCollapseItem name="details" title="相关报错详情">
+    <DisclosurePanel v-if="total" label="相关报错详情" :context="issue.title">
         <div v-for="detail in pageItems" :key="detail.id" class="issue-group">
           <p class="issue-message">{{ detail.message }}</p>
           <dl class="issue-detail-context">
@@ -36,8 +36,7 @@ const { page, pageSize, total, pageItems } = useListPagination(details)
           </dl>
         </div>
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
-      </ElCollapseItem>
-    </ElCollapse>
+    </DisclosurePanel>
     </div>
   </article>
 </template>
@@ -59,6 +58,5 @@ const { page, pageSize, total, pageItems } = useListPagination(details)
 .issue-analysis-grid section { min-width: 0; border-top: 1px solid var(--ui-border); padding-top: 12px; }
 .issue-analysis-grid h5 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .issue-footer { display: grid; gap: 8px; padding: 0 16px 12px; }
-.issue-groups { min-width: 0; }
 .issue-group { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--ui-border); }
 </style>

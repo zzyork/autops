@@ -39,13 +39,11 @@
 .inspection-host-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .inspection-collapse-actions { display: flex; gap: 8px; margin-left: auto; }
 .inspection-checks { border: 1px solid var(--ui-border); }
-.inspection-checks .el-collapse-item__header { height: auto; min-height: 48px; padding: 10px 16px; background: var(--ui-surface-muted); line-height: 1.5; }
-.inspection-checks .el-collapse-item__header:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
 .inspection-checks .el-collapse-item__content { padding-bottom: 0; }
 .inspection-check-result { display: grid; gap: 16px; padding: 16px; min-width: 0; }
 .inspection-check-result p { margin: 0; }
 .inspection-check-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
-.inspection-check-header h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.inspection-check-header h4 { margin: 0; font-size: 13px; font-weight: 600; }
 .inspection-finding { display: flex; align-items: flex-start; gap: 8px; padding: 8px; overflow-wrap: anywhere; }
 .inspection-finding-warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .inspection-finding-critical { background: var(--ui-danger-soft); color: var(--ui-danger); }
