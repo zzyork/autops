@@ -45,7 +45,6 @@ const { menuCollapsed, assetsExpanded, inspectionsExpanded, operationsExpanded, 
         <svg v-if="!menuCollapsed" class="console-menu-label-arrow" viewBox="0 0 24 24" aria-hidden="true"><path :d="operationsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
       </button>
       <nav v-show="operationsExpanded" id="operations-navigation" aria-label="服务器运维">
-        <RouterLink to="/operations/hostname" class="console-menu-item" aria-label="主机名管理" title="主机名管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h7" /></svg><span v-if="!menuCollapsed">主机名管理</span></RouterLink>
         <RouterLink to="/operations/packages" class="console-menu-item" aria-label="软件包与仓库" title="软件包与仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8" /></svg><span v-if="!menuCollapsed">软件包与仓库</span></RouterLink>
         <RouterLink to="/operations/firewall" class="console-menu-item" aria-label="防火墙管理" title="防火墙管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 9 5-1 8-4 8-9V7zM8 12h8" /></svg><span v-if="!menuCollapsed">防火墙管理</span></RouterLink>
         <RouterLink to="/operations/kernel" class="console-menu-item" aria-label="内核参数" title="内核参数"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6" /></svg><span v-if="!menuCollapsed">内核参数</span></RouterLink>

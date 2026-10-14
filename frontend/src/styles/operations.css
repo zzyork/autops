@@ -35,3 +35,6 @@
 .operation-section > .operation-actions { margin-top: 20px; }
 .operation-history-detail { display: grid; gap: 8px; }
 .operation-link { white-space: normal; height: auto; text-align: left; overflow-wrap: anywhere; }
+.operations-embedded { padding: 0; }
+.hostname-operation-dialog .el-dialog__body { max-height: calc(100vh - 190px); overflow-y: auto; }
+.hostname-operation-dialog .el-dialog__title { overflow-wrap: anywhere; }

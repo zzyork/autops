@@ -12,3 +12,5 @@ def migrate_operations(engine: Engine) -> None:
             connection.execute(text("ALTER TABLE operation_hosts ADD COLUMN resolution_note VARCHAR"))
         if "resolved_at" not in columns:
             connection.execute(text("ALTER TABLE operation_hosts ADD COLUMN resolved_at DATETIME"))
+        if "identity_required" not in columns:
+            connection.execute(text("ALTER TABLE operation_hosts ADD COLUMN identity_required BOOLEAN NOT NULL DEFAULT 0"))

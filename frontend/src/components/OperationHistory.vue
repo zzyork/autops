@@ -8,8 +8,8 @@ import { DEFAULT_PAGE_SIZE } from '@/components/pagination'
 import { operationTime, statusType, taskLabels } from '@/components/operationDisplay'
 import type { OperationModule, OperationModuleId, OperationTask } from '@/types/operations'
 
-const props = defineProps<{ module: OperationModuleId; modules: OperationModule[]; revision: number }>()
-const emit = defineEmits<{ select: [id: string] }>()
+const props = defineProps<{ module: OperationModuleId; modules: OperationModule[]; revision: number; fixedModule?: boolean }>()
+const emit = defineEmits<{ select: [id: string]; busy: [value: boolean] }>()
 const vLoading = ElLoading.directive
 const filter = ref<OperationModuleId | null>(props.module)
 const page = ref(1)
@@ -17,6 +17,7 @@ const pageSize = ref(DEFAULT_PAGE_SIZE)
 const tasks = ref<OperationTask[]>([])
 const total = ref(0)
 const loading = ref(false)
+watch(loading, (value) => emit('busy', value), { immediate: true })
 const loaded = ref(false)
 let requestId = 0
 let active = true
@@ -55,7 +56,7 @@ onUnmounted(() => { active = false; requestId++ })
 <template>
   <section class="host-section operation-section" aria-label="运维任务历史">
     <div class="section-header"><h2>任务历史</h2></div>
-    <div class="host-toolbar"><span></span><div class="host-toolbar-right"><label class="operation-filter">模块 <ElSelect :model-value="filter ?? ''" :disabled="loading" aria-label="筛选运维模块" @update:model-value="changeFilter"><ElOption label="全部模块" value="" /><ElOption v-for="item in modules" :key="item.id" :label="item.title" :value="item.id" /></ElSelect></label><ElButton :loading="loading" @click="load">刷新</ElButton></div></div>
+    <div class="host-toolbar"><span></span><div class="host-toolbar-right"><label v-if="!fixedModule" class="operation-filter">模块 <ElSelect :model-value="filter ?? ''" :disabled="loading" aria-label="筛选运维模块" @update:model-value="changeFilter"><ElOption label="全部模块" value="" /><ElOption v-for="item in modules" :key="item.id" :label="item.title" :value="item.id" /></ElSelect></label><ElButton :loading="loading" @click="load">刷新</ElButton></div></div>
     <div v-loading="loading" class="host-table-wrap">
       <ElTable v-if="loaded" :data="tasks" row-key="id" class="host-table" empty-text="暂无历史任务">
         <ElTableColumn label="任务" min-width="180"><template #default="{ row }"><ElButton link type="primary" class="operation-link" @click="emit('select', row.id)">{{ row.title }}</ElButton></template></ElTableColumn>

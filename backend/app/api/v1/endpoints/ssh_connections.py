@@ -1,13 +1,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from ...dependencies import Database
 from ....connection_models import ConnectionTest
 from ....repositories.ssh_connections import list_tests
 from ....schemas.ssh_connections import ConnectionTestInput, ConnectionTestResponse, TargetType
-from ....services.ssh_connections import trust_test_key
 
 router = APIRouter(prefix="/ssh/connection-tests", tags=["SSH 连接"])
 
@@ -30,7 +29,6 @@ def read_test(test_id: UUID, session: Database) -> ConnectionTest:
     return record
 
 
-@router.post("/{test_id}/trust", status_code=204)
-def trust_key(test_id: UUID, request: Request, session: Database) -> Response:
-    trust_test_key(session, request.app.state.cipher, str(test_id))
-    return Response(status_code=204)
+@router.post("/{test_id}/trust", status_code=410)
+def trust_key(test_id: UUID) -> None:
+    raise HTTPException(410, "旧测试确认接口已停用，请使用独立身份检查")

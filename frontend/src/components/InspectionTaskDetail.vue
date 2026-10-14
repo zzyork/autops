@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
+import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
 import { checkLabel, conclusionLabel, conclusionType, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runType, summarizeChecks, timeLabel } from '@/components/inspectionDisplay'
 import type { CheckResponse, TaskDetail } from '@/types/inspections'
 
@@ -14,12 +15,42 @@ const expandedChecks = ref<string[]>([])
 const hostSummary = computed(() => summarizeChecks(selectedHost.value?.checks ?? []))
 const visibleChecks = computed(() => displayChecks(selectedHost.value?.checks ?? []))
 let session = 0
+let observedRunning = false
+const promptedHosts = new Set<string>()
+const checkingIdentity = ref(false)
+async function checkIdentity() {
+  const host = selectedHost.value
+  if (!host || checkingIdentity.value) return
+  const current = session
+  checkingIdentity.value = true
+  try {
+    await ensureSSHIdentities([{ target_type: 'host', target_id: host.host_id }], { isCurrent: () => current === session })
+  } catch (error) { if (current === session) showSystemError(error) }
+  finally { if (current === session) checkingIdentity.value = false }
+}
 watch(() => props.task.id, () => {
   session++
+  observedRunning = false
+  promptedHosts.clear()
+  checkingIdentity.value = false
   hostId.value = props.task.hosts[0]?.id ?? null
   exporting.value = false
 }, { immediate: true })
 onUnmounted(() => { session++ })
+watch(() => props.task, (task) => {
+  if (wasSSHOperationStarted(task.id) || isActiveRun(task.status)) observedRunning = true
+  if (!observedRunning) return
+  for (const host of task.hosts) {
+    if (host.failure_code !== 'host_key_required' || promptedHosts.has(host.id)) continue
+    promptedHosts.add(host.id)
+    const current = session
+    void ensureSSHIdentities([{ target_type: 'host', target_id: host.host_id }], {
+      isCurrent: () => current === session && props.task.id === task.id,
+    }).catch((error: unknown) => {
+      if (current === session) showSystemError(error)
+    })
+  }
+}, { immediate: true })
 watch(hostId, () => {
   expandedChecks.value = selectedHost.value?.checks.map((check) => check.check_id) ?? []
 }, { immediate: true })
@@ -46,8 +77,8 @@ async function exportReport() {
     link.click()
     link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
-  } catch {
-    if (current === session) showSystemError()
+  } catch (error) {
+    if (current === session) showSystemError(error)
   } finally {
     if (current === session) exporting.value = false
   }
@@ -74,16 +105,17 @@ async function exportReport() {
           <div v-if="visibleChecks.length" class="inspection-collapse-actions"><ElButton native-type="button" @click="expandedChecks = visibleChecks.map((check) => check.check_id)">全部展开</ElButton><ElButton native-type="button" @click="expandedChecks = []">全部收起</ElButton></div>
         </div>
         <ElAlert v-if="selectedHost.failure_code === 'host_key_required'" type="warning" :closable="false" show-icon class="inspection-key-alert">
-          <template #title>该主机因主机密钥尚未确认而未完成巡检。请到 <RouterLink to="/assets/hosts">资产管理</RouterLink> 对该主机进行连接测试并独立核对身份。</template>
+          <template #title>该主机因 SSH 身份尚未确认而未完成巡检。确认身份后本次巡检不会自动重试，请重新发起巡检。</template>
         </ElAlert>
-        <p v-else-if="selectedHost.failure_code" class="inspection-muted">该主机未完成巡检（{{ selectedHost.failure_code }}），无法判定风险。</p>
+        <ElButton v-if="selectedHost.failure_code === 'host_key_required'" :loading="checkingIdentity" @click="checkIdentity">重新检查服务器身份</ElButton>
+        <p v-else-if="selectedHost.failure_code" class="inspection-muted">该主机未完成巡检，无法判定风险。</p>
         <p v-if="!selectedHost.checks.length" class="inspection-muted">检查项尚未开始。</p>
         <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="left" class="inspection-checks ui-collapse">
         <ElCollapseItem v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`" :name="check.check_id">
           <template #title="{ isActive }"><div class="inspection-check-header"><h4>{{ check.title }}</h4><span class="ui-collapse-action">{{ isActive ? '收起' : '展开' }}</span><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="inspection-muted">{{ check.payload.findings.length }} 条风险发现</span></div></template>
           <template #icon="{ isActive }"><svg class="ui-collapse-arrow" :class="{ 'is-expanded': isActive }" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="m5 3 4 4-4 4" /></svg></template>
           <section class="inspection-check-result" :aria-label="check.title">
-          <p v-if="check.status === 'failed' || check.status === 'interrupted' || check.status === 'skipped'" class="inspection-muted">{{ check.status === 'skipped' ? '检查已跳过' : '检查未完成' }}{{ check.error_code ? `（${check.error_code}）` : '' }}，无法判定风险。</p>
+          <p v-if="check.status === 'failed' || check.status === 'interrupted' || check.status === 'skipped'" class="inspection-muted">{{ check.status === 'skipped' ? '检查已跳过' : '检查未完成' }}，无法判定风险。</p>
           <p v-else-if="check.status === 'queued'" class="inspection-muted">检查尚未开始。</p>
           <p v-else-if="check.status === 'running'" class="inspection-muted">正在检查，结果尚未确定。</p>
           <p v-if="check.status !== 'completed' && check.payload.findings.length" class="inspection-muted">以下为已返回的风险线索，检查尚未完成，不能视为完整结论。</p>

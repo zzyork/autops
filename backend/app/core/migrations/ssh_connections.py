@@ -1,6 +1,6 @@
 from sqlalchemy import Engine, inspect, text
 
-from ...connection_models import ConnectionTest, KnownHostKey
+from ...connection_models import ConnectionTest, IdentityChallengeRecord, KnownHostKey
 
 
 def migrate_ssh_connections(engine: Engine) -> None:
@@ -8,6 +8,7 @@ def migrate_ssh_connections(engine: Engine) -> None:
     with engine.begin() as connection:
         KnownHostKey.__table__.create(connection, checkfirst=True)
         ConnectionTest.__table__.create(connection, checkfirst=True)
+        IdentityChallengeRecord.__table__.create(connection, checkfirst=True)
         columns = {column["name"] for column in inspect(connection).get_columns("ssh_connection_tests")}
         if "failure_message" not in columns:
             connection.execute(text("ALTER TABLE ssh_connection_tests ADD COLUMN failure_message VARCHAR"))

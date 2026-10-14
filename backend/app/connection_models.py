@@ -40,7 +40,7 @@ class ConnectionTest(Base):
     username: Mapped[str]
     via_jump_host: Mapped[str | None]
     snapshot: Mapped[str]
-    host_key_policy: Mapped[str] = mapped_column(String(16), default="accept_new")
+    host_key_policy: Mapped[str] = mapped_column(String(16), default="strict")
     auto_trusted_keys: Mapped[list[dict[str, str | int | None]]] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(default="queued")
     stage: Mapped[str | None]
@@ -54,3 +54,25 @@ class ConnectionTest(Base):
     duration_ms: Mapped[int | None]
     version: Mapped[int] = mapped_column(default=1)
     __mapper_args__ = {"version_id_col": version}
+
+
+class IdentityChallengeRecord(Base):
+    __tablename__ = "ssh_identity_challenges"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    target_type: Mapped[str] = mapped_column(String(16))
+    target_id: Mapped[int]
+    target_name: Mapped[str]
+    address: Mapped[str]
+    port: Mapped[int]
+    key_type: Mapped[str]
+    public_key: Mapped[str]
+    fingerprint: Mapped[str]
+    previous_fingerprint: Mapped[str | None]
+    previous_state: Mapped[dict | None] = mapped_column(JSON)
+    jump_state: Mapped[dict | None] = mapped_column(JSON)
+    requested_type: Mapped[str] = mapped_column(String(16))
+    requested_id: Mapped[int]
+    snapshot: Mapped[str]
+    expires_at: Mapped[datetime]
+    consumed_at: Mapped[datetime | None]

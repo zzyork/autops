@@ -70,6 +70,7 @@
 .host-address, .host-secondary { margin-top: 2px; font-size: 12px; line-height: 18px; color: var(--ui-text-muted); overflow-wrap: anywhere; }
 .host-empty { padding: 24px 0; }
 .host-table-wrap:has(+ .host-empty) .el-table__empty-block { display: none; }
+.host-more-button { margin-left: 12px; }
 .asset-form { display: grid; gap: 20px; padding: 4px 0 12px; }
 .asset-form .field { display: flex; flex-direction: column; min-width: 0; gap: 8px; font-size: 13px; font-weight: 400; color: var(--ui-text); }
 .asset-form .field > span { display: block; }

@@ -93,7 +93,10 @@ class OperationManager:
                 raise HTTPException(409, "远端读取失败")
             return Inspection(host_id=data.host_id, host_name=plan.name, module=data.module,
                               output=visible_output(result.stdout))
-        except (HostKeyRequired, SSHConnectionError, CommandExecutionError) as exc:
+        except HostKeyRequired:
+            raise HTTPException(409, {"code": "ssh_identity_required", "target": {
+                "target_type": "host", "target_id": data.host_id}}) from None
+        except (SSHConnectionError, CommandExecutionError) as exc:
             logger.warning("Operation inspect failed: %s", type(exc).__name__)
             raise HTTPException(409, "主机信任、连接或读取检查失败") from None
         except ValueError:
@@ -127,7 +130,10 @@ class OperationManager:
                                       asset_snapshot=plan.snapshot, use_sudo=use_sudo,
                                       preflight_stdout=visible_output(result.stdout), preflight_hash=digest(result.stdout),
                                       before=visible_output(result.stdout), after=None, error=None))
-            except (HostKeyRequired, SSHConnectionError, CommandExecutionError, ValueError) as exc:
+            except HostKeyRequired:
+                raise HTTPException(409, {"code": "ssh_identity_required", "target": {
+                    "target_type": "host", "target_id": host_id}}) from None
+            except (SSHConnectionError, CommandExecutionError, ValueError) as exc:
                 logger.warning("Operation prepare preflight failed for host %s: %s", host_id, type(exc).__name__)
                 raise HTTPException(409, "主机权限、信任、连接或预检失败") from None
         if self.stopping.is_set() or self.persistence_failed.is_set():

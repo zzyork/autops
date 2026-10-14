@@ -1,5 +1,7 @@
 import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnectionInput, SessionSummary } from '@/types/ai'
 import { get, HttpError, request, streamRequest } from './http'
+import { rememberSSHOperation, withSSHIdentities } from './sshIdentity'
+import type { SSHIdentityOptions } from '@/types/sshIdentity'
 
 const connectionPath = (id: number) => `/ai/connections/${encodeURIComponent(id)}`
 const sessionPath = (id: string) => `/ai/sessions/${encodeURIComponent(id)}`
@@ -41,5 +43,15 @@ export const listSessions = () => get<SessionSummary[]>('/ai/sessions')
 export const createSession = () => request<SessionSummary>('/ai/sessions', { method: 'POST' })
 export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })
-export const decideProposal = (sessionId: string, proposalId: string, approve: boolean) => request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, { method: 'POST', body: { approve }, timeoutMs: 120000 })
+export async function decideProposal(sessionId: string, proposalId: string, approve: boolean, options: SSHIdentityOptions = {}) {
+  const execute = () => request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, { method: 'POST', body: { approve }, timeoutMs: 120000, signal: options.signal })
+  if (!approve) return execute()
+  const session = await getSession(sessionId)
+  const proposal = session.proposals.find((item) => item.id === proposalId)
+  if (!proposal) throw new HttpError()
+  const result = await withSSHIdentities(proposal.hosts.map((host) => ({ target_type: 'host', target_id: host.id, version: host.version })), execute, options)
+  const taskId = result.proposals.find((item) => item.id === proposalId)?.task_id
+  if (taskId) rememberSSHOperation(taskId)
+  return result
+}
 export const sendMessage = (id: string, content: string, signal: AbortSignal, onToken: (text: string) => void) => streamRequest<ChatSession>(`${sessionPath(id)}/messages`, { body: { content }, signal, timeoutMs: 300000, onToken, validateResult: isChatSession })

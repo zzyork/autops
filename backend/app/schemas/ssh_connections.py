@@ -12,17 +12,6 @@ class ConnectionTestInput(BaseModel):
     target_type: TargetType
     target_id: int = Field(gt=0)
     version: int = Field(gt=0)
-    host_key_policy: Literal["accept_new"] = "accept_new"
-
-
-class HostKeyChallenge(BaseModel):
-    target_type: TargetType
-    target_id: int
-    address: str
-    port: int
-    key_type: str
-    fingerprint: str
-    previous_fingerprint: str | None
 
 
 class ConnectionTestResponse(BaseModel):
@@ -34,20 +23,12 @@ class ConnectionTestResponse(BaseModel):
     address: str
     port: int
     username: str
-    via_jump_host: str | None
     status: TestStatus
-    stage: Literal["target", "jump_host"] | None
-    failure_code: Literal["authentication", "timeout", "connection", "configuration", "internal"] | None
-    failure_message: str | None
     created_at: datetime
     started_at: datetime | None
-    finished_at: datetime | None
     duration_ms: int | None
-    challenge: HostKeyChallenge | None
-    host_key_policy: Literal["strict", "accept_new"]
-    auto_trusted_keys: list[HostKeyChallenge]
 
-    @field_validator("created_at", "started_at", "finished_at")
+    @field_validator("created_at", "started_at")
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value

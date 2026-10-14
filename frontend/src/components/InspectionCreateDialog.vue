@@ -124,12 +124,12 @@ async function submit() {
   const current = session
   saving.value = true
   try {
-    const task = await createInspectionTask(body)
+    const task = await createInspectionTask(body, { isCurrent: () => current === session && props.modelValue })
     if (current !== session) return
     emit('update:modelValue', false)
     emit('created', task)
-  } catch {
-    if (current === session) showSystemError()
+  } catch (error) {
+    if (current === session) showSystemError(error)
   } finally {
     if (current === session) saving.value = false
   }

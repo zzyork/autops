@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElButton, ElTag } from 'element-plus'
 import { getInspectionAnalysis, getInspectionTask } from '@/api/inspections'
 import { showRequestError } from '@/components/feedback'
+import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
 import { isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
 import { analysisStatusLabel } from '@/components/inspectionAnalysisDisplay'
 import type { AnalysisResponse, TaskDetail } from '@/types/inspections'
@@ -27,6 +28,8 @@ let analysisTimer: ReturnType<typeof setTimeout> | undefined
 let sequence = 0
 let analysisSequence = 0
 let terminalPolls = 0
+let observedRunning = false
+const promptedHosts = new Set<string>()
 const POLL_MS = 1000
 const ANALYSIS_POLL_MS = 2000
 const TERMINAL_POLL_COUNT = 5
@@ -45,10 +48,10 @@ async function loadAnalysis() {
     if (taskActive || result.status === 'queued' || result.status === 'running' || (result.status === 'not_generated' && terminalPolls > 0)) {
       analysisTimer = setTimeout(() => { void loadAnalysis() }, ANALYSIS_POLL_MS)
     }
-  } catch {
+  } catch (error) {
     if (!active || current !== analysisSequence) return
     analysisLoaded.value = false
-    showRequestError()
+    showRequestError(error)
   } finally {
     if (active && current === analysisSequence) analysisLoading.value = false
   }
@@ -65,19 +68,44 @@ async function load() {
     const justFinished = task.value !== null && isActiveRun(task.value.status) && !isActiveRun(result.status)
     task.value = result
     loaded.value = true
+    if (wasSSHOperationStarted(result.id) || isActiveRun(result.status)) observedRunning = true
+    if (observedRunning) {
+      for (const host of result.hosts) {
+        if (host.failure_code !== 'host_key_required' || promptedHosts.has(host.id)) continue
+        promptedHosts.add(host.id)
+        void ensureSSHIdentities([{ target_type: 'host', target_id: host.host_id }], {
+          isCurrent: () => active && props.taskId === result.id,
+        }).catch((error: unknown) => {
+          if (active && props.taskId === result.id) showRequestError(error)
+        })
+      }
+    }
     if (isActiveRun(result.status)) timer = setTimeout(() => { void load() }, POLL_MS)
     if (firstLoad || justFinished) {
       terminalPolls = isActiveRun(result.status) ? 0 : TERMINAL_POLL_COUNT
       void loadAnalysis()
     }
-  } catch {
+  } catch (error) {
     if (!active || current !== sequence) return
     loaded.value = false
-    showRequestError()
+    showRequestError(error)
   } finally {
     if (active && current === sequence) loading.value = false
   }
 }
+watch(() => props.taskId, () => {
+  sequence++
+  analysisSequence++
+  clearTimeout(timer)
+  clearTimeout(analysisTimer)
+  task.value = null
+  loaded.value = false
+  analysis.value = null
+  analysisLoaded.value = false
+  observedRunning = false
+  promptedHosts.clear()
+  void load()
+})
 onMounted(() => { void load() })
 onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout(timer); clearTimeout(analysisTimer) })
 </script>
@@ -87,6 +115,7 @@ onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout
     <template v-if="loaded && task">
       <div class="ai-card-heading"><strong>{{ task.name }}</strong><ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></div>
       <p class="inspection-muted">已完成 {{ task.completed_hosts }} / {{ task.host_count }} 台主机巡检，执行失败 {{ task.failed_hosts }} 台。</p>
+      <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="inspection-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
       <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status"><p class="inspection-muted" role="status">AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。</p><ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton></div>
       <p v-else-if="analysisLoading" class="inspection-muted">正在读取 AI 报告状态...</p>
       <p v-else class="inspection-retry">AI 报告状态未加载。<ElButton @click="loadAnalysis">重试</ElButton></p>

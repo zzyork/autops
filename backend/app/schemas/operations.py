@@ -114,6 +114,7 @@ class HostResponse(StrictModel):
     host_name: str
     address: str
     status: HostStatus
+    identity_required: bool
     before: str | None
     after: str | None
     error: str | None

@@ -45,6 +45,7 @@ class OperationHost(Base):
     before: Mapped[str | None]
     after: Mapped[str | None]
     error: Mapped[str | None]
+    identity_required: Mapped[bool] = mapped_column(default=False)
     resolution_note: Mapped[str | None]
     resolved_at: Mapped[datetime | None]
     steps: Mapped[list[OperationStepRun]] = relationship(order_by="OperationStepRun.position", lazy="selectin")

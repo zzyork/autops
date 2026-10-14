@@ -67,7 +67,10 @@ def execute_host(manager, task_id: str, run_id: str, host_id: int) -> None:
                             break
                     else:
                         status, reason = "succeeded", None
-        except (HostKeyRequired, SSHConnectionError, CommandExecutionError) as exc:
+        except HostKeyRequired:
+            host.identity_required = True
+            status, reason = "failed", "服务器身份需确认，写入命令未开始"
+        except (SSHConnectionError, CommandExecutionError) as exc:
             logger.warning("Operation host %s remote failure: %s", run_id, type(exc).__name__)
             status, reason = "failed", "连接或预检中断，写入命令未开始"
         except (ValueError, HTTPException) as exc:

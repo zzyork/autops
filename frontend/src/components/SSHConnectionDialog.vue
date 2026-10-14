@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCheckbox, ElDialog, ElLoading, ElMessageBox } from 'element-plus'
-import { getConnectionTest, listConnectionTests, startConnectionTest, trustConnectionTest } from '@/api/ssh_connections'
+import { ElAlert, ElButton, ElDialog, ElLoading } from 'element-plus'
+import { getConnectionTest, listConnectionTests, startConnectionTest } from '@/api/ssh_connections'
 import { showSystemError } from '@/components/feedback'
+import { ensureSSHIdentities } from '@/api/sshIdentity'
 import { SSH_STATUS_UNAVAILABLE, sshTestDisplay } from '@/components/sshTestDisplay'
 import TestStatus from '@/components/TestStatus.vue'
 import type { ConnectionTest, ConnectionTestTarget } from '@/types/api'
@@ -24,7 +25,8 @@ const loaded = ref(false)
 const submitting = ref(false)
 const trusting = ref(false)
 const recordLoadFailed = ref(false)
-const verified = ref(false)
+const launchedId = ref<string | null>(null)
+const confirmedId = ref<string | null>(null)
 const selected = computed(() => history.value.find((item) => item.id === selectedId.value) ?? null)
 const hasActiveTest = computed(() => history.value.some(isActive))
 let session = 0
@@ -47,7 +49,8 @@ function reset() {
   submitting.value = false
   trusting.value = false
   recordLoadFailed.value = false
-  verified.value = false
+  launchedId.value = null
+  confirmedId.value = null
 }
 
 watch(() => [props.modelValue, props.target] as const, ([visible, target]) => {
@@ -68,6 +71,26 @@ function isActive(item: ConnectionTest) {
   return item.status === 'queued' || item.status === 'running'
 }
 
+function updateVisible(visible: boolean) {
+  if (!visible && (submitting.value || trusting.value)) return
+  emit('update:modelValue', visible)
+}
+
+async function checkIdentity(item: ConnectionTest, current: number) {
+  if (item.id !== launchedId.value || item.status !== 'awaiting_trust' || trusting.value) return
+  trusting.value = true
+  try {
+    await ensureSSHIdentities([{ target_type: item.target_type, target_id: item.target_id }], {
+      isCurrent: () => current === session && props.modelValue && launchedId.value === item.id,
+    })
+    if (current === session && launchedId.value === item.id) confirmedId.value = item.id
+  } catch (error) {
+    if (current === session) showSystemError(error)
+  } finally {
+    if (current === session) trusting.value = false
+  }
+}
+
 function poll(item: ConnectionTest) {
   if (!isActive(item) || !props.modelValue || selectedId.value !== item.id) return
   const currentSession = session
@@ -78,10 +101,11 @@ function poll(item: ConnectionTest) {
       if (currentSession !== session || currentPoll !== pollId) return
       updateRecord(result)
       if (isActive(result)) poll(result)
-    } catch {
+      else if (result.status === 'awaiting_trust') void checkIdentity(result, currentSession)
+    } catch (error) {
       if (currentSession === session && currentPoll === pollId) {
         recordLoadFailed.value = true
-        showSystemError()
+        showSystemError(error)
       }
     }
   }, POLL_INTERVAL_MS)
@@ -95,7 +119,6 @@ async function loadHistory() {
   loading.value = true
   loaded.value = false
   recordLoadFailed.value = false
-  verified.value = false
   try {
     const result = await listConnectionTests(target.target_type, target.target_id)
     if (current !== session) return
@@ -105,8 +128,8 @@ async function loadHistory() {
     loaded.value = true
     const item = selected.value
     if (item) poll(item)
-  } catch {
-    if (current === session) showSystemError()
+  } catch (error) {
+    if (current === session) showSystemError(error)
   } finally {
     if (current === session) loading.value = false
   }
@@ -117,7 +140,6 @@ function selectRecord(item: ConnectionTest) {
   stopPolling()
   selectedId.value = item.id
   recordLoadFailed.value = false
-  verified.value = false
   poll(item)
 }
 
@@ -127,53 +149,30 @@ async function startTest() {
   const current = session
   submitting.value = true
   try {
-    const item = await startConnectionTest({ target_type: target.target_type, target_id: target.target_id, version: target.version })
+    const item = await startConnectionTest({ target_type: target.target_type, target_id: target.target_id, version: target.version }, {
+      isCurrent: () => current === session && props.modelValue,
+    })
     if (current !== session) return
     stopPolling()
     updateRecord(item)
     selectedId.value = item.id
+    launchedId.value = item.id
+    confirmedId.value = null
     recordLoadFailed.value = false
-    verified.value = false
     poll(item)
-  } catch {
-    if (current === session) showSystemError()
+    if (item.status === 'awaiting_trust') void checkIdentity(item, current)
+  } catch (error) {
+    if (current === session) showSystemError(error)
   } finally {
     if (current === session) submitting.value = false
   }
 }
 
-async function trustKey() {
-  const item = selected.value
-  const challenge = item?.challenge
-  if (!props.modelValue || !item || item.status !== 'awaiting_trust' || !challenge || !verified.value || trusting.value) return
-  const current = session
-  try {
-    await ElMessageBox.confirm(
-      `确认已独立核对 ${challenge.address}:${challenge.port} 的服务器身份？\n旧指纹：${challenge.previous_fingerprint ?? '无（首次信任）'}\n新指纹：${challenge.fingerprint}\n信任后将更新此主机密钥的信任记录，后续连接将按新指纹校验；本次测试不会自动重试。`,
-      '信任此主机密钥',
-      { confirmButtonText: '确认信任', cancelButtonText: '取消', type: 'warning', customClass: 'ssh-trust-confirm' },
-    )
-  } catch { return }
-  if (current !== session || selectedId.value !== item.id || !verified.value) return
-  trusting.value = true
-  try {
-    await trustConnectionTest(item.id)
-    if (current !== session) return
-    updateRecord({ ...item, status: 'trusted' })
-    verified.value = false
-    const result = await getConnectionTest(item.id)
-    if (current === session) updateRecord(result)
-  } catch {
-    if (current === session) showSystemError()
-  } finally {
-    if (current === session) trusting.value = false
-  }
-}
-
 function recordDisplay(item: ConnectionTest) {
-  return recordLoadFailed.value && selectedId.value === item.id
-    ? { status: 'unavailable' as const, label: SSH_STATUS_UNAVAILABLE, description: SSH_STATUS_UNAVAILABLE }
-    : sshTestDisplay(item.status)
+  if (recordLoadFailed.value && selectedId.value === item.id) {
+    return { status: 'unavailable' as const, label: SSH_STATUS_UNAVAILABLE, description: SSH_STATUS_UNAVAILABLE }
+  }
+  return sshTestDisplay(item.status)
 }
 
 function dateLabel(value: string) {
@@ -183,13 +182,12 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-  <ElDialog :model-value="modelValue" align-center :title="`SSH 连接测试：${target?.name ?? ''}`" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!trusting" :show-close="!trusting" @update:model-value="emit('update:modelValue', $event)" @closed="emit('closed')">
+  <ElDialog :model-value="modelValue" align-center :title="`SSH 连接测试：${target?.name ?? ''}`" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!submitting && !trusting" :show-close="!submitting && !trusting" @update:model-value="updateVisible" @closed="emit('closed')">
     <div v-loading="loading" class="ssh-test-dialog">
       <div class="ssh-test-actions">
          <ElButton type="primary" :loading="submitting" :disabled="!loaded || loading || trusting || hasActiveTest" @click="startTest">开始测试</ElButton>
         <ElButton :disabled="loading || submitting || trusting" @click="loadHistory">刷新记录</ElButton>
       </div>
-      <p class="ssh-test-muted">新测试首次连接会自动保存主机及关联跳板机的服务器公钥，已有密钥变化仍会拦截；请在可信网络使用。</p>
       <template v-if="loaded && !loading">
         <section aria-label="最近测试记录">
           <h2>最近测试记录</h2>
@@ -202,40 +200,18 @@ function dateLabel(value: string) {
           </div>
         </section>
         <section v-if="selected && !recordLoadFailed" class="ssh-test-result" aria-label="测试结果">
-          <h2>测试结果 <span class="ssh-test-status"><TestStatus :status="sshTestDisplay(selected.status).status" :description="`${selected.target_name}：${sshTestDisplay(selected.status).description}`" />{{ sshTestDisplay(selected.status).label }}</span></h2>
+          <h2>测试结果 <span class="ssh-test-status"><TestStatus :status="recordDisplay(selected).status" :description="`${selected.target_name}：${recordDisplay(selected).description}`" />{{ recordDisplay(selected).label }}</span></h2>
           <dl class="ssh-test-details">
             <dt>目标</dt><dd>{{ selected.target_name }} · {{ selected.address }}:{{ selected.port }}</dd>
-            <dt>登录用户</dt><dd>{{ selected.username }}{{ selected.via_jump_host ? '（目标主机）' : '' }}</dd>
-            <dt>身份策略</dt><dd>{{ selected.host_key_policy === 'accept_new' ? '首次自动信任' : '人工确认（历史记录）' }}</dd>
+            <dt>登录用户</dt><dd>{{ selected.username }}</dd>
             <dt>开始时间</dt><dd>{{ selected.started_at ? dateLabel(selected.started_at) : '尚未开始' }}</dd>
             <dt>耗时</dt><dd>{{ selected.duration_ms !== null ? `${selected.duration_ms} ms` : (selected.status === 'running' ? '计时中' : '未记录') }}</dd>
-            <template v-if="selected.status === 'failed'"><dt>结果</dt><dd class="ssh-test-error">{{ selected.failure_message === null ? '该记录未保存具体错误，请重新测试' : selected.failure_message }}</dd></template>
           </dl>
         </section>
-        <section v-if="selected && !recordLoadFailed && selected.auto_trusted_keys.length" class="ssh-test-challenge" aria-label="本次自动信任的服务器身份">
-          <h2>本次新增信任（{{ selected.auto_trusted_keys.length }}）</h2>
-          <p>以下公钥已保存供后续连接校验，连接是否成功以测试结果为准。</p>
-          <div v-for="identity in selected.auto_trusted_keys" :key="`${identity.target_type}:${identity.target_id}:${identity.fingerprint}`">
-            <p>{{ identity.target_type === 'jump_host' ? '跳板机' : '目标主机' }} · {{ identity.address }}:{{ identity.port }} · {{ identity.key_type }}</p>
-            <p class="ssh-fingerprint">指纹：{{ identity.fingerprint }}</p>
-          </div>
-        </section>
-        <section v-if="selected && !recordLoadFailed && selected.challenge" class="ssh-test-challenge" aria-label="服务器身份核对">
-            <h2>服务器身份核对</h2>
-            <ElAlert v-if="selected.status === 'awaiting_trust'" :title="selected.challenge.previous_fingerprint === null ? '首次连接：请独立核对服务器身份指纹' : '主机密钥已变化：请独立核对服务器身份指纹'" type="warning" :closable="false" show-icon />
-            <p>服务器身份：{{ selected.challenge.target_type === 'jump_host' ? '跳板机' : '目标主机' }} · {{ selected.challenge.address }}:{{ selected.challenge.port }}</p>
-            <p>密钥类型：{{ selected.challenge.key_type }}</p>
-            <p class="ssh-fingerprint">原指纹：{{ selected.challenge.previous_fingerprint ?? '无（首次信任）' }}</p>
-            <p class="ssh-fingerprint">新指纹：{{ selected.challenge.fingerprint }}</p>
-            <template v-if="selected.status === 'awaiting_trust'">
-              <p>信任将{{ selected.challenge.previous_fingerprint === null ? '新增' : '替换' }}该主机密钥的信任记录，影响此地址后续 SSH 连接的身份校验；本次测试不会自动重试。</p>
-              <ElCheckbox v-model="verified" :disabled="trusting">我已通过独立渠道核对上述服务器身份和新指纹</ElCheckbox>
-              <div><ElButton type="primary" :loading="trusting" :disabled="!verified" @click="trustKey">信任此主机密钥</ElButton></div>
-            </template>
-        </section>
+        <ElAlert v-if="selected && !recordLoadFailed && selected.status === 'awaiting_trust'" :title="confirmedId === selected.id ? '身份已确认，请重新开始测试。' : '测试因身份待确认而停止，请重新开始测试。'" type="warning" :closable="false" show-icon />
       </template>
     </div>
-    <template #footer><ElButton :disabled="trusting" @click="emit('update:modelValue', false)">关闭</ElButton></template>
+    <template #footer><ElButton :disabled="submitting || trusting" @click="updateVisible(false)">关闭</ElButton></template>
   </ElDialog>
 </template>
 
@@ -258,12 +234,4 @@ function dateLabel(value: string) {
 .ssh-test-details { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
 .ssh-test-details dt { color: var(--ui-text-secondary); }
 .ssh-test-details dd { margin: 0; overflow-wrap: anywhere; }
-.ssh-test-error { white-space: pre-wrap; }
-.ssh-test-challenge { display: grid; gap: 8px; margin-top: 16px; padding: 12px; border: 1px solid var(--ui-border); background: var(--ui-warning-soft); overflow-wrap: anywhere; }
-.ssh-test-challenge .el-checkbox { height: auto; white-space: normal; }
-.ssh-test-challenge .el-checkbox :deep(.el-checkbox__label) { white-space: normal; color: var(--ui-text); }
-</style>
-
-<style>
-.ssh-trust-confirm .el-message-box__message { white-space: pre-line; overflow-wrap: anywhere; }
 </style>

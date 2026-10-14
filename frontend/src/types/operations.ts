@@ -57,6 +57,7 @@ export interface OperationTaskHost {
   before: string | null
   after: string | null
   error: string | null
+  identity_required: boolean
   resolved_at: string | null
   resolution_note: string | null
   steps: OperationStep[]

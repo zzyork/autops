@@ -22,7 +22,8 @@ class ConnectionPlan:
     snapshot: str
 
 
-def resolve_plan(session: Session, cipher: Fernet, target_type: str, target_id: int) -> ConnectionPlan:
+def resolve_plan(session: Session, cipher: Fernet, target_type: str, target_id: int, *,
+                 identity_probe: bool = False) -> ConnectionPlan:
     record = get_asset(session, target_type, target_id)
     if record is None:
         raise HTTPException(404, "资产不存在")
@@ -37,16 +38,22 @@ def resolve_plan(session: Session, cipher: Fernet, target_type: str, target_id: 
             password = None
             private_key = None
             versions.append((kind, asset.id, asset.version, asset.created_at.isoformat()))
+            need_credentials = not identity_probe or (
+                isinstance(record, Host) and kind == "jump_host" and
+                get_trust(session, kind, asset.id, address, asset.port) is not None
+            )
             if asset.auth_type == "password":
                 if asset.password_encrypted is None:
                     raise ValueError("缺少密码")
-                password = cipher.decrypt(asset.password_encrypted.encode()).decode()
+                if need_credentials:
+                    password = cipher.decrypt(asset.password_encrypted.encode()).decode()
             elif asset.auth_type == "key":
                 key = get_key(session, asset.ssh_key_id) if asset.ssh_key_id is not None else None
                 if key is None:
                     raise ValueError("缺少密钥")
                 versions.append(("ssh_key", key.id, key.version, key.created_at.isoformat()))
-                private_key = cipher.decrypt(key.private_key_encrypted.encode()).decode()
+                if need_credentials:
+                    private_key = cipher.decrypt(key.private_key_encrypted.encode()).decode()
             else:
                 raise ValueError("认证方式无效")
         except (ValueError, InvalidToken, UnicodeError):

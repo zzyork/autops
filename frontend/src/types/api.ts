@@ -104,13 +104,11 @@ export type HostInput = Omit<Host, 'id' | 'has_password' | 'created_at' | 'updat
 export type HostUpdateInput = HostInput & { version: number }
 
 export type ConnectionTargetType = 'host' | 'jump_host'
-export type HostKeyPolicy = 'strict' | 'accept_new'
 
 export interface ConnectionTestInput {
   target_type: ConnectionTargetType
   target_id: number
   version: number
-  host_key_policy?: 'accept_new'
 }
 
 export interface ConnectionTestTarget {
@@ -118,16 +116,6 @@ export interface ConnectionTestTarget {
   target_id: number
   version: number
   name: string
-}
-
-export interface ConnectionTestChallenge {
-  target_type: ConnectionTargetType
-  target_id: number
-  address: string
-  port: number
-  key_type: string
-  fingerprint: string
-  previous_fingerprint: string | null
 }
 
 export interface ConnectionTest {
@@ -138,16 +126,8 @@ export interface ConnectionTest {
   address: string
   port: number
   username: string
-  via_jump_host: string | null
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_trust' | 'interrupted' | 'trusted'
-  stage: 'target' | 'jump_host' | null
-  failure_code: 'authentication' | 'timeout' | 'connection' | 'configuration' | 'internal' | null
-  failure_message: string | null
   created_at: string
   started_at: string | null
-  finished_at: string | null
   duration_ms: number | null
-  challenge: ConnectionTestChallenge | null
-  host_key_policy: HostKeyPolicy
-  auto_trusted_keys: ConnectionTestChallenge[]
 }

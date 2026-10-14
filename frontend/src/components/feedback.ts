@@ -1,9 +1,10 @@
 import { ElMessage } from 'element-plus'
-import { SYSTEM_ERROR_MESSAGE } from '@/api/http'
+import { RequestCancelledError, SYSTEM_ERROR_MESSAGE } from '@/api/http'
 
 let systemErrorVisible = false
 
-export function showRequestError(): void {
+export function showRequestError(error?: unknown): void {
+  if (error instanceof RequestCancelledError) return
   if (systemErrorVisible) return
   systemErrorVisible = true
   ElMessage({

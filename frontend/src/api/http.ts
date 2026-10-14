@@ -1,3 +1,5 @@
+import type { SSHIdentityTarget } from '@/types/sshIdentity'
+
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
 export const SYSTEM_ERROR_MESSAGE = '系统异常'
@@ -10,6 +12,20 @@ export class HttpError extends Error {
 }
 
 interface RequestOptions { method?: string; body?: unknown; timeoutMs?: number; signal?: AbortSignal }
+
+export class RequestCancelledError extends Error {
+  constructor() { super('操作已取消'); this.name = 'RequestCancelledError' }
+}
+export class SSHIdentityRequiredError extends HttpError {
+  constructor(readonly target: SSHIdentityTarget) { super(); this.name = 'SSHIdentityRequiredError' }
+}
+function identityTarget(value: unknown): SSHIdentityTarget | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const item = value as Record<string, unknown>
+  if (item.target_type !== 'host' && item.target_type !== 'jump_host') return null
+  if (typeof item.target_id !== 'number' || !Number.isSafeInteger(item.target_id) || item.target_id <= 0) return null
+  return { target_type: item.target_type, target_id: item.target_id }
+}
 
 function requestSignal(options: RequestOptions): AbortSignal {
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 8000)
@@ -29,9 +45,23 @@ async function sendRequest(path: string, options: RequestOptions, accept: string
       signal: requestSignal(options),
     })
   } catch {
+    if (options.signal?.aborted) throw new RequestCancelledError()
     throw new HttpError()
   }
-  if (!response.ok) throw new HttpError()
+  if (!response.ok) {
+    if (response.status === 409) {
+      let payload: unknown
+      try { payload = await response.json() } catch { throw new HttpError() }
+      if (payload && typeof payload === 'object' && 'detail' in payload) {
+        const detail = payload.detail
+        if (detail && typeof detail === 'object' && 'code' in detail && detail.code === 'ssh_identity_required' && 'target' in detail) {
+          const target = identityTarget(detail.target)
+          if (target) throw new SSHIdentityRequiredError(target)
+        }
+      }
+    }
+    throw new HttpError()
+  }
   return response
 }
 

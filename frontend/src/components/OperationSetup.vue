@@ -11,6 +11,8 @@ const props = defineProps<{
   busy: boolean
   inspecting: boolean
   hostsReady: boolean
+  fixedHost?: Host
+  initialAction?: string
 }>()
 const emit = defineEmits<{
   changed: []
@@ -27,9 +29,9 @@ const params = ref<Record<string, OperationValue>>({})
 const error = ref('')
 const invalid = ref<string | null>(null)
 const action = computed(() => props.actions.find((item) => item.id === actionId.value))
-const hostIds = computed(() => mode.value === 'single' ? (singleHost.value === null ? [] : [singleHost.value]) : multipleHosts.value)
+const hostIds = computed(() => props.fixedHost ? [props.fixedHost.id] : mode.value === 'single' ? (singleHost.value === null ? [] : [singleHost.value]) : multipleHosts.value)
 
-watch(() => props.actions, (actions) => { actionId.value = actions[0]?.id ?? '' }, { immediate: true })
+watch(() => [props.actions, props.initialAction] as const, ([actions, initialAction]) => { actionId.value = initialAction ? actions.find((item) => item.id === initialAction)?.id ?? '' : actions[0]?.id ?? '' }, { immediate: true })
 watch(action, (next) => {
   params.value = Object.fromEntries((next?.fields ?? []).map((field) => [field.key, field.default ?? (field.kind === 'boolean' ? false : field.kind === 'number' || field.kind === 'select' ? null : '')]))
 }, { immediate: true, flush: 'sync' })
@@ -89,13 +91,16 @@ function prepare() {
   <section class="host-section operation-section" aria-label="操作配置">
     <div class="section-header"><h2>操作配置</h2></div>
     <div class="asset-form">
-      <div class="field"><span>目标范围 <em>*</em></span><ElRadioGroup v-model="mode" :disabled="busy" aria-label="目标范围"><ElRadioButton value="single">单台主机</ElRadioButton><ElRadioButton value="multiple">多台主机</ElRadioButton></ElRadioGroup></div>
-      <label v-if="mode === 'single'" class="field" :class="{ 'is-error': invalid === 'hosts' }"><span>主机 <em>*</em></span><ElSelect v-model="singleHost" filterable :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect></label>
-      <div v-else class="field" :class="{ 'is-error': invalid === 'hosts' }"><label :for="`operation-${module}-hosts`">主机 <em>*</em></label><ElSelect :id="`operation-${module}-hosts`" v-model="multipleHosts" multiple :multiple-limit="16" filterable collapse-tags :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择多台主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect><span class="ssh-field-hint">已选 {{ multipleHosts.length }} / 16 台；读取现状仅支持单台。</span></div>
+      <div v-if="fixedHost" class="field"><span>目标主机</span><strong>{{ fixedHost.name }} · {{ fixedHost.address }}</strong></div>
+      <template v-else>
+        <div class="field"><span>目标范围 <em>*</em></span><ElRadioGroup v-model="mode" :disabled="busy" aria-label="目标范围"><ElRadioButton value="single">单台主机</ElRadioButton><ElRadioButton value="multiple">多台主机</ElRadioButton></ElRadioGroup></div>
+        <label v-if="mode === 'single'" class="field" :class="{ 'is-error': invalid === 'hosts' }"><span>主机 <em>*</em></span><ElSelect v-model="singleHost" filterable :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect></label>
+        <div v-else class="field" :class="{ 'is-error': invalid === 'hosts' }"><label :for="`operation-${module}-hosts`">主机 <em>*</em></label><ElSelect :id="`operation-${module}-hosts`" v-model="multipleHosts" multiple :multiple-limit="16" filterable collapse-tags :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择多台主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect><span class="ssh-field-hint">已选 {{ multipleHosts.length }} / 16 台；读取现状仅支持单台。</span></div>
+      </template>
       <div class="field"><ElCheckbox v-model="sudo" :disabled="busy" label="使用免密 sudo（需目标主机已配置）" /></div>
       <div class="operation-actions"><ElButton :loading="inspecting" :disabled="!hostsReady || busy || hostIds.length !== 1" @click="inspect">读取现状</ElButton><span v-if="hostIds.length > 1" class="ssh-field-hint">读取现状须仅选一台主机。</span></div>
       <div class="form-section-title">计划参数</div>
-      <label class="field"><span>操作 <em>*</em></span><ElSelect v-model="actionId" :disabled="busy" class="full-width" aria-label="操作"><ElOption v-for="item in actions" :key="item.id" :label="item.title" :value="item.id" /></ElSelect></label>
+      <label v-if="!initialAction" class="field"><span>操作 <em>*</em></span><ElSelect v-model="actionId" :disabled="busy" class="full-width" aria-label="操作"><ElOption v-for="item in actions" :key="item.id" :label="item.title" :value="item.id" /></ElSelect></label>
       <p v-if="action" class="ssh-field-hint">{{ action.description }}</p>
       <div v-if="action" class="field-grid">
         <div v-for="field in action.fields" :key="field.key" class="field" :class="{ 'is-error': invalid === field.key }">

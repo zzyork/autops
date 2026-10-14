@@ -168,13 +168,13 @@ async function decide(proposalId: string, approve: boolean) {
   if (!id || operation.value || !detailLoaded.value) return
   operation.value = 'decision'
   try {
-    const session = await decideProposal(id, proposalId, approve)
+    const session = await decideProposal(id, proposalId, approve, { isCurrent: () => active && selectedId.value === id })
     if (!active || selectedId.value !== id) return
     detail.value = session
     void loadSessions()
-  } catch {
+  } catch (error) {
     if (active && selectedId.value === id) {
-      showRequestError()
+      showRequestError(error)
       if (await loadDetail(id, false)) void loadSessions(false)
     }
   }
