@@ -32,7 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
-            analysis = await run_in_threadpool(InspectionAnalysisManager, sessions, cipher)
+            analysis = await run_in_threadpool(InspectionAnalysisManager, sessions, cipher, settings.data_dir)
             application.state.inspection_analysis = analysis
             inspections = await run_in_threadpool(InspectionManager, sessions, cipher, analysis.automatic)
             application.state.inspections = inspections

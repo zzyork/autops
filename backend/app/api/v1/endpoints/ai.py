@@ -19,7 +19,9 @@ from ...dependencies import Database, commit
 from ....ai_models import AIConnection, AIProposal, AISession
 from ....repositories import ai as repository
 from ....schemas.ai import (ConnectionInput, ConnectionResponse, DecisionInput, Detail,
-                            MessageInput, Summary)
+                            FeatureModels, MessageInput, Summary)
+from ....services.ai_feature_models import (config_guard, feature_connection, load_feature_models,
+                                           save_feature_models)
 from ....schemas.inspections import InspectionInput
 from ....services.inspection_rules import load_rules
 from ....services.ai_provider import MAX_TOTAL_SECONDS
@@ -47,6 +49,16 @@ def list_connections(session: Database) -> list[AIConnection]:
     return repository.connections(session)
 
 
+@router.get("/feature-models", response_model=FeatureModels)
+def read_feature_models(request: Request) -> FeatureModels:
+    return load_feature_models(request.app.state.data_dir)
+
+
+@router.put("/feature-models", response_model=FeatureModels)
+def update_feature_models(data: FeatureModels, request: Request, session: Database) -> FeatureModels:
+    return save_feature_models(request.app.state.data_dir, data, session)
+
+
 @router.post("/connections", response_model=ConnectionResponse, status_code=201)
 def create_connection(data: ConnectionInput, request: Request, session: Database) -> AIConnection:
     encrypted = request.app.state.cipher.encrypt(data.api_key.encode()).decode() if data.api_key else None
@@ -71,12 +83,16 @@ def update_connection(connection_id: int, data: ConnectionInput, request: Reques
 
 
 @router.delete("/connections/{connection_id}", status_code=204)
-def delete_connection(connection_id: int, session: Database) -> Response:
-    record = require_connection(session, connection_id)
-    if session.scalar(select(func.count()).select_from(AISession).where(AISession.connection_id == record.id)):
-        raise HTTPException(409, "连接已关联会话")
-    session.delete(record)
-    commit(session)
+def delete_connection(connection_id: int, request: Request, session: Database) -> Response:
+    with config_guard:
+        record = require_connection(session, connection_id)
+        config = load_feature_models(request.app.state.data_dir)
+        if connection_id in (config.chat_connection_id, config.inspection_report_connection_id):
+            raise HTTPException(409, "连接已被 AI 功能模型配置引用")
+        if session.scalar(select(func.count()).select_from(AISession).where(AISession.connection_id == record.id)):
+            raise HTTPException(409, "连接已关联会话")
+        session.delete(record)
+        commit(session)
     return Response(status_code=204)
 
 
@@ -101,11 +117,12 @@ def list_sessions(session: Database) -> list[AISession]:
 
 
 @router.post("/sessions", response_model=Summary, status_code=201)
-def create_session(session: Database) -> AISession:
-    record = repository.primary_connection(session)
-    if record is None:
-        raise HTTPException(409, "请先指定主模型")
-    return repository.create_session(session, record)
+def create_session(request: Request, session: Database) -> AISession:
+    with config_guard:
+        record = feature_connection(session, request.app.state.data_dir, "chat")
+        if record is None:
+            raise HTTPException(409, "请先配置可用的 AI 对话模型")
+        return repository.create_session(session, record)
 
 
 @router.get("/sessions/{session_id}", response_model=Detail)

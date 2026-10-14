@@ -34,3 +34,5 @@
 .ai-address { overflow-wrap: anywhere; }
 .ai-data-notice { margin-top: 16px; color: var(--ui-text-secondary); }
 .ai-model-form { padding-bottom: 4px; }
+.ai-feature-section { margin-top: 16px; }
+.ai-feature-form { padding-bottom: 0; }

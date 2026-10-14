@@ -1406,7 +1406,8 @@ def test_analysis_restart_marks_queued_and_running_interrupted(client: TestClien
         session.add_all([InspectionAIReport(task_id=task_id, status=status, generation_id=f"batch-{index}")
                          for index, (task_id, status) in enumerate(zip(tasks, ("queued", "running")))])
         session.commit()
-    restarted = InspectionAnalysisManager(client.app.state.sessions, client.app.state.cipher)
+    restarted = InspectionAnalysisManager(client.app.state.sessions, client.app.state.cipher,
+                                          client.app.state.data_dir)
     try:
         for task_id in tasks:
             result = client.get(f"{ROOT}/tasks/{task_id}/analysis").json()

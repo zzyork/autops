@@ -1,9 +1,16 @@
-import type { ChatSession, ModelConnection, ModelConnectionInput, SessionSummary } from '@/types/ai'
-import { get, request, streamRequest } from './http'
+import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnectionInput, SessionSummary } from '@/types/ai'
+import { get, HttpError, request, streamRequest } from './http'
 
 const connectionPath = (id: number) => `/ai/connections/${encodeURIComponent(id)}`
 const sessionPath = (id: string) => `/ai/sessions/${encodeURIComponent(id)}`
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+function featureModelsConfig(value: unknown): FeatureModelsConfig {
+  if (!isRecord(value) || !('chat_connection_id' in value) || !('inspection_report_connection_id' in value)
+    || ![value.chat_connection_id, value.inspection_report_connection_id].every((id) =>
+      id === null || typeof id === 'number' && Number.isSafeInteger(id) && id > 0)) throw new HttpError()
+  return value as unknown as FeatureModelsConfig
+}
 
 function isChatSession(value: unknown): value is ChatSession {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string'
@@ -24,6 +31,8 @@ function isChatSession(value: unknown): value is ChatSession {
 }
 
 export const listConnections = () => get<ModelConnection[]>('/ai/connections')
+export const getFeatureModels = async () => featureModelsConfig(await get<unknown>('/ai/feature-models'))
+export const updateFeatureModels = async (body: FeatureModelsConfig) => featureModelsConfig(await request<unknown>('/ai/feature-models', { method: 'PUT', body }))
 export const createConnection = (body: ModelConnectionInput) => request<ModelConnection>('/ai/connections', { method: 'POST', body })
 export const updateConnection = (id: number, body: ModelConnectionInput) => request<ModelConnection>(connectionPath(id), { method: 'PUT', body })
 export const deleteConnection = (id: number) => request<void>(connectionPath(id), { method: 'DELETE' })

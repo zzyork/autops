@@ -11,6 +11,11 @@ class Input(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class FeatureModels(Input):
+    chat_connection_id: int | None = Field(gt=0, strict=True)
+    inspection_report_connection_id: int | None = Field(gt=0, strict=True)
+
+
 class ConnectionInput(Input):
     name: str = Field(min_length=1, max_length=100)
     protocol: Literal["openai_compatible", "anthropic"]

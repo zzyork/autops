@@ -80,6 +80,7 @@
 | `docs/plans/2026-10-13-inspection-single-request.md` | 已确认的全量合并日志单次请求方案、输出预算、失败边界和验证范围。最后同步：2026-10-13。 |
 | `docs/plans/2026-10-13-inspection-diagnostic-groups.md` | 已确认的诊断组压缩实施计划、Drain3 保护边界、完整原文追溯、接口与验证范围，替代逐精确报错分析粒度。最后同步：2026-10-13。 |
 | `docs/plans/2026-10-13-inspection-ai-merge.md` | 由 AI 在单次请求内按错误机制及处置路径合并问题的提示词、编号覆盖契约、完整证据关联和验证记录。最后同步：2026-10-13。 |
+| `docs/plans/2026-10-14-ai-feature-models-design.md` | AI 对话与巡检汇报独立模型配置、已确认的主模型继承行为、接口、错误边界及验证记录。最后同步：2026-10-14。 |
 
 ## 后端文件
 
@@ -101,6 +102,7 @@
 | `backend/app/repositories/ai.py` | 模型连接、会话、消息、工具历史、计划持久化与中断标记。最后同步：2026-10-12。 |
 | `backend/app/services/ai_provider.py` | OpenAI 兼容及 Anthropic 流式协议适配、可校验输出限额和正常终止验证。最后同步：2026-10-13。 |
 | `backend/app/services/ai_chat.py` | LangGraph 对话编排、能力验证、资产与巡检工具、会话互斥。最后同步：2026-10-12。 |
+| `backend/app/services/ai_feature_models.py` | AI 对话与巡检汇报独立模型配置读取、连接校验、原子保存及选模；未指定时沿用主模型。最后同步：2026-10-14。 |
 | `backend/app/api/v1/endpoints/ai.py` | 模型连接、会话、SSE 回复及巡检计划确认接口。最后同步：2026-10-12。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 共用数据库会话依赖、事务提交与分组查询。最后同步：2026-10-10。 |
@@ -181,6 +183,7 @@
 | `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务进度并复用已有详情组件。最后同步：2026-10-12。 |
 | `frontend/src/components/DisclosurePanel.vue` | 单项详情共用展开入口，接收名称、可选上下文、双向展开状态与内容插槽，使用中性描边按钮、左侧状态箭头和唯一内容关联；按需挂载详情。最后同步：2026-10-14。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入。最后同步：2026-10-12。 |
+| `frontend/src/components/FeatureModelsForm.vue` | 独立功能模型表单，接收连接列表及加载状态，读取和保存对话、巡检汇报模型并发出配置状态事件。最后同步：2026-10-14。 |
 | `frontend/src/views/ChatView.vue` | 对话首页，会话历史、首次发送自动使用主模型创建会话、流式输入输出和计划决策。最后同步：2026-10-12。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |
 | `frontend/src/styles/ai.css` | 复用控制台主题的对话、模型配置和任务卡片样式。最后同步：2026-10-12。 |

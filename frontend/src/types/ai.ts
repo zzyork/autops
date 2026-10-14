@@ -18,6 +18,10 @@ export interface ModelConnection extends Omit<ModelConnectionInput, 'api_key'> {
   chat_status: CapabilityStatus
   tool_status: CapabilityStatus
 }
+export interface FeatureModelsConfig {
+  chat_connection_id: number | null
+  inspection_report_connection_id: number | null
+}
 export interface SessionSummary {
   id: string
   title: string

@@ -2,6 +2,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -9,11 +10,12 @@ from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, sessionmaker
 
-from ..repositories import ai, inspection_analysis as repository, inspections
+from ..repositories import inspection_analysis as repository, inspections
 from ..schemas.inspection_analysis import AnalysisProgress, AnalysisResponse
 from .ai_provider import ProviderError
 from .inspection_analysis_engine import ModelSnapshot, analyze
 from .inspection_analysis_input import build_input
+from .ai_feature_models import feature_connection
 
 logger = logging.getLogger(__name__)
 MAX_ANALYSIS_WORKERS = 2
@@ -21,8 +23,9 @@ MAX_PENDING_ANALYSES = 8
 
 
 class InspectionAnalysisManager:
-    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet):
+    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet, data_dir: Path):
         self.sessions, self.cipher = sessions, cipher
+        self.data_dir = data_dir
         self.guard = threading.Lock()
         self.stopping = threading.Event()
         self.persistence_failed = threading.Event()
@@ -45,7 +48,7 @@ class InspectionAnalysisManager:
         if task is None:
             raise HTTPException(404, "巡检任务不存在")
         row = repository.read(session, task_id)
-        connection = ai.primary_connection(session)
+        connection = feature_connection(session, self.data_dir, "inspection_report")
         ready = connection is not None and connection.chat_status == "passed"
         with self.guard:
             can_generate = (ready and task.status not in inspections.ACTIVE and not self.stopping.is_set()
@@ -89,7 +92,7 @@ class InspectionAnalysisManager:
             with self.sessions() as session:
                 # 在同一写事务内验证模型资格与认领，已接受批次随后固定使用此快照。
                 repository.begin_claim(session)
-                connection = ai.primary_connection(session)
+                connection = feature_connection(session, self.data_dir, "inspection_report")
                 snapshot = ModelSnapshot(connection.protocol, connection.base_url, connection.model,
                                          connection.api_key_encrypted, f"{connection.name} / {connection.model}",
                                          connection.config_version) if connection is not None and connection.chat_status == "passed" else None
@@ -111,7 +114,7 @@ class InspectionAnalysisManager:
                 if snapshot is None:
                     if automatic:
                         return
-                    raise HTTPException(409, "主模型未配置或未通过对话测试")
+                    raise HTTPException(409, "巡检 AI 汇报模型未配置或未通过对话测试")
                 if full:
                     row = repository.read(session, task_id)
                     row.error_code = "queue_full"

@@ -5,15 +5,16 @@ import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { useListPagination } from '@/components/pagination'
-import { createSession, decideProposal, deleteSession, getSession, listConnections, listSessions, sendMessage } from '@/api/ai'
+import { createSession, decideProposal, deleteSession, getFeatureModels, getSession, listConnections, listSessions, sendMessage } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/inspectionDisplay'
-import type { ChatSession, ModelConnection, SessionSummary } from '@/types/ai'
+import type { ChatSession, FeatureModelsConfig, ModelConnection, SessionSummary } from '@/types/ai'
 import '@/styles/ai.css'
 
 const connections = ref<ModelConnection[]>([])
 const connectionsLoaded = ref(false)
 const connectionsLoading = ref(false)
+const featureModels = ref<FeatureModelsConfig | null>(null)
 const sessions = ref<SessionSummary[]>([])
 const { page, pageSize, total, pageItems, resetPage } = useListPagination(sessions)
 const sessionsLoaded = ref(false)
@@ -28,7 +29,13 @@ const streamingText = ref('')
 const sendingContent = ref('')
 const operation = ref<'create' | 'send' | 'decision' | 'delete' | null>(null)
 const conversation = ref<HTMLElement | null>(null)
-const primaryConnection = computed(() => connections.value.find((item) => item.is_default))
+const newChatConnection = computed(() => {
+  if (!connectionsLoaded.value || !featureModels.value) return undefined
+  return featureModels.value.chat_connection_id === null
+    ? connections.value.find((item) => item.is_default)
+    : connections.value.find((item) => item.id === featureModels.value?.chat_connection_id)
+})
+const newChatAvailable = computed(() => !!newChatConnection.value)
 const selectedConnection = computed(() => connections.value.find((item) => item.id === detail.value?.connection_id))
 let active = true
 let listSequence = 0
@@ -38,18 +45,22 @@ let streamController: AbortController | null = null
 let selectInitialSession = true
 const MAX_MESSAGE_LENGTH = 8000
 
-async function loadConnections() {
+async function loadConnections(): Promise<boolean> {
   const current = ++connectionSequence
+  connectionsLoaded.value = false
   connectionsLoading.value = true
   try {
-    const items = await listConnections()
-    if (!active || current !== connectionSequence) return
+    const [items, config] = await Promise.all([listConnections(), getFeatureModels()])
+    if (!active || current !== connectionSequence) return false
     connections.value = items
+    featureModels.value = config
     connectionsLoaded.value = true
+    return true
   } catch {
-    if (!active || current !== connectionSequence) return
-    connectionsLoaded.value = false
+    if (!active || current !== connectionSequence) return false
+    featureModels.value = null
     showRequestError()
+    return false
   } finally { if (active && current === connectionSequence) connectionsLoading.value = false }
 }
 async function loadSessions(notify = true) {
@@ -101,10 +112,11 @@ function newChat() {
   detailLoading.value = false
   input.value = ''
   inputError.value = ''
+  void loadConnections()
 }
 async function send() {
   const content = input.value.trim()
-  if (operation.value || (selectedId.value ? !detailLoaded.value : !connectionsLoaded.value || !primaryConnection.value)) return
+  if (operation.value || (selectedId.value ? !detailLoaded.value : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value)) return
   if (!content || content.length > MAX_MESSAGE_LENGTH) {
     inputError.value = `消息须填写且不超过 ${MAX_MESSAGE_LENGTH} 字符。`
     return
@@ -117,6 +129,11 @@ async function send() {
   let controller: AbortController | null = null
   try {
     if (!id) {
+      if (!await loadConnections() || !active) return
+      if (!newChatAvailable.value) {
+        inputError.value = featureModels.value?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。'
+        return
+      }
       const summary = await createSession()
       if (!active) return
       id = summary.id
@@ -231,13 +248,13 @@ onUnmounted(() => {
               <p v-if="!detail.messages.length && !detail.proposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
             </template>
             <template v-else-if="!selectedId">
-              <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取模型连接...</p>
-              <p v-else-if="!connectionsLoaded" class="inspection-retry">模型连接未加载。<ElButton @click="loadConnections">重试</ElButton></p>
-              <p v-else-if="!primaryConnection" class="ai-placeholder">尚未指定主模型。<RouterLink to="/settings/models">前往模型配置</RouterLink></p>
+              <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取功能模型配置与连接...</p>
+              <p v-else-if="!connectionsLoaded" class="inspection-retry">功能模型配置或连接未加载。<ElButton @click="loadConnections">重试</ElButton></p>
+              <p v-else-if="!newChatAvailable" class="ai-placeholder">{{ featureModels?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。' }}<RouterLink to="/settings/models">前往模型配置</RouterLink></p>
               <p v-else class="ai-placeholder">开始对话</p>
             </template>
           </div>
-           <div class="ai-composer"><label for="chat-input">消息</label><ElInput id="chat-input" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="!!inputError" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || !primaryConnection)" placeholder="输入运维问题" @input="inputError = ''" @keydown.ctrl.enter.prevent="send" /><p v-if="inputError" class="ssh-field-error" role="alert">{{ inputError }}</p><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || !primaryConnection) || !input.trim()" @click="send">发送</ElButton></div></div>
+           <div class="ai-composer"><label for="chat-input">消息</label><ElInput id="chat-input" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="!!inputError" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable)" placeholder="输入运维问题" @input="inputError = ''" @keydown.ctrl.enter.prevent="send" /><p v-if="inputError" class="ssh-field-error" role="alert">{{ inputError }}</p><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable) || !input.trim()" @click="send">发送</ElButton></div></div>
         </section>
       </div>
     </main>
