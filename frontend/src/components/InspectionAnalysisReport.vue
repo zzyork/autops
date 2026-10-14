@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElButton, ElCollapse, ElCollapseItem, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { ElButton, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel, timeLabel } from '@/components/inspectionDisplay'
 import ListPagination from '@/components/ListPagination.vue'
-import InspectionAnalysisEvidence from '@/components/InspectionAnalysisEvidence.vue'
 import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
 import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
 import { useListPagination } from '@/components/pagination'
@@ -19,8 +18,6 @@ const loaded = ref(false)
 const loading = ref(false)
 const generating = ref(false)
 const loadFailed = ref(false)
-const expandedEvidence = ref<string[]>([])
-const selectedEvidenceIds = ref<string[] | null>(null)
 let terminalPolls = 0
 let request = 0
 let session = 0
@@ -39,12 +36,6 @@ function issueHost(issue: AnalysisIssue): string {
   const items = report.value?.evidence.filter((evidence) => issue.evidence_ids.includes(evidence.id)) ?? []
   return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
 }
-
-function showEvidence(issue: AnalysisIssue) {
-  selectedEvidenceIds.value = issue.evidence_ids
-  expandedEvidence.value = ['evidence']
-}
-watch(report, () => { selectedEvidenceIds.value = null })
 
 function statusLabel(status: AnalysisResponse['status']): string {
   return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
@@ -175,8 +166,6 @@ watch(() => props.taskId, () => {
   loading.value = false
   generating.value = false
   loadFailed.value = false
-  expandedEvidence.value = []
-  selectedEvidenceIds.value = null
   resetLogs()
   resetProblems()
   terminalPolls = isActiveRun(props.taskStatus) ? 0 : TERMINAL_POLL_COUNT
@@ -264,16 +253,9 @@ onUnmounted(() => {
         <section v-if="logTotal" class="inspection-analysis-section">
           <div class="inspection-analysis-section-heading"><h3>错误日志分析</h3><span class="inspection-muted">{{ logTotal }} 项</span></div>
           <p v-if="legacyLogs" class="inspection-muted">此汇报为旧版汇总，可重新生成诊断组分析。</p>
-          <p v-if="logIssues.some((issue) => issueDiagnosticGroups(issue).length)" class="inspection-muted">同类问题可共用一份分析，各报错类型及原始日志完整保留。次数为各来源已采集日志的观察次数，同一事件可能被多个来源记录。</p>
-          <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="index" :issue="issue" :host="issueHost(issue)" @evidence="showEvidence(issue)" />
+          <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="`${report.generated_at}:${(logPage - 1) * logPageSize + index}`" :issue="issue" :host="issueHost(issue)" :evidence="report.evidence" />
           <ListPagination v-model:page="logPage" v-model:page-size="logPageSize" :total="logTotal" />
         </section>
-        <ElCollapse v-if="logEvidenceIds.size" v-model="expandedEvidence" class="inspection-checks inspection-analysis-evidence">
-          <ElCollapseItem name="evidence">
-            <template #title><h3>日志证据 ({{ logEvidenceIds.size }})</h3></template>
-            <InspectionAnalysisEvidence :evidence="report.evidence" :selected-ids="selectedEvidenceIds" @clear="selectedEvidenceIds = null" />
-          </ElCollapseItem>
-        </ElCollapse>
       </template>
     </template>
   </section>

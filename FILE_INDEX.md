@@ -217,9 +217,9 @@
 | `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录入口，默认历史列表，选择记录后展示任务概览、AI 汇报和主机详情入口。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRecordDetailView.vue` | 独立服务器巡检记录详情页面，通过任务路由参数读取、轮询并复用主机检查详情与报告导出；提供返回记录入口。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionRecordSummary.vue` | 巡检记录概览，接收任务详情，展示全任务严重/警告统计及详情跳转，复用状态与时间显示映射。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionAnalysisReport.vue` | 经巡检 API 层生成、读取及轮询报告，展示诊断组与来源统计、巡检风险，筛选关联证据并导出完整原文，兼容旧报告。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisReport.vue` | 经巡检 API 层生成、读取及轮询报告，展示巡检风险和精简错误分析，向问题组件传递日志证据并导出完整原文，兼容旧报告。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionAnalysisEvidence.vue` | 接收报告证据与可选编号筛选，展示原文和来源表/结果行位置，复用 10/20/50 条分页，发出清除筛选事件；可复用于巡检报告证据查看。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionAnalysisIssue.vue` | 接收问题和主机说明，展示合并分析、来源观察统计与折叠关联模板，发出查看原始证据事件，兼容历史单组问题。最后同步：2026-10-13。 |
-| `frontend/src/components/inspectionAnalysisDisplay.ts` | 报告与问题组件共用的严重程度映射、历史单组及新多组诊断信息读取。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisIssue.vue` | 接收问题、主机说明与日志证据，展示等级、名称、影响主机、原因和建议，折叠分页展示具体报错、主机、可用路径及时间次数。最后同步：2026-10-13。 |
+| `frontend/src/components/inspectionAnalysisDisplay.ts` | 报告与问题组件共用的严重程度映射、诊断信息读取及新旧分段日志证据的具体报错详情转换。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，展示检查项、当前阈值、时限与服务判定，并编辑保存规则。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表；历史页默认终态分页列表，点击后仅显示记录概览与 AI 汇报，支持返回列表、删除和活跃执行轮询。最后同步：2026-10-13。 |
