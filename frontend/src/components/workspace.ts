@@ -15,6 +15,7 @@ export function createWorkspace(router: Router) {
   const menuCollapsed = ref(false)
   const assetsExpanded = ref(true)
   const inspectionsExpanded = ref(true)
+  const operationsExpanded = ref(true)
   const settingsExpanded = ref(true)
   let navigationSequence = 0
   let pendingLocation: string | null = null
@@ -101,7 +102,7 @@ export function createWorkspace(router: Router) {
     return true
   }
 
-  return { tabs, activeKey, menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded, select, close, canSwitch }
+  return { tabs, activeKey, menuCollapsed, assetsExpanded, inspectionsExpanded, operationsExpanded, settingsExpanded, select, close, canSwitch }
 }
 
 export const workspaceKey: InjectionKey<ReturnType<typeof createWorkspace>> = Symbol('workspace')

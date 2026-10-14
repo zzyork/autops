@@ -5,7 +5,7 @@ import '@/styles/assets.css'
 
 withDefaults(defineProps<{ title: string; section?: string }>(), { section: '资产管理' })
 const route = useRoute()
-const { menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded } = useWorkspace()
+const { menuCollapsed, assetsExpanded, inspectionsExpanded, operationsExpanded, settingsExpanded } = useWorkspace()
 </script>
 
 <template>
@@ -38,6 +38,19 @@ const { menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded } =
       <nav v-show="inspectionsExpanded" id="inspections-navigation" aria-label="巡检管理">
         <RouterLink to="/inspections" class="console-menu-item" aria-label="巡检任务" title="巡检任务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM8 10l2 2 4-4M8 16h8" /></svg><span v-if="!menuCollapsed">巡检任务</span></RouterLink>
         <RouterLink to="/inspections/records" class="console-menu-item" :class="{ 'router-link-exact-active': route.name === 'inspection-record-detail' }" :aria-current="route.name === 'inspection-record-detail' ? 'location' : undefined" aria-label="巡检记录" title="巡检记录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 7h8M8 12h8M8 17h5" /></svg><span v-if="!menuCollapsed">巡检记录</span></RouterLink>
+      </nav>
+      <button class="console-menu-label" type="button" :aria-expanded="operationsExpanded" aria-controls="operations-navigation" :aria-label="operationsExpanded ? '收起服务器运维菜单' : '展开服务器运维菜单'" title="服务器运维" @click="operationsExpanded = !operationsExpanded">
+        <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v7H4zM4 13h16v7H4zM8 8h2M8 17h2" /></svg>
+        <span v-if="!menuCollapsed">服务器运维</span>
+        <svg v-if="!menuCollapsed" class="console-menu-label-arrow" viewBox="0 0 24 24" aria-hidden="true"><path :d="operationsExpanded ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+      </button>
+      <nav v-show="operationsExpanded" id="operations-navigation" aria-label="服务器运维">
+        <RouterLink to="/operations/hostname" class="console-menu-item" aria-label="主机名管理" title="主机名管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h7" /></svg><span v-if="!menuCollapsed">主机名管理</span></RouterLink>
+        <RouterLink to="/operations/packages" class="console-menu-item" aria-label="软件包与仓库" title="软件包与仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8" /></svg><span v-if="!menuCollapsed">软件包与仓库</span></RouterLink>
+        <RouterLink to="/operations/firewall" class="console-menu-item" aria-label="防火墙管理" title="防火墙管理"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 9 5-1 8-4 8-9V7zM8 12h8" /></svg><span v-if="!menuCollapsed">防火墙管理</span></RouterLink>
+        <RouterLink to="/operations/kernel" class="console-menu-item" aria-label="内核参数" title="内核参数"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6" /></svg><span v-if="!menuCollapsed">内核参数</span></RouterLink>
+        <RouterLink to="/operations/system" class="console-menu-item" aria-label="系统优化" title="系统优化"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 14l3-3 2 2 5-5" /></svg><span v-if="!menuCollapsed">系统优化</span></RouterLink>
+        <RouterLink to="/operations/disk" class="console-menu-item" aria-label="磁盘管理" title="磁盘管理"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1" /><path d="M7 15h2M13 15h4" /></svg><span v-if="!menuCollapsed">磁盘管理</span></RouterLink>
       </nav>
       <button class="console-menu-label" type="button" :aria-expanded="settingsExpanded" aria-controls="settings-navigation" :aria-label="settingsExpanded ? '收起配置管理菜单' : '展开配置管理菜单'" title="配置管理" @click="settingsExpanded = !settingsExpanded">
         <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h4" /></svg>

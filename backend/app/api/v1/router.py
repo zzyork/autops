@@ -8,6 +8,7 @@ from .endpoints.ssh_keys import router as ssh_keys_router
 from .endpoints.ssh_connections import router as ssh_connections_router
 from .endpoints.inspections import router as inspections_router
 from .endpoints.ai import router as ai_router
+from .endpoints.operations import router as operations_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -18,3 +19,4 @@ api_router.include_router(ssh_keys_router)
 api_router.include_router(ssh_connections_router)
 api_router.include_router(inspections_router)
 api_router.include_router(ai_router)
+api_router.include_router(operations_router)

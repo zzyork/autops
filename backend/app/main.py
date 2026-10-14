@@ -15,6 +15,7 @@ from .services.ssh_connections import ConnectionTestManager
 from .services.inspection_tasks import InspectionManager
 from .services.ai_chat import ChatManager
 from .services.inspection_analysis import InspectionAnalysisManager
+from .services.operations import OperationManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         inspections = None
         ai = None
         analysis = None
+        operations = None
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
@@ -38,15 +40,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application.state.inspections = inspections
             ai = await run_in_threadpool(ChatManager, sessions, cipher)
             application.state.ai = ai
+            operations = await run_in_threadpool(OperationManager, sessions, cipher)
+            application.state.operations = operations
             yield
         finally:
             if analysis is not None:
                 analysis.stop_accepting()
+            if operations is not None:
+                operations.stop_accepting()
             try:
                 try:
                     try:
-                        if ai is not None:
-                            await run_in_threadpool(ai.close)
+                        try:
+                            if operations is not None:
+                                await run_in_threadpool(operations.close)
+                        finally:
+                            if ai is not None:
+                                await run_in_threadpool(ai.close)
                     finally:
                         try:
                             if inspections is not None:
