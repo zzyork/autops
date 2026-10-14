@@ -114,7 +114,6 @@ def _connect(endpoint: SSHEndpoint, deadline: NetworkDeadline, stage: str, sock:
              accept_new_key: HostKeyAcceptor | None = None) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
     try:
-        deadline.register(client.close)
         client.set_missing_host_key_policy(VerifyHostKey(endpoint, accept_new_key, deadline if accept_new_key else None))
         pkey = load_private_key(endpoint.private_key) if endpoint.private_key is not None else None
     except TimeoutError as exc:
@@ -122,8 +121,13 @@ def _connect(endpoint: SSHEndpoint, deadline: NetworkDeadline, stage: str, sock:
     except (ValueError, TypeError, paramiko.SSHException) as exc:
         raise connection_error("configuration", stage, endpoint, exc) from exc
     try:
-        if sock is None:
-            sock = open_socket(endpoint.address, endpoint.port, deadline, PHASE_TIMEOUT_SECONDS)
+        try:
+            if sock is None:
+                sock = open_socket(endpoint.address, endpoint.port, deadline, PHASE_TIMEOUT_SECONDS)
+        finally:
+            # 逆序清理时先停止 SSH Transport，再关闭其底层 Socket，避免接收线程报 10038。
+            # 建连失败也登记客户端；超时后 register 会立即清理并阻止继续握手。
+            deadline.register(client.close)
         remaining = deadline.remaining()
         client.connect(
             hostname=endpoint.address, port=endpoint.port, username=endpoint.username,
