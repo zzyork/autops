@@ -3,12 +3,12 @@ from collections.abc import Callable
 from typing import Annotated, TypeVar
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Request
 
 from ...dependencies import Database
 from ....repositories import operations as repository
-from ....schemas.operations import (ConfirmInput, InspectInput, Inspection, ModuleId, OperationCatalog,
-                                     PlanInput, ResolveInput, TaskPage, TaskResponse)
+from ....schemas.operations import (ConfirmInput, InspectInput, Inspection, OperationCatalog,
+                                     PlanInput, ResolveInput, TaskResponse)
 from ....services.operation_commands import catalog as command_catalog
 
 router = APIRouter(prefix="/operations", tags=["服务器运维"])
@@ -55,19 +55,6 @@ def resolve(task_id: UUID, host_id: Annotated[int, Path(gt=0)], data: ResolveInp
         raise HTTPException(422, "请在带外核对远端进程已停止，并确认任务 ID")
     return safe(request, lambda: TaskResponse.model_validate(
         request.app.state.operations.resolve(str(task_id), host_id, data.note)))
-
-
-@router.get("/tasks", response_model=TaskPage)
-def list_tasks(request: Request, session: Database, module: ModuleId | None = None,
-               page: Annotated[int, Query(ge=1)] = 1,
-               page_size: Annotated[int, Query(ge=1, le=50)] = 20) -> TaskPage:
-    def load() -> TaskPage:
-        request.app.state.operations.ensure_available()
-        repository.expire_plans(session)
-        items, total = repository.page_tasks(session, module, page, page_size)
-        return TaskPage(items=[TaskResponse.model_validate(item) for item in items], total=total,
-                        page=page, page_size=page_size)
-    return safe(request, load)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)

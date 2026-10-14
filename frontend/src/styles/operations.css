@@ -9,8 +9,6 @@
 .operation-section h3 { margin: 0 0 12px; font-size: 14px; }
 .operation-actions, .operation-host-head, .operation-step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .operation-actions .el-button + .el-button { margin-left: 0; }
-.operation-filter { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.operation-filter .el-select { width: 170px; }
 .operation-meta, .operation-params { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 0; overflow-wrap: anywhere; }
 .operation-meta > div, .operation-params > div { min-width: 140px; max-width: 100%; }
 .operation-meta dt, .operation-params dt { color: var(--ui-text-secondary); font-size: 12px; }
@@ -33,8 +31,6 @@
 .operation-host-result > .operation-actions { margin: 8px 0; }
 .operation-warning { color: var(--ui-danger); }
 .operation-section > .operation-actions { margin-top: 20px; }
-.operation-history-detail { display: grid; gap: 8px; }
-.operation-link { white-space: normal; height: auto; text-align: left; overflow-wrap: anywhere; }
 .operations-embedded { padding: 0; }
 .hostname-operation-dialog .el-dialog__body { max-height: calc(100vh - 190px); overflow-y: auto; }
 .hostname-operation-dialog .el-dialog__title { overflow-wrap: anywhere; }

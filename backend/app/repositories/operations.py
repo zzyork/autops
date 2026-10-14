@@ -1,8 +1,8 @@
 from datetime import timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import func, select, text, update
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select, text, update
+from sqlalchemy.orm import Session
 
 from ..models import utc_now
 from ..operation_models import OperationHost, OperationStepRun, OperationTask
@@ -14,17 +14,6 @@ PLAN_LIFETIME = timedelta(minutes=30)
 
 def get_task(session: Session, task_id: str) -> OperationTask | None:
     return session.get(OperationTask, task_id)
-
-
-def page_tasks(session: Session, module: str | None, page: int, page_size: int) -> tuple[list[OperationTask], int]:
-    query = select(OperationTask).options(selectinload(OperationTask.hosts).selectinload(OperationHost.steps))
-    count = select(func.count()).select_from(OperationTask)
-    if module is not None:
-        query = query.where(OperationTask.module == module)
-        count = count.where(OperationTask.module == module)
-    items = list(session.scalars(query.order_by(OperationTask.created_at.desc(), OperationTask.id.desc())
-                                 .offset((page - 1) * page_size).limit(page_size)))
-    return items, session.scalar(count) or 0
 
 
 def create_plan(session: Session, data: PlanInput, params: dict, spec: OperationSpec, snapshots: list[dict]) -> OperationTask:

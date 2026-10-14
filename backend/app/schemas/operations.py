@@ -126,8 +126,6 @@ class HostResponse(StrictModel):
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
-
-
 class TaskResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
     id: str
@@ -146,10 +144,3 @@ class TaskResponse(StrictModel):
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
-
-
-class TaskPage(StrictModel):
-    items: list[TaskResponse]
-    total: int
-    page: int
-    page_size: int

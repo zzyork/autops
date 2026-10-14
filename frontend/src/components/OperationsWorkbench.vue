@@ -6,7 +6,6 @@ import { RequestCancelledError } from '@/api/http'
 import { confirmOperation, getOperationCatalog, getOperationTask, inspectOperation, prepareOperation, resolveOperationHost } from '@/api/operations'
 import { showRequestError } from '@/components/feedback'
 import { isRunningOperation } from '@/components/operationDisplay'
-import OperationHistory from '@/components/OperationHistory.vue'
 import OperationSetup from '@/components/OperationSetup.vue'
 import OperationTaskDetail from '@/components/OperationTaskDetail.vue'
 import type { Host } from '@/types/api'
@@ -30,30 +29,19 @@ const planning = ref(false)
 const planFailed = ref(false)
 const confirming = ref(false)
 const resolving = ref<{ taskId: string; hostId: number } | null>(null)
-const historyTask = ref<OperationTask | null>(null)
-const historyId = ref<string | null>(null)
-const historyLoaded = ref(false)
-const historyLoading = ref(false)
 const pendingRequests = ref(0)
-const historyListLoading = ref(false)
 const preparedDialogOpen = ref(false)
-const historyDialogOpen = ref(false)
 const preparedDetailBusy = ref(false)
-const historyDetailBusy = ref(false)
-const revision = ref(0)
-const busy = computed(() => pendingRequests.value > 0 || loading.value || inspecting.value || planning.value || confirming.value || resolving.value !== null || historyListLoading.value || preparedDialogOpen.value || historyDialogOpen.value || preparedDetailBusy.value || historyDetailBusy.value)
+const busy = computed(() => pendingRequests.value > 0 || loading.value || inspecting.value || planning.value || confirming.value || resolving.value !== null || preparedDialogOpen.value || preparedDetailBusy.value)
 watch(busy, (value) => emit('busy', value), { immediate: true, flush: 'sync' })
 const moduleInfo = computed(() => catalog.value?.modules.find((item) => item.id === props.module))
 const preparedAction = computed(() => moduleInfo.value?.actions.find((item) => item.id === prepared.value?.action))
-const historyAction = computed(() => catalog.value?.modules.find((item) => item.id === historyTask.value?.module)?.actions.find((item) => item.id === historyTask.value?.action))
 const POLL_MS = 2000
 let active = true
 let optionsRequest = 0
 let inspectRequest = 0
 let planRequest = 0
-let historyRequest = 0
 let planTimer: ReturnType<typeof setTimeout> | undefined
-let historyTimer: ReturnType<typeof setTimeout> | undefined
 
 async function loadOptions() {
   const current = ++optionsRequest
@@ -119,7 +107,6 @@ async function prepare(input: OperationPlanInput) {
     if (!active || current !== planRequest) return
     prepared.value = task
     preparedLoaded.value = true
-    revision.value++
   } catch (error) {
     if (active && current === planRequest) { planFailed.value = !(error instanceof RequestCancelledError); showRequestError(error) }
   } finally {
@@ -145,10 +132,8 @@ async function loadPrepared(id: string) {
   try {
     const task = await getOperationTask(id)
     if (!active || current !== planRequest || prepared.value?.id !== id) return
-    const wasRunning = isRunningOperation(prepared.value.status)
     prepared.value = task
     preparedLoaded.value = true
-    if (wasRunning && !isRunningOperation(task.status)) revision.value++
     schedulePlan()
   } catch {
     if (!active || current !== planRequest || prepared.value?.id !== id) return
@@ -164,8 +149,7 @@ function canConfirmTarget(task: OperationTask) {
 }
 
 async function confirm(id: string) {
-  const selected = preparedLoaded.value && prepared.value?.id === id ? prepared.value
-    : historyLoaded.value && historyTask.value?.id === id ? historyTask.value : null
+  const selected = preparedLoaded.value && prepared.value?.id === id ? prepared.value : null
   if (!selected || selected.status !== 'planned' || !canConfirmTarget(selected) || confirming.value || planning.value) return
   prepared.value = selected
   preparedLoaded.value = true
@@ -177,15 +161,10 @@ async function confirm(id: string) {
     if (!active || current !== planRequest) return
     prepared.value = task
     preparedLoaded.value = true
-    revision.value++
-    if (historyId.value === id) {
-      historyTask.value = task
-      historyLoaded.value = true
-      scheduleHistory()
-    }
     schedulePlan()
   } catch (error) {
     if (active && current === planRequest) {
+      preparedLoaded.value = false
       showRequestError(error)
     }
   } finally {
@@ -194,55 +173,10 @@ async function confirm(id: string) {
   }
 }
 
-function scheduleHistory() {
-  clearTimeout(historyTimer)
-  if (active && historyTask.value && isRunningOperation(historyTask.value.status)) {
-    historyTimer = setTimeout(() => { if (historyId.value) void loadHistory(historyId.value) }, POLL_MS)
-  }
-}
-
-async function loadHistory(id: string) {
-  clearTimeout(historyTimer)
-  const current = ++historyRequest
-  historyLoading.value = true
-  pendingRequests.value++
-  try {
-    const task = await getOperationTask(id)
-    if (!active || current !== historyRequest || historyId.value !== id) return
-    historyTask.value = task
-    historyLoaded.value = true
-    scheduleHistory()
-  } catch {
-    if (!active || current !== historyRequest || historyId.value !== id) return
-    historyLoaded.value = false
-    showRequestError()
-  } finally {
-    pendingRequests.value--
-    if (active && current === historyRequest) historyLoading.value = false
-  }
-}
-
-function selectHistory(id: string) {
-  historyId.value = id
-  historyTask.value = null
-  historyLoaded.value = false
-  void loadHistory(id)
-}
-function closeHistory() {
-  historyRequest++
-  clearTimeout(historyTimer)
-  historyId.value = null
-  historyTask.value = null
-  historyLoaded.value = false
-  historyLoading.value = false
-  historyDialogOpen.value = false
-  historyDetailBusy.value = false
-}
-
 async function resolve(id: string, hostId: number, note: string) {
-  if (resolving.value || props.fixedHost && hostId !== props.fixedHost.id || ![prepared.value, historyTask.value].some((task) =>
-    (!props.fixedHost || task?.module === props.module) &&
-    task?.id === id && task.hosts.some((host) => host.host_id === hostId && host.status === 'unknown' && !host.resolved_at))) return
+  if (resolving.value || !prepared.value || props.fixedHost && (hostId !== props.fixedHost.id || prepared.value.module !== props.module) ||
+    prepared.value.id !== id || !prepared.value.hosts.some((host) =>
+      host.host_id === hostId && host.status === 'unknown' && !host.resolved_at)) return
   resolving.value = { taskId: id, hostId }
   pendingRequests.value++
   try {
@@ -254,14 +188,6 @@ async function resolve(id: string, hostId: number, note: string) {
       prepared.value = task
       preparedLoaded.value = true
     }
-    if (historyId.value === id) {
-      historyRequest++
-      clearTimeout(historyTimer)
-      historyTask.value = task
-      historyLoaded.value = true
-      historyLoading.value = false
-    }
-    revision.value++
   } catch {
     if (active) showRequestError()
   } finally {
@@ -276,9 +202,7 @@ onUnmounted(() => {
   optionsRequest++
   inspectRequest++
   planRequest++
-  historyRequest++
   clearTimeout(planTimer)
-  clearTimeout(historyTimer)
 })
 </script>
 
@@ -291,8 +215,6 @@ onUnmounted(() => {
         <section v-if="inspection || inspectFailed" class="host-section operation-section" aria-label="主机现状"><template v-if="inspection"><div class="section-header"><h2>主机现状 · {{ inspection.host_name }}</h2></div><div class="operation-output"><pre>{{ inspection.output }}</pre></div></template><ElButton v-else :loading="inspecting" :disabled="!lastInspectInput" @click="lastInspectInput && inspect(lastInspectInput)">重试读取</ElButton></section>
         <OperationTaskDetail v-if="prepared && preparedLoaded" :task="prepared" :action="preparedAction" :allowed-host-id="fixedHost?.id" :can-confirm="!!preparedAction && prepared.status === 'planned' && canConfirmTarget(prepared)" :confirming="confirming || planning" :resolving-host-id="resolving?.taskId === prepared.id ? resolving.hostId : null" @dialog-open="preparedDialogOpen = $event" @busy="preparedDetailBusy = $event" @confirm="confirm" @resolve="resolve" />
         <section v-else-if="prepared && !preparedLoaded" class="host-section operation-section"><ElButton @click="loadPrepared(prepared.id)">重试加载任务详情</ElButton></section>
-        <OperationHistory :module="module" :modules="catalog.modules" :fixed-module="!!fixedHost" :revision="revision" @busy="historyListLoading = $event" @select="selectHistory" />
-        <section v-if="historyId" class="operation-history-detail"><div class="operation-actions"><ElButton @click="closeHistory">关闭历史详情</ElButton><ElButton :loading="historyLoading" @click="loadHistory(historyId)">刷新详情</ElButton></div><OperationTaskDetail v-if="historyLoaded && historyTask" :task="historyTask" :action="historyAction" :allowed-host-id="fixedHost?.id" :can-confirm="!!historyAction && historyTask.status === 'planned' && canConfirmTarget(historyTask)" :confirming="confirming || planning" :resolving-host-id="resolving?.taskId === historyTask.id ? resolving.hostId : null" @dialog-open="historyDialogOpen = $event" @busy="historyDetailBusy = $event" @confirm="confirm" @resolve="resolve" /><section v-else-if="!historyLoading" class="host-section operation-section"><ElButton @click="loadHistory(historyId)">重试加载历史详情</ElButton></section></section>
       </template>
       <section v-else-if="!loading" class="host-section operation-section">{{ ready ? '当前模块不在操作目录中。' : '' }}<ElButton v-if="!ready" @click="loadOptions">重试加载</ElButton></section>
     </div>

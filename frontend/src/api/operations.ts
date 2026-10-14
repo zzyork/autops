@@ -1,6 +1,6 @@
 import type {
   OperationCatalog, OperationInspectInput, OperationInspection, OperationModuleId,
-  OperationPlanInput, OperationResolveInput, OperationTask, OperationTaskPage,
+  OperationPlanInput, OperationResolveInput, OperationTask,
 } from '@/types/operations'
 import { get, request } from './http'
 import { rememberSSHOperation, withSSHIdentities } from './sshIdentity'
@@ -27,8 +27,3 @@ export const getOperationTask = (id: string) => get<OperationTask>(`/operations/
 export const resolveOperationHost = (id: string, hostId: number, note: string) => request<OperationTask>(`/operations/tasks/${encodeURIComponent(id)}/hosts/${encodeURIComponent(hostId)}/resolve`, {
   method: 'POST', body: { confirmation: id, remote_stopped: true, note } satisfies OperationResolveInput,
 })
-export function listOperationTasks(module: OperationModuleId | null, page: number, pageSize: number) {
-  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-  if (module) params.set('module', module)
-  return get<OperationTaskPage>(`/operations/tasks?${params}`)
-}

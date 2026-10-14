@@ -72,6 +72,7 @@
 | --- | --- |
 | `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准，包含统一测试状态图标与 tooltip 复用要求。最后同步：2026-10-13。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
+| `docs/plans/2026-10-14-activity-audit-implementation.md` | 依据现行前后端规范优化的操作记录实施方案，包含最小响应与展示契约、事务迁移、模块接入、用户兼容、分阶段验收及规范检查表；尚未实施业务代码。最后同步：2026-10-14。 |
 
 ## 后端文件
 
@@ -156,21 +157,20 @@
 | --- | --- |
 | `backend/app/operation_models.py` | 运维计划、主机、步骤及人工核对数据库模型。最后同步：2026-10-14。 |
 | `backend/app/core/migrations/operations.py` | 运维表及核对字段的幂等启动迁移。最后同步：2026-10-14。 |
-| `backend/app/schemas/operations.py` | 目录、读取、计划、确认、核对及分页任务契约。最后同步：2026-10-14。 |
-| `backend/app/repositories/operations.py` | 运维计划、确认认领、逐步记录、持久阻塞、重启中断与分页。最后同步：2026-10-14。 |
+| `backend/app/schemas/operations.py` | 目录、读取、计划、确认、核对及当前任务详情契约。最后同步：2026-10-14。 |
+| `backend/app/repositories/operations.py` | 运维计划、确认认领、逐步记录、持久阻塞与重启中断。最后同步：2026-10-14。 |
 | `backend/app/services/operations.py` | SSH 预检、权限、计划、确认、主机互斥与有界调度。最后同步：2026-10-14。 |
 | `backend/app/services/operation_execution.py` | 资产/状态复核、逐步骤执行与核验、失败和未知结果持久化。最后同步：2026-10-14。 |
 | `backend/app/services/operation_commands/` | 六类固定操作目录、严格参数校验及预检/执行/核验脚本；common、hostname、packages、firewall、kernel、system、disk 按职责分文件。最后同步：2026-10-14。 |
-| `backend/app/api/v1/endpoints/operations.py` | 运维目录、现状、计划、确认、分页历史、详情及人工核对接口。最后同步：2026-10-14。 |
+| `backend/app/api/v1/endpoints/operations.py` | 运维目录、现状、计划、确认、当前任务详情及人工核对接口。最后同步：2026-10-14。 |
 | `frontend/src/types/operations.ts` | 六模块目录、表单、任务状态及核对类型。最后同步：2026-10-14。 |
 | `frontend/src/api/operations.ts` | 运维 API 调用及对应时限。最后同步：2026-10-14。 |
-| `frontend/src/components/OperationsWorkbench.vue` | 运维页面及固定主机弹窗共用请求、独立身份确认前置流程、轮询、计划、历史与核对。最后同步：2026-10-14。 |
+| `frontend/src/components/OperationsWorkbench.vue` | 运维页面请求、独立身份确认前置流程、轮询、当前计划与核对。最后同步：2026-10-14。 |
 | `frontend/src/components/OperationSetup.vue` | 主机选择、免密 sudo、目录驱动参数表单及本地校验。最后同步：2026-10-14。 |
 | `frontend/src/components/OperationTaskDetail.vue` | 计划预览、确认弹窗、逐主机步骤和未知结果人工核对。最后同步：2026-10-14。 |
-| `frontend/src/components/OperationHistory.vue` | 模块筛选、10/20/50 分页任务历史。最后同步：2026-10-14。 |
 | `frontend/src/components/operationDisplay.ts` | 运维任务、主机和步骤的状态中文与语义色映射。最后同步：2026-10-14。 |
 | `frontend/src/styles/operations.css` | 复用控制台变量的运维表单、详情、输出及任务布局。最后同步：2026-10-14。 |
-| `frontend/src/components/HostnameOperationDialog.vue` | 主机行更改主机名弹窗，复用固定目标运维工作台与忙碌关闭守卫。最后同步：2026-10-14。 |
+| `frontend/src/components/HostnameOperationDialog.vue` | 简单主机名编辑弹窗，自动读取当前名称，输入新名称后保存；复用身份校验、运维执行及异常结果核对。最后同步：2026-10-14。 |
 | `frontend/src/views/PackagesOperationsView.vue` | 软件包与仓库管理独立页面。最后同步：2026-10-14。 |
 | `frontend/src/views/FirewallOperationsView.vue` | 防火墙管理独立页面。最后同步：2026-10-14。 |
 | `frontend/src/views/KernelOperationsView.vue` | 内核参数与资源限制独立页面。最后同步：2026-10-14。 |

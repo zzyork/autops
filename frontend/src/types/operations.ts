@@ -78,10 +78,3 @@ export interface OperationTask {
   sudo: boolean
   hosts: OperationTaskHost[]
 }
-
-export interface OperationTaskPage {
-  items: OperationTask[]
-  total: number
-  page: number
-  page_size: number
-}
