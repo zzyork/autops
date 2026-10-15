@@ -14,6 +14,9 @@
 | --- | --- |
 | `./` | 项目根目录。 |
 | `.vscode/` | VS Code 前后端调试与联合启动配置。最后同步：2026-10-13。 |
+| `.agents/skills/` | OpenCode 与 Codex 共享的项目适配技能及固定上游技术知识快照。最后同步：2026-10-15。 |
+| `.opencode/commands/` | OpenCode 项目规划与只读审核命令入口。最后同步：2026-10-15。 |
+| `.opencode/agents/` | OpenCode 项目专用只读审核 Agent。最后同步：2026-10-15。 |
 | `scripts/` | 统一存放项目安装与启动脚本。最后同步：2026-10-13。 |
 | `backend/` | FastAPI 后端项目。 |
 | `backend/app/` | 后端应用包。 |
@@ -44,7 +47,7 @@
 | --- | --- |
 | `.gitignore` | Git 文件忽略配置，忽略运行数据及默认忽略新增的 `backend/tests/*`，例外见 `backend/.gitignore`。最后同步：2026-10-12。 |
 | `.gitattributes` | 固定 Windows 启动脚本使用 CRLF、Shell 启动脚本使用 LF，避免跨平台检出造成解析错误。最后同步：2026-10-13。 |
-| `AGENTS.md` | 项目 Agent 工作约定，要求严格执行前端、后端开发规范及 README 编写、更新和审核规范。最后同步：2026-10-12。 |
+| `AGENTS.md` | 项目 Agent 工作约定，强制执行三份开发规范、技能加载及外部知识边界，包含 README、授权与验证要求。最后同步：2026-10-15。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
 | `README.md` | 项目介绍与安装、运行、模型对话、巡检及六类服务器运维使用入口和目标系统范围。最后同步：2026-10-14。 |
 | `main.py` | 兼容根目录 `uvicorn main:app` 启动方式的入口。 |
@@ -70,9 +73,39 @@
 
 | 路径 | 用途 |
 | --- | --- |
+| `docs/AI-奥卡姆剃刀开发规范.md` | 基于出版论文及工程指南的跨端简约设计约束，定义必要复杂度、合理冗余、拆分合并、Agent 决策流程、审核清单及文献适用边界。最后同步：2026-10-15。 |
 | `docs/AI-前端开发约束规范.md` | AI 前端开发约束及项目 UI 实施标准，包含统一测试状态图标与 tooltip 复用要求。最后同步：2026-10-13。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端架构、接口、数据库、安全及验证约束。最后同步：2026-10-12。 |
+| `docs/AI-编程接入指南.md` | 项目技能路由、固定来源与许可、审核记录、已知差异、使用和更新验收说明。最后同步：2026-10-15。 |
+| `docs/plans/2026-10-15-ai-coding-integration.md` | AI 编程规则与技能接入的方案取舍、实施步骤、风险和验收计划。最后同步：2026-10-15。 |
 | `docs/plans/2026-10-14-activity-audit-implementation.md` | 依据现行前后端规范优化的操作记录实施方案，包含最小响应与展示契约、事务迁移、模块接入、用户兼容、分阶段验收及规范检查表；尚未实施业务代码。最后同步：2026-10-14。 |
+
+## AI 编程技能与入口
+
+以下条目最后同步：2026-10-15。上游技能快照的来源提交和许可见 `docs/AI-编程接入指南.md`。
+
+| 路径 | 用途 |
+| --- | --- |
+| `.agents/skills/autops-frontend/SKILL.md` | 前端实施与验证流程，连接项目规范、源码和 Vue 技能。 |
+| `.agents/skills/autops-backend/SKILL.md` | 后端实施与验证流程，连接项目规范、源码和 FastAPI 技能。 |
+| `.agents/skills/autops-review/SKILL.md` | 变更、接口、安全与验证审核流程。 |
+| `.agents/skills/vue/SKILL.md` | 固定版本的上游 Vue 技能入口。 |
+| `.agents/skills/vue/GENERATION.md` | 上游 Vue 文档生成来源记录。 |
+| `.agents/skills/vue/LICENSE.md` | 上游 MIT 许可。 |
+| `.agents/skills/vue/references/script-setup-macros.md` | Vue 组件宏与类型参考。 |
+| `.agents/skills/vue/references/core-new-apis.md` | Vue 响应式与生命周期参考。 |
+| `.agents/skills/vue/references/advanced-patterns.md` | Vue 内置组件、指令与进阶模式参考。 |
+| `.agents/skills/fastapi/SKILL.md` | 固定版本的 FastAPI 官方技能入口。 |
+| `.agents/skills/fastapi/LICENSE` | 上游 MIT 许可。 |
+| `.agents/skills/fastapi/references/dependencies.md` | 依赖注入、生命周期和资源清理参考。 |
+| `.agents/skills/fastapi/references/other-tools.md` | 上游工具与库偏好，仅按接入指南选择性参考。 |
+| `.agents/skills/fastapi/references/path-operations.md` | 路由与 HTTP 输入输出参考。 |
+| `.agents/skills/fastapi/references/pydantic.md` | Pydantic 输入校验与类型参考。 |
+| `.agents/skills/fastapi/references/responses.md` | 响应模型与输出过滤参考。 |
+| `.agents/skills/fastapi/references/streaming.md` | SSE、JSON Lines 和字节流参考。 |
+| `.opencode/commands/autops-plan.md` | `/autops-plan` 规划入口。 |
+| `.opencode/commands/autops-review.md` | `/autops-review` 只读审核入口。 |
+| `.opencode/agents/autops-auditor.md` | 拒绝编辑、Shell 与任务委派的只读审核 Agent。 |
 
 ## 后端文件
 
