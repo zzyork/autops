@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElLoading, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import ModelConnectionDialog from '@/components/ModelConnectionDialog.vue'
 import FeatureModelsForm from '@/components/FeatureModelsForm.vue'
 import TestStatus from '@/components/TestStatus.vue'
 import ListPagination from '@/components/ListPagination.vue'
-import { useListPagination } from '@/components/pagination'
-import { deleteConnection, listConnections, testConnection } from '@/api/ai'
+import { useServerPagination } from '@/components/serverPagination'
+import { deleteConnection, listConnections, listConnectionsPage, testConnection } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import type { FeatureModelsConfig, ModelConnection } from '@/types/ai'
 import type { TestStatus as TestStatusValue } from '@/types/testStatus'
 import '@/styles/ai.css'
 
 const vLoading = ElLoading.directive
-const connections = ref<ModelConnection[]>([])
-const { page, pageSize, total, pageItems } = useListPagination(connections)
+const { items: connections, page, pageSize, total, loading, loadFailed, refresh, resetPage } = useServerPagination(listConnectionsPage)
 const loaded = ref(false)
-const loading = ref(false)
+const allConnections = ref<ModelConnection[]>([])
+const allLoaded = ref(false)
+const allLoading = ref(false)
 const editing = ref<ModelConnection | null>(null)
 const copying = ref<ModelConnection | null>(null)
 const dialog = ref(false)
@@ -24,7 +25,11 @@ const operating = ref<number | null>(null)
 const testing = ref<number | null>(null)
 const featureModels = ref<FeatureModelsConfig | null>(null)
 let active = true
-let sequence = 0
+let allSequence = 0
+watch(loading, (busy) => {
+  if (busy) { loaded.value = false; return }
+  if (!loadFailed.value) loaded.value = true
+})
 function testStatus(connection: ModelConnection): TestStatusValue {
   if (testing.value === connection.id) return 'pending'
   if (connection.chat_status === 'passed' && connection.tool_status === 'passed') return 'passed'
@@ -40,22 +45,30 @@ function testDescription(connection: ModelConnection): string {
   }
 }
 
-async function load() {
-  if (testing.value !== null) return
-  const current = ++sequence
-  loading.value = true
+async function loadAll() {
+  const current = ++allSequence
+  allLoaded.value = false
+  allLoading.value = true
   try {
     const items = await listConnections()
-    if (!active || current !== sequence) return
-    connections.value = items
-    loaded.value = true
+    if (!active || current !== allSequence) return
+    allConnections.value = items
+    allLoaded.value = true
   } catch {
-    if (!active || current !== sequence) return
-    loaded.value = false
+    if (!active || current !== allSequence) return
     showRequestError()
   } finally {
-    if (active && current === sequence) loading.value = false
+    if (active && current === allSequence) allLoading.value = false
   }
+}
+function load() {
+  if (testing.value !== null) return
+  void refresh()
+  void loadAll()
+}
+function saved() {
+  if (!editing.value) resetPage()
+  load()
 }
 function open(connection: ModelConnection | null) {
   editing.value = connection
@@ -71,12 +84,12 @@ async function test(connection: ModelConnection) {
   if (operating.value !== null) return
   operating.value = connection.id
   testing.value = connection.id
-  sequence++
-  loading.value = false
   try {
     const updated = await testConnection(connection.id)
     if (!active) return
     connections.value = connections.value.map((item) => item.id === updated.id ? updated : item)
+    void loadAll()
+    await refresh()
   } catch { if (active) showRequestError() }
   finally { if (active) { operating.value = null; testing.value = null } }
 }
@@ -90,21 +103,21 @@ async function remove(connection: ModelConnection) {
   } catch { operating.value = null; return }
   try {
     await deleteConnection(connection.id)
-    if (active) void load()
+    if (active) load()
   } catch { if (active) showRequestError() }
   finally { if (active) operating.value = null }
 }
-onMounted(() => { void load() })
-onUnmounted(() => { active = false; sequence++ })
+onMounted(() => { void loadAll() })
+onUnmounted(() => { active = false; allSequence++ })
 </script>
 
 <template>
     <main class="assets-main">
       <div class="assets-heading"><h1>模型配置</h1></div>
       <section class="host-section" aria-label="模型连接">
-        <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
+        <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading || allLoading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
         <div v-loading="loading" class="host-table-wrap">
-          <ElTable v-if="loaded" :data="pageItems" class="host-table" empty-text="暂无模型连接">
+          <ElTable v-if="loaded" :data="connections" class="host-table" empty-text="暂无模型连接">
             <ElTableColumn label="连接名称" min-width="170"><template #default="{ row }"><strong>{{ row.name }}</strong><ElTag v-if="row.is_default" size="small" class="ai-default-tag">主模型</ElTag><ElTag v-if="row.is_backup" size="small" type="info" class="ai-default-tag">备用模型</ElTag></template></ElTableColumn>
             <ElTableColumn label="协议 / 模型" min-width="190"><template #default="{ row }">{{ row.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容' }}<div class="host-secondary">{{ row.model }}</div></template></ElTableColumn>
             <ElTableColumn label="服务地址" min-width="240"><template #default="{ row }"><span class="ai-address">{{ row.base_url }}</span></template></ElTableColumn>
@@ -116,8 +129,8 @@ onUnmounted(() => { active = false; sequence++ })
         </div>
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="loaded && !loading" :disabled="loading || !loaded || operating !== null" />
       </section>
-      <FeatureModelsForm :connections="connections" :connections-loaded="loaded" :connections-loading="loading" @configured="featureModels = $event" />
+      <FeatureModelsForm :connections="allConnections" :connections-loaded="allLoaded" :connections-loading="allLoading" @configured="featureModels = $event" />
       <p class="ai-data-notice">模型服务会收到用户对话，以及完成请求所需的资产信息和巡检结果。请确认服务地址和数据处理范围后再使用。</p>
     </main>
-    <ModelConnectionDialog v-model="dialog" :connection="editing" :copy-source="copying" @saved="load" />
+    <ModelConnectionDialog v-model="dialog" :connection="editing" :copy-source="copying" @saved="saved" />
 </template>

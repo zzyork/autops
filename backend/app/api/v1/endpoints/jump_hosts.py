@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit
 from ....models import Host, JumpHost
+from ....repositories import assets as repository
 from ....schemas.jump_hosts import JumpHostInput, JumpHostResponse, JumpHostUpdate
+from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from .credentials import apply_connection
 
 router = APIRouter(tags=["资产管理"])
@@ -26,12 +28,15 @@ def jump_host_response(session: Session, jump_host: JumpHost) -> JumpHostRespons
     })
 
 
-@router.get("/jump-hosts", response_model=list[JumpHostResponse])
-def list_jump_hosts(session: Database, q: str = Query(default="", max_length=253)) -> list[JumpHostResponse]:
-    statement = select(JumpHost).order_by(JumpHost.id.desc())
-    if q.strip():
-        statement = statement.where(or_(JumpHost.name.contains(q.strip(), autoescape=True), JumpHost.address.contains(q.strip(), autoescape=True)))
-    return [jump_host_response(session, jump_host) for jump_host in session.scalars(statement)]
+@router.get("/jump-hosts", response_model=list[JumpHostResponse] | PageResponse[JumpHostResponse])
+def list_jump_hosts(session: Database, q: str = Query(default="", max_length=253),
+                    page: PageNumber = None,
+                     page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[JumpHostResponse] | PageResponse[JumpHostResponse]:
+    result = repository.jump_hosts(session, q, page, page_size)
+    if page is None:
+        return [jump_host_response(session, item) for item in result]
+    items, total = result
+    return PageResponse[JumpHostResponse](items=[jump_host_response(session, item) for item in items], total=total)
 
 
 @router.get("/jump-hosts/{jump_host_id}", response_model=JumpHostResponse)

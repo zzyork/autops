@@ -2,6 +2,11 @@ export interface HealthResponse {
   status: 'ok'
 }
 
+export interface PageResponse<T> {
+  items: T[]
+  total: number
+}
+
 export interface HostGroup {
   id: number
   name: string
@@ -29,6 +34,8 @@ export interface SSHKey {
   host_count: number
   jump_host_count: number
 }
+
+export type SSHKeySummary = Omit<SSHKey, 'public_key'>
 
 export interface SSHKeyReferences {
   hosts: { id: number; name: string }[]

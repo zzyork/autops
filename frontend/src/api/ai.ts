@@ -2,6 +2,7 @@ import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnection
 import { get, HttpError, request, streamRequest } from './http'
 import { rememberSSHOperation, withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
+import type { PageResponse } from '@/types/api'
 
 const connectionPath = (id: number) => `/ai/connections/${encodeURIComponent(id)}`
 const sessionPath = (id: string) => `/ai/sessions/${encodeURIComponent(id)}`
@@ -33,6 +34,7 @@ function isChatSession(value: unknown): value is ChatSession {
 }
 
 export const listConnections = () => get<ModelConnection[]>('/ai/connections')
+export const listConnectionsPage = (page: number, pageSize: number) => get<PageResponse<ModelConnection>>(`/ai/connections?page=${page}&page_size=${pageSize}`)
 export const getFeatureModels = async () => featureModelsConfig(await get<unknown>('/ai/feature-models'))
 export const updateFeatureModels = async (body: FeatureModelsConfig) => featureModelsConfig(await request<unknown>('/ai/feature-models', { method: 'PUT', body }))
 export const createConnection = (body: ModelConnectionInput) => request<ModelConnection>('/ai/connections', { method: 'POST', body })
@@ -40,6 +42,7 @@ export const updateConnection = (id: number, body: ModelConnectionInput) => requ
 export const deleteConnection = (id: number) => request<void>(connectionPath(id), { method: 'DELETE' })
 export const testConnection = (id: number) => request<ModelConnection>(`${connectionPath(id)}/test`, { method: 'POST', timeoutMs: 150000 })
 export const listSessions = () => get<SessionSummary[]>('/ai/sessions')
+export const listSessionsPage = (page: number, pageSize: number) => get<PageResponse<SessionSummary>>(`/ai/sessions?page=${page}&page_size=${pageSize}`)
 export const createSession = () => request<SessionSummary>('/ai/sessions', { method: 'POST' })
 export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })

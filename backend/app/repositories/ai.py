@@ -6,10 +6,13 @@ from sqlalchemy.orm import Session
 from ..ai_models import AIConnection, AIMessage, AIProposal, AISession, AIToolHistory
 from ..models import utc_now
 from ..schemas.ai import ConnectionInput
+from ..schemas.pagination import DEFAULT_PAGE_SIZE
+from .pagination import fetch_rows
 
 
-def connections(session: Session) -> list[AIConnection]:
-    return list(session.scalars(select(AIConnection).order_by(AIConnection.id)))
+def connections(session: Session, page: int | None = None,
+                 page_size: int = DEFAULT_PAGE_SIZE) -> list[AIConnection] | tuple[list[AIConnection], int]:
+    return fetch_rows(session, select(AIConnection).order_by(AIConnection.id), page, page_size)
 
 
 def connection(session: Session, connection_id: int) -> AIConnection | None:
@@ -46,8 +49,10 @@ def save_connection(session: Session, data: ConnectionInput, encrypted: str | No
     return record
 
 
-def sessions(session: Session) -> list[AISession]:
-    return list(session.scalars(select(AISession).order_by(AISession.updated_at.desc(), AISession.id.desc()).limit(100)))
+def sessions(session: Session, page: int | None = None,
+              page_size: int = DEFAULT_PAGE_SIZE) -> list[AISession] | tuple[list[AISession], int]:
+    query = select(AISession).order_by(AISession.updated_at.desc(), AISession.id.desc())
+    return fetch_rows(session, query, page, page_size, legacy_limit=100)
 
 
 def create_session(session: Session, record: AIConnection) -> AISession:

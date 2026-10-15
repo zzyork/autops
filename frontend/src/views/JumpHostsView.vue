@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessageBox,
   ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
-import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHosts, updateJumpHost } from '@/api/jump_hosts'
+import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHostsPage, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
-import { useListPagination } from '@/components/pagination'
+import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 
@@ -24,16 +24,14 @@ interface JumpHostForm {
 }
 
 const vLoading = ElLoading.directive
-const jumpHosts = ref<JumpHost[]>([])
-const { page, pageSize, total, pageItems, resetPage } = useListPagination(jumpHosts)
+const { items: jumpHosts, page, pageSize, total, loading, loadFailed, refresh: load, resetPage, invalidate } =
+  useServerPagination<JumpHost>((currentPage, size) => listJumpHostsPage(search.value.trim(), currentPage, size))
 const sshKeys = ref<SSHKey[]>([])
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
 const search = ref('')
-const loading = ref(false)
 const opening = ref(false)
 const saving = ref(false)
-const loadFailed = ref(false)
 const localError = ref('')
 const dialogError = ref('')
 const dialog = ref(false)
@@ -58,7 +56,6 @@ watch(() => form.value.auth_type, (next, previous) => {
 }, { flush: 'sync' })
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
-let requestId = 0
 let sshKeyRequest = 0
 async function refreshSSHKeys() {
   const current = ++sshKeyRequest
@@ -79,35 +76,19 @@ async function refreshSSHKeys() {
     if (current === sshKeyRequest) sshKeysLoading.value = false
   }
 }
-async function refresh() {
-  const current = ++requestId
-  loading.value = true
-  loadFailed.value = false
-  try {
-    const result = await listJumpHosts(search.value.trim())
-    if (current === requestId) jumpHosts.value = result
-  } catch {
-    if (current === requestId) {
-      jumpHosts.value = []
-      loadFailed.value = true
-      showSystemError()
-    }
-  } finally {
-    if (current === requestId) loading.value = false
-  }
+function refresh() {
+  clearTimeout(searchTimer)
+  return load()
 }
 
 watch(search, () => {
   clearTimeout(searchTimer)
+  invalidate()
   resetPage()
-  requestId++
-  loading.value = true
   searchTimer = setTimeout(refresh, search.value ? 250 : 0)
-})
-onMounted(() => { void refresh() })
+}, { flush: 'sync' })
 onUnmounted(() => {
   clearTimeout(searchTimer)
-  requestId++
   sshKeyRequest++
 })
 
@@ -239,7 +220,7 @@ function openConnectionTest(item: JumpHost) {
         <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
         <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading || opening" :data="pageItems" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
+          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
             <ElTableColumn label="跳板机" min-width="200"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="关联主机" width="100" />

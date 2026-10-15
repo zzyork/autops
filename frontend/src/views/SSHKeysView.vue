@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import {
   ElAlert,
   ElButton,
@@ -19,23 +19,21 @@ import {
   deleteSSHKey,
   getSSHKey,
   getSSHKeyReferences,
-  listSSHKeys,
+  listSSHKeysPage,
   updateSSHKey,
 } from "@/api/ssh_keys";
 import { showSystemError } from "@/components/feedback";
 import ListPagination from "@/components/ListPagination.vue";
-import { useListPagination } from "@/components/pagination";
-import type { SSHKey, SSHKeyReferences, SSHKeyUpdateInput } from "@/types/api";
+import { useServerPagination } from "@/components/serverPagination";
+import type { SSHKey, SSHKeySummary, SSHKeyReferences, SSHKeyUpdateInput } from "@/types/api";
 import "@/styles/assets.css";
 
 const vLoading = ElLoading.directive;
-const keys = ref<SSHKey[]>([]);
-const { page, pageSize, total, pageItems, resetPage } = useListPagination(keys);
+const { items: keys, page, pageSize, total, loading, loadFailed, refresh: load, resetPage, invalidate } =
+  useServerPagination<SSHKeySummary>((currentPage, size) => listSSHKeysPage(search.value.trim(), currentPage, size));
 const search = ref("");
-const loading = ref(false);
 const opening = ref(false);
 const saving = ref(false);
-const loadFailed = ref(false);
 const dialog = ref(false);
 const dialogError = ref("");
 const editing = ref<SSHKey | null>(null);
@@ -67,38 +65,23 @@ const referencesName = ref("");
 const referencesLoading = ref(false);
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let requestId = 0;
 let readId = 0;
 let publicReadId = 0;
 let publicViewId = 0;
 let referenceId = 0;
 let editId = 0;
 
-async function refresh() {
-  const current = ++requestId;
-  loading.value = true;
-  loadFailed.value = false;
-  try {
-    const result = await listSSHKeys(search.value.trim());
-    if (current === requestId) keys.value = result;
-  } catch {
-    if (current === requestId) {
-      keys.value = [];
-      loadFailed.value = true;
-      showSystemError();
-    }
-  } finally {
-    if (current === requestId) loading.value = false;
-  }
+function refresh() {
+  clearTimeout(searchTimer);
+  return load();
 }
 
 watch(search, () => {
   clearTimeout(searchTimer);
+  invalidate();
   resetPage();
-  requestId++;
-  loading.value = true;
   searchTimer = setTimeout(refresh, search.value ? 250 : 0);
-});
+}, { flush: "sync" });
 watch(
   () => form.value.name,
   () => {
@@ -188,12 +171,8 @@ watch(referencesDialog, (visible) => {
     references.value = null;
   }
 });
-onMounted(() => {
-  void refresh();
-});
 onUnmounted(() => {
   clearTimeout(searchTimer);
-  requestId++;
   clearPrivateKey();
   clearPublicKey();
   publicViewId++;
@@ -416,7 +395,7 @@ async function save() {
   }
 }
 
-async function showPublicKey(item: SSHKey) {
+async function showPublicKey(item: SSHKeySummary) {
   const current = ++publicViewId;
   publicName.value = item.name;
   publicKeyId.value = item.id;
@@ -444,7 +423,7 @@ function editMissingPublicKey() {
   void openEdit(id);
 }
 
-async function showReferences(item: SSHKey) {
+async function showReferences(item: SSHKeySummary) {
   const current = ++referenceId;
   referencesName.value = item.name;
   references.value = null;
@@ -460,7 +439,7 @@ async function showReferences(item: SSHKey) {
   }
 }
 
-async function remove(item: SSHKey) {
+async function remove(item: SSHKeySummary) {
   if (item.host_count || item.jump_host_count) return;
   try {
     await ElMessageBox.confirm(
@@ -514,7 +493,7 @@ function dateLabel(value: string) {
         <div class="host-table-wrap">
           <ElTable
             v-loading="loading || opening"
-            :data="pageItems"
+            :data="keys"
             row-key="id"
             class="host-table"
             :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无 SSH 密钥'"
@@ -537,7 +516,7 @@ function dateLabel(value: string) {
                 ><ElButton
                   link
                   type="primary"
-                  @click="showReferences(row as SSHKey)"
+                   @click="showReferences(row as SSHKeySummary)"
                   >{{ row.host_count }} 主机 /
                   {{ row.jump_host_count }} 跳板机</ElButton
                 ></template
@@ -559,7 +538,7 @@ function dateLabel(value: string) {
                   link
                   type="primary"
                   :disabled="opening"
-                  @click="showPublicKey(row as SSHKey)"
+                   @click="showPublicKey(row as SSHKeySummary)"
                   >查看公钥</ElButton
                 ><ElButton
                   link
@@ -579,7 +558,7 @@ function dateLabel(value: string) {
                     :disabled="
                       opening || row.host_count > 0 || row.jump_host_count > 0
                     "
-                    @click="remove(row as SSHKey)"
+                     @click="remove(row as SSHKeySummary)"
                     >删除</ElButton
                   ></span
                 ></template

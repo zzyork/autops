@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit, find_group
 from ....models import Host, HostGroup
+from ....repositories import assets as repository
 from ....schemas.assets import GroupInput, GroupResponse
+from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 
 router = APIRouter(tags=["资产管理"])
 
@@ -14,9 +16,14 @@ def group_response(session: Session, group: HostGroup) -> GroupResponse:
     return GroupResponse(id=group.id, name=group.name, remark=group.remark, host_count=count)
 
 
-@router.get("/host-groups", response_model=list[GroupResponse])
-def list_groups(session: Database) -> list[GroupResponse]:
-    return [group_response(session, group) for group in session.scalars(select(HostGroup).order_by(HostGroup.id))]
+@router.get("/host-groups", response_model=list[GroupResponse] | PageResponse[GroupResponse])
+def list_groups(session: Database, page: PageNumber = None,
+                 page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[GroupResponse] | PageResponse[GroupResponse]:
+    result = repository.groups(session, page, page_size)
+    if page is None:
+        return [group_response(session, group) for group in result]
+    items, total = result
+    return PageResponse[GroupResponse](items=[group_response(session, group) for group in items], total=total)
 
 
 @router.post("/host-groups", response_model=GroupResponse, status_code=201)

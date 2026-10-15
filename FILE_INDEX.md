@@ -79,7 +79,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `backend/.env.example` | 后端环境变量模板。最后同步：2026-10-10。 |
-| `backend/.gitignore` | 从根目录的 `backend/tests/*` 忽略规则中仅放行 `tests/test_inspection_checks.py` 与 `tests/test_inspection_tasks.py` 两个新增测试文件。最后同步：2026-10-12。 |
+| `backend/.gitignore` | 从根目录测试忽略规则中放行巡检检查、任务及列表分页正式回归测试。最后同步：2026-10-14。 |
 | `backend/__init__.py` | 声明后端 Python 包。 |
 | `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接与 Drain3 日志模板提取依赖。最后同步：2026-10-13。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
@@ -119,6 +119,8 @@
 | `backend/app/core/migrations/ssh_connections.py` | 幂等创建连接与信任表，为历史记录补齐错误文本、身份策略与新增信任字段。最后同步：2026-10-13。 |
 | `backend/app/core/migrations/inspections.py` | 幂等创建巡检任务、主机执行、检查结果和 AI 报告表。最后同步：2026-10-13。 |
 | `backend/app/repositories/__init__.py` | 声明仓储包。最后同步：2026-10-12。 |
+| `backend/app/repositories/assets.py` | 主机、分组、跳板机与密钥的筛选及数据库分页查询。最后同步：2026-10-14。 |
+| `backend/app/repositories/pagination.py` | 共用列表计数与 limit/offset 查询，兼容原数组查询。最后同步：2026-10-14。 |
 | `backend/app/repositories/ssh_connections.py` | SSH 资产、密钥、信任与测试历史查询及重启状态更新。最后同步：2026-10-12。 |
 | `backend/app/repositories/inspections.py` | 巡检任务与执行记录持久化、分页、终态删除、状态汇总和中断恢复。最后同步：2026-10-12。 |
 | `backend/app/services/__init__.py` | 声明业务服务包。最后同步：2026-10-12。 |
@@ -141,6 +143,7 @@
 | `backend/app/services/inspection_checks/logs.py` | journal 与 /var/log 下文件错误日志筛选、权限及真实路径校验，复用巡检结果和报告。最后同步：2026-10-12。 |
 | `backend/app/core/ssh_keys.py` | SSH 公私钥内容与配对校验、指纹生成。最后同步：2026-10-10。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
+| `backend/app/schemas/pagination.py` | 分页响应泛型、页码上限及 10/20/50/100 数量校验，默认每页 10 条。最后同步：2026-10-15。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
 | `backend/app/schemas/assets.py` | 资产管理接口数据模型。最后同步：2026-10-10。 |
 | `backend/app/schemas/jump_hosts.py` | 跳板机接口数据模型。 |
@@ -148,6 +151,7 @@
 | `backend/app/schemas/ssh_connections.py` | SSH 连接测试输入与最小必要结果响应模型，过滤策略、旧挑战及内部异常。最后同步：2026-10-14。 |
 | `backend/app/schemas/inspections.py` | 巡检输入校验、规则配置、结果及任务/报告响应模型；历史响应过滤未安装服务与回环监听。最后同步：2026-10-12。 |
 | `backend/tests/test_assets.py` | 使用 TestClient 验证主机、分组的 CRUD、筛选及异常路径。最后同步：2026-10-10。 |
+| `backend/tests/test_list_pagination.py` | 六类列表分页、筛选、输入边界、最小响应和旧数组契约回归测试。最后同步：2026-10-14。 |
 | `backend/tests/test_inspection_checks.py` | 使用模拟命令结果验证四类巡检采集、阈值、服务和回环监听过滤。最后同步：2026-10-12。 |
 | `backend/tests/test_inspection_tasks.py` | 使用隔离数据库与 TestClient 验证巡检规则、任务/报告接口、终态删除、历史过滤及执行边界。最后同步：2026-10-12。 |
 
@@ -217,8 +221,9 @@
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/ListPagination.vue` | 共用列表分页控件，接收总数、加载可用状态及紧凑布局选项，双向绑定页码与每页数量，统一提供 10、20、50 条选择。最后同步：2026-10-13。 |
+| `frontend/src/components/ListPagination.vue` | 共用列表分页控件，接收总数、加载可用状态及紧凑布局选项，双向绑定页码与每页数量，统一提供 10、20、50、100 条选择。最后同步：2026-10-15。 |
 | `frontend/src/components/pagination.ts` | 共用分页数量配置与本地数组分页逻辑，维护当前页、数量切换重置及数据减少后的页码校正。最后同步：2026-10-13。 |
+| `frontend/src/components/serverPagination.ts` | 六类管理列表共用后端分页状态与请求，处理请求失效、页长重置及末页校正。最后同步：2026-10-14。 |
 | `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检、六类服务器运维及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-14。 |
 | `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，接收注入的标签状态并切换、关闭页面，复用 Element Plus 的键盘与溢出导航。最后同步：2026-10-13。 |
 | `frontend/src/components/WorkspacePage.vue` | 标签页面路由容器，接收独立路由快照，为业务页面隔离路由参数与查询条件。最后同步：2026-10-13。 |

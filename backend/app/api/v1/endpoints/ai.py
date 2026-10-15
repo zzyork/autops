@@ -19,7 +19,8 @@ from ...dependencies import Database, commit
 from ....ai_models import AIConnection, AIProposal, AISession
 from ....repositories import ai as repository
 from ....schemas.ai import (ConnectionInput, ConnectionResponse, DecisionInput, Detail,
-                            FeatureModels, MessageInput, Summary)
+                             FeatureModels, MessageInput, Summary)
+from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from ....services.ai_feature_models import (config_guard, feature_connection, load_feature_models,
                                            save_feature_models)
 from ....schemas.inspections import InspectionInput
@@ -44,9 +45,14 @@ def require_session(session: Database, session_id: UUID) -> AISession:
     return conversation
 
 
-@router.get("/connections", response_model=list[ConnectionResponse])
-def list_connections(session: Database) -> list[AIConnection]:
-    return repository.connections(session)
+@router.get("/connections", response_model=list[ConnectionResponse] | PageResponse[ConnectionResponse])
+def list_connections(session: Database, page: PageNumber = None,
+                     page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[AIConnection] | PageResponse[ConnectionResponse]:
+    result = repository.connections(session, page, page_size)
+    if page is None:
+        return result
+    items, total = result
+    return PageResponse[ConnectionResponse](items=[ConnectionResponse.model_validate(item) for item in items], total=total)
 
 
 @router.get("/feature-models", response_model=FeatureModels)
@@ -111,9 +117,14 @@ def test_connection(connection_id: int, request: Request, session: Database) -> 
     return record
 
 
-@router.get("/sessions", response_model=list[Summary])
-def list_sessions(session: Database) -> list[AISession]:
-    return repository.sessions(session)
+@router.get("/sessions", response_model=list[Summary] | PageResponse[Summary])
+def list_sessions(session: Database, page: PageNumber = None,
+                   page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[AISession] | PageResponse[Summary]:
+    result = repository.sessions(session, page, page_size)
+    if page is None:
+        return result
+    items, total = result
+    return PageResponse[Summary](items=[Summary.model_validate(item) for item in items], total=total)
 
 
 @router.post("/sessions", response_model=Summary, status_code=201)

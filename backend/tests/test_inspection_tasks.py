@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Event, Lock, current_thread
 from types import SimpleNamespace
 from collections.abc import Iterator
+from uuid import uuid4
 
 import pytest
 import httpx
@@ -676,11 +677,30 @@ def test_missing_and_stale_host_and_page_bounds(client: TestClient, monkeypatch:
     empty = client.get(f"{ROOT}/tasks", params={"offset": 100001})
     assert empty.status_code == 200
     assert empty.json() == {"items": [], "total": 3}
-    for params in ({"limit": 0}, {"limit": 51}, {"offset": -1}):
+    for params in ({"limit": 0}, {"limit": 101}, {"offset": -1}):
         assert client.get(f"{ROOT}/tasks", params=params).status_code == 422
     assert client.get(f"{ROOT}/tasks/not-a-uuid").status_code == 422
     assert client.get(f"{ROOT}/tasks/00000000-0000-0000-0000-000000000001").status_code == 404
     assert client.get(f"{ROOT}/tasks/00000000-0000-0000-0000-000000000001/report").status_code == 404
+
+
+def test_task_page_default_and_hundred_items(client: TestClient) -> None:
+    with client.app.state.sessions() as session:
+        session.add_all(InspectionTask(id=str(uuid4()), name=f"task-{index}", status="completed",
+                                       check_ids=["server_info"], config={}, host_count=0)
+                        for index in range(101))
+        session.commit()
+
+    url = f"{ROOT}/tasks"
+    first = client.get(url).json()
+    assert first["total"] == 101 and len(first["items"]) == 10
+    for limit in (20, 50, 100):
+        page = client.get(url, params={"limit": limit}).json()
+        assert page["total"] == 101 and len(page["items"]) == limit
+        assert page["items"][:10] == first["items"]
+    last = client.get(url, params={"limit": 100, "offset": 100}).json()
+    assert last["total"] == 101 and len(last["items"]) == 1
+    assert last["items"][0]["id"] not in {item["id"] for item in first["items"]}
 
 
 def test_restart_interrupts_only_unfinished_checks(client: TestClient) -> None:

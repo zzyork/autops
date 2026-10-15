@@ -1,4 +1,4 @@
-import type { SSHKey, SSHKeyInput, SSHKeyReferences, SSHKeyUpdateInput } from '@/types/api'
+import type { PageResponse, SSHKey, SSHKeySummary, SSHKeyInput, SSHKeyReferences, SSHKeyUpdateInput } from '@/types/api'
 import { get, request } from './http'
 
 export function listSSHKeys(q = '') {
@@ -6,6 +6,12 @@ export function listSSHKeys(q = '') {
   if (q) params.set('q', q)
   const query = params.toString()
   return get<SSHKey[]>(`/ssh-keys${query ? `?${query}` : ''}`)
+}
+
+export function listSSHKeysPage(q: string, page: number, pageSize: number) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (q) params.set('q', q)
+  return get<PageResponse<SSHKeySummary>>(`/ssh-keys?${params}`)
 }
 
 export const getSSHKey = (id: number) => get<SSHKey>(`/ssh-keys/${id}`)

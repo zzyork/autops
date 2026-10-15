@@ -4,7 +4,7 @@ import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
   ElDropdown, ElDropdownItem, ElDropdownMenu, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
-import { createHost, deleteHost, getHost, listGroups, listHosts, updateHost } from '@/api/assets'
+import { createHost, deleteHost, getHost, listGroups, listHostsPage, updateHost } from '@/api/assets'
 import { listJumpHosts } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
@@ -12,7 +12,7 @@ import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import HostnameOperationDialog from '@/components/HostnameOperationDialog.vue'
-import { useListPagination } from '@/components/pagination'
+import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTest, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
@@ -35,8 +35,10 @@ const groups = ref<HostGroup[]>([])
 const jumpHosts = ref<JumpHost[]>([])
 const sshKeys = ref<SSHKey[]>([])
 const vLoading = ElLoading.directive
-const hosts = ref<Host[]>([])
-const { page, pageSize, total, pageItems, resetPage } = useListPagination(hosts)
+const { items: hosts, page, pageSize, total, loading: hostsLoading, loadFailed: hostsLoadFailed,
+  refresh: loadHosts, resetPage, invalidate } = useServerPagination<Host>(
+  (currentPage, size) => listHostsPage(search.value.trim(), selectedGroup.value, currentPage, size),
+)
 const hostTable = ref<{ clearSelection: () => void } | null>(null)
 const selectedGroup = ref<number | null>(null)
 const search = ref('')
@@ -45,9 +47,7 @@ const jumpHostsLoading = ref(false)
 const jumpHostsLoaded = ref(false)
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
-const hostsLoading = ref(false)
 const groupsLoadFailed = ref(false)
-const hostsLoadFailed = ref(false)
 const dialogError = ref('')
 const saving = ref(false)
 const openingHost = ref(false)
@@ -152,42 +152,25 @@ async function refreshJumpHosts() {
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
-let hostRequest = 0
-async function refreshHosts() {
-  const current = ++hostRequest
+function refreshHosts() {
+  clearTimeout(searchTimer)
   clearSelectedHosts()
-  hostsLoading.value = true
-  hostsLoadFailed.value = false
-  try {
-    const result = await listHosts(search.value.trim(), selectedGroup.value)
-    if (current === hostRequest) hosts.value = result
-  } catch {
-    if (current === hostRequest) {
-      hosts.value = []
-      hostsLoadFailed.value = true
-      showSystemError()
-    }
-  } finally {
-    if (current === hostRequest) hostsLoading.value = false
-  }
+  return loadHosts()
 }
 
 watch([search, selectedGroup], () => {
   clearTimeout(searchTimer)
-  resetPage()
   clearSelectedHosts()
-  hostRequest++
-  hostsLoading.value = true
+  invalidate()
+  resetPage()
   searchTimer = setTimeout(refreshHosts, search.value ? 250 : 0)
-})
+}, { flush: 'sync' })
 onMounted(() => {
   void refreshGroups()
   void refreshJumpHosts()
-  void refreshHosts()
 })
 onUnmounted(() => {
   clearTimeout(searchTimer)
-  hostRequest++
   jumpHostRequest++
   sshKeyRequest++
 })
@@ -388,7 +371,7 @@ function dateLabel(value: string) {
           </div>
         </aside>
         <section class="host-section" aria-labelledby="host-title">
-          <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span class="host-total">{{ hosts.length }} 台</span></div></div>
+          <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span v-if="!hostsLoading && !hostsLoadFailed" class="host-total">{{ total }} 台</span></div></div>
           <div class="host-toolbar">
             <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" />
             <div class="host-toolbar-right">
@@ -398,7 +381,7 @@ function dateLabel(value: string) {
             </div>
           </div>
           <div class="host-table-wrap">
-            <ElTable ref="hostTable" v-loading="hostsLoading || openingHost" :data="pageItems" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
+            <ElTable ref="hostTable" v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
               <ElTableColumn type="selection" width="44" />
               <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>

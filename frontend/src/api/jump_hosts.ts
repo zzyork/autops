@@ -1,4 +1,4 @@
-import type { JumpHost, JumpHostInput, JumpHostUpdateInput } from '@/types/api'
+import type { JumpHost, JumpHostInput, JumpHostUpdateInput, PageResponse } from '@/types/api'
 import { get, request } from './http'
 
 export function listJumpHosts(q = '') {
@@ -6,6 +6,12 @@ export function listJumpHosts(q = '') {
   if (q) params.set('q', q)
   const query = params.toString()
   return get<JumpHost[]>(`/jump-hosts${query ? `?${query}` : ''}`)
+}
+
+export function listJumpHostsPage(q: string, page: number, pageSize: number) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (q) params.set('q', q)
+  return get<PageResponse<JumpHost>>(`/jump-hosts?${params}`)
 }
 
 export const getJumpHost = (id: number) => get<JumpHost>(`/jump-hosts/${id}`)

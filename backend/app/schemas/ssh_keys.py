@@ -28,16 +28,19 @@ class SSHKeyUpdate(SSHKeyMetadata):
     public_key: str | None = None
 
 
-class SSHKeyResponse(SSHKeyMetadata):
+class SSHKeySummary(SSHKeyMetadata):
     id: int
     key_type: str
     fingerprint: str
-    public_key: str | None
     created_at: datetime
     updated_at: datetime
     version: int
     host_count: int
     jump_host_count: int
+
+
+class SSHKeyResponse(SSHKeySummary):
+    public_key: str | None
 
 
 class SSHKeyReference(BaseModel):

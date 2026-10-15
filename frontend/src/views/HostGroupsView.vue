@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDialog, ElInput, ElLoading, ElMessageBox, ElTable, ElTableColumn } from 'element-plus'
-import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/assets'
+import { createGroup, deleteGroup, listGroupsPage, updateGroup } from '@/api/assets'
 import ListPagination from '@/components/ListPagination.vue'
-import { useListPagination } from '@/components/pagination'
+import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { HostGroup } from '@/types/api'
 
 const vLoading = ElLoading.directive
-const groups = ref<HostGroup[]>([])
-const { page, pageSize, total, pageItems } = useListPagination(groups)
-const loading = ref(false)
-const loadFailed = ref(false)
+const { items: groups, page, pageSize, total, loading, loadFailed, refresh: loadGroups } =
+  useServerPagination<HostGroup>(listGroupsPage)
 const localError = ref('')
 const dialog = ref(false)
 const dialogError = ref('')
@@ -21,20 +19,10 @@ const form = ref({ name: '', remark: '' })
 const nameError = ref(false)
 watch(() => form.value.name, () => { nameError.value = false })
 
-async function refreshGroups() {
-  loading.value = true
-  loadFailed.value = false
+function refreshGroups() {
   localError.value = ''
-  try {
-    groups.value = await listGroups()
-  } catch {
-    loadFailed.value = true
-    showSystemError()
-  } finally {
-    loading.value = false
-  }
+  return loadGroups()
 }
-onMounted(() => { void refreshGroups() })
 
 function openGroup(group: HostGroup | null = null) {
   editingGroup.value = group
@@ -85,7 +73,7 @@ async function removeGroup(group: HostGroup) {
         <div class="host-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
         <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
         <div class="host-table-wrap">
-          <ElTable v-loading="loading" :data="pageItems" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
+          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
             <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="主机数量" width="120" />
             <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>

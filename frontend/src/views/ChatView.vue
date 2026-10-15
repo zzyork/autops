@@ -4,8 +4,8 @@ import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import ListPagination from '@/components/ListPagination.vue'
-import { useListPagination } from '@/components/pagination'
-import { createSession, decideProposal, deleteSession, getFeatureModels, getSession, listConnections, listSessions, sendMessage } from '@/api/ai'
+import { useServerPagination } from '@/components/serverPagination'
+import { createSession, decideProposal, deleteSession, getFeatureModels, getSession, listConnections, listSessionsPage, sendMessage } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/inspectionDisplay'
 import type { ChatSession, FeatureModelsConfig, ModelConnection, SessionSummary } from '@/types/ai'
@@ -15,10 +15,8 @@ const connections = ref<ModelConnection[]>([])
 const connectionsLoaded = ref(false)
 const connectionsLoading = ref(false)
 const featureModels = ref<FeatureModelsConfig | null>(null)
-const sessions = ref<SessionSummary[]>([])
-const { page, pageSize, total, pageItems, resetPage } = useListPagination(sessions)
+const { items: sessions, page, pageSize, total, loading: sessionsLoading, loadFailed: sessionsFailed, refresh: loadSessions, resetPage } = useServerPagination(listSessionsPage)
 const sessionsLoaded = ref(false)
-const sessionsLoading = ref(false)
 const selectedId = ref<string | null>(null)
 const detail = ref<ChatSession | null>(null)
 const detailLoaded = ref(false)
@@ -38,7 +36,6 @@ const newChatConnection = computed(() => {
 const newChatAvailable = computed(() => !!newChatConnection.value)
 const selectedConnection = computed(() => connections.value.find((item) => item.id === detail.value?.connection_id))
 let active = true
-let listSequence = 0
 let connectionSequence = 0
 let detailSequence = 0
 let streamController: AbortController | null = null
@@ -63,22 +60,13 @@ async function loadConnections(): Promise<boolean> {
     return false
   } finally { if (active && current === connectionSequence) connectionsLoading.value = false }
 }
-async function loadSessions(notify = true) {
-  const current = ++listSequence
-  sessionsLoading.value = true
-  try {
-    const items = await listSessions()
-    if (!active || current !== listSequence) return
-    sessions.value = items
-    sessionsLoaded.value = true
-    if (selectInitialSession && !selectedId.value && items.length) select(items[0]!.id)
-    selectInitialSession = false
-  } catch {
-    if (!active || current !== listSequence) return
-    sessionsLoaded.value = false
-    if (notify) showRequestError()
-  } finally { if (active && current === listSequence) sessionsLoading.value = false }
-}
+watch(sessionsLoading, (loading) => {
+  if (loading) { sessionsLoaded.value = false; return }
+  if (sessionsFailed.value) return
+  sessionsLoaded.value = true
+  if (selectInitialSession && !selectedId.value && sessions.value.length) select(sessions.value[0]!.id)
+  selectInitialSession = false
+})
 async function loadDetail(id: string, notify = true): Promise<boolean> {
   const current = ++detailSequence
   detailLoaded.value = false
@@ -105,6 +93,8 @@ function select(id: string) {
 function newChat() {
   if (operation.value) return
   selectInitialSession = false
+  resetPage()
+  void loadSessions()
   detailSequence++
   selectedId.value = null
   detail.value = null
@@ -156,7 +146,7 @@ async function send() {
   } catch {
     if (active && selectedId.value === id && !controller?.signal.aborted) {
       showRequestError()
-      if (id && await loadDetail(id, false)) void loadSessions(false)
+      if (id && await loadDetail(id, false)) void loadSessions()
     }
   } finally {
     if (active) { sendingContent.value = ''; streamingText.value = ''; operation.value = null }
@@ -175,7 +165,7 @@ async function decide(proposalId: string, approve: boolean) {
   } catch (error) {
     if (active && selectedId.value === id) {
       showRequestError(error)
-      if (await loadDetail(id, false)) void loadSessions(false)
+      if (await loadDetail(id, false)) void loadSessions()
     }
   }
   finally { if (active) operation.value = null }
@@ -192,12 +182,12 @@ async function remove(session: SessionSummary) {
   try {
     await deleteSession(session.id)
     if (!active) return
-    sessions.value = sessions.value.filter((item) => item.id !== session.id)
     if (selectedId.value === session.id) {
       detailSequence++
       selectedId.value = null
       detail.value = null
       detailLoaded.value = false
+      detailLoading.value = false
       input.value = ''
     }
     void loadSessions()
@@ -208,10 +198,9 @@ watch([() => detail.value?.messages.length, streamingText, () => detail.value?.p
   await nextTick()
   if (conversation.value) conversation.value.scrollTop = conversation.value.scrollHeight
 })
-onMounted(() => { void loadConnections(); void loadSessions() })
+onMounted(() => { void loadConnections() })
 onUnmounted(() => {
   active = false
-  listSequence++
   connectionSequence++
   detailSequence++
   streamController?.abort()
@@ -228,7 +217,7 @@ onUnmounted(() => {
             <p v-if="sessionsLoading && !sessionsLoaded" class="ai-placeholder">正在读取会话...</p>
             <p v-else-if="!sessionsLoaded" class="inspection-retry">会话未加载。<ElButton @click="loadSessions()">重试</ElButton></p>
             <p v-else-if="!sessions.length" class="ai-placeholder">暂无会话</p>
-            <div v-for="session in sessionsLoaded ? pageItems : []" :key="session.id" class="ai-session-row" :class="{ active: selectedId === session.id }">
+            <div v-for="session in sessionsLoaded ? sessions : []" :key="session.id" class="ai-session-row" :class="{ active: selectedId === session.id }">
               <button type="button" class="ai-session-select" :disabled="!!operation" :title="session.title" @click="select(session.id)"><strong>{{ session.title }}</strong><small>{{ timeLabel(session.updated_at) }}</small></button>
               <ElButton link type="danger" :disabled="!!operation" :aria-label="`删除会话 ${session.title}`" title="删除会话" @click="remove(session)">删除</ElButton>
             </div>

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit, find_group
 from ....models import Host, JumpHost
+from ....repositories import assets as repository
 from ....schemas.assets import HostInput, HostResponse, HostUpdate
+from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from .credentials import apply_connection
 
 router = APIRouter(tags=["资产管理"])
@@ -17,14 +18,15 @@ def find_host(session: Session, host_id: int) -> Host:
     return host
 
 
-@router.get("/hosts", response_model=list[HostResponse])
-def list_hosts(session: Database, q: str = Query(default="", max_length=253), group_id: int | None = Query(default=None, gt=0)) -> list[Host]:
-    statement = select(Host).order_by(Host.id.desc())
-    if group_id is not None:
-        statement = statement.where(Host.group_id == group_id)
-    if q.strip():
-        statement = statement.where(or_(Host.name.contains(q.strip(), autoescape=True), Host.address.contains(q.strip(), autoescape=True)))
-    return list(session.scalars(statement))
+@router.get("/hosts", response_model=list[HostResponse] | PageResponse[HostResponse])
+def list_hosts(session: Database, q: str = Query(default="", max_length=253),
+               group_id: int | None = Query(default=None, gt=0), page: PageNumber = None,
+               page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[Host] | PageResponse[HostResponse]:
+    result = repository.hosts(session, q, group_id, page, page_size)
+    if page is None:
+        return result
+    items, total = result
+    return PageResponse[HostResponse](items=[HostResponse.model_validate(item) for item in items], total=total)
 
 
 @router.get("/hosts/{host_id}", response_model=HostResponse)

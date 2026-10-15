@@ -1,13 +1,15 @@
 from datetime import timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit
 from ....core.ssh_keys import parse_private_key, validate_public_key
 from ....models import Host, JumpHost, SSHKey
-from ....schemas.ssh_keys import SSHKeyInput, SSHKeyReference, SSHKeyReferences, SSHKeyResponse, SSHKeyUpdate
+from ....repositories import assets as repository
+from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
+from ....schemas.ssh_keys import SSHKeyInput, SSHKeyReference, SSHKeyReferences, SSHKeyResponse, SSHKeySummary, SSHKeyUpdate
 
 router = APIRouter(tags=["SSH 密钥管理"])
 STALE_MESSAGE = "密钥已被修改，请重新打开编辑页面"
@@ -20,22 +22,29 @@ def find_key(session: Session, key_id: int) -> SSHKey:
     return key
 
 
-def key_response(session: Session, key: SSHKey) -> SSHKeyResponse:
-    return SSHKeyResponse(
+def key_summary(session: Session, key: SSHKey) -> SSHKeySummary:
+    return SSHKeySummary(
         id=key.id, name=key.name, remark=key.remark, key_type=key.key_type,
-        fingerprint=key.fingerprint, public_key=key.public_key, version=key.version,
+        fingerprint=key.fingerprint, version=key.version,
         created_at=key.created_at.replace(tzinfo=timezone.utc), updated_at=key.updated_at.replace(tzinfo=timezone.utc),
         host_count=session.scalar(select(func.count()).select_from(Host).where(Host.ssh_key_id == key.id)),
         jump_host_count=session.scalar(select(func.count()).select_from(JumpHost).where(JumpHost.ssh_key_id == key.id)),
     )
 
 
-@router.get("/ssh-keys", response_model=list[SSHKeyResponse])
-def list_keys(session: Database, q: str = Query(default="", max_length=253)) -> list[SSHKeyResponse]:
-    statement = select(SSHKey).order_by(SSHKey.id.desc())
-    if q.strip():
-        statement = statement.where(or_(SSHKey.name.contains(q.strip(), autoescape=True), SSHKey.fingerprint.contains(q.strip(), autoescape=True)))
-    return [key_response(session, key) for key in session.scalars(statement)]
+def key_response(session: Session, key: SSHKey) -> SSHKeyResponse:
+    return SSHKeyResponse(**key_summary(session, key).model_dump(), public_key=key.public_key)
+
+
+@router.get("/ssh-keys", response_model=list[SSHKeyResponse] | PageResponse[SSHKeySummary])
+def list_keys(session: Database, q: str = Query(default="", max_length=253),
+              page: PageNumber = None,
+               page_size: PageSize = DEFAULT_PAGE_SIZE) -> list[SSHKeyResponse] | PageResponse[SSHKeySummary]:
+    result = repository.keys(session, q, page, page_size)
+    if page is None:
+        return [key_response(session, key) for key in result]
+    items, total = result
+    return PageResponse[SSHKeySummary](items=[key_summary(session, key) for key in items], total=total)
 
 
 @router.get("/ssh-keys/{key_id}", response_model=SSHKeyResponse)

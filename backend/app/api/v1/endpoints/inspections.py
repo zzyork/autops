@@ -7,6 +7,7 @@ from ...dependencies import Database
 from ....repositories import inspections as repository
 from ....schemas.inspections import InspectionCatalog, InspectionConfig, InspectionConfigSave, InspectionInput, ReportResponse, TaskDetail, TaskPage, TaskSummary
 from ....schemas.inspection_analysis import AnalysisResponse
+from ....schemas.pagination import DEFAULT_PAGE_SIZE
 from ....services.inspection_checks import CHECK_DEFINITIONS
 from ....services.inspection_reports import render_report, render_report_archive
 from ....services.inspection_rules import load_rules, save_rules
@@ -32,7 +33,7 @@ def start_task(data: InspectionInput, request: Request, session: Database) -> Ta
 
 
 @router.get("/tasks", response_model=TaskPage)
-def list_tasks(request: Request, session: Database, limit: Annotated[int, Query(ge=1, le=50)] = 20,
+def list_tasks(request: Request, session: Database, limit: Annotated[int, Query(ge=1, le=100)] = DEFAULT_PAGE_SIZE,
                offset: Annotated[int, Query(ge=0)] = 0, records_only: bool = False) -> TaskPage:
     request.app.state.inspections.ensure_available()
     items, total = repository.page_tasks(session, limit, offset, records_only)
