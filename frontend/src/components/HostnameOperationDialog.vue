@@ -171,15 +171,23 @@ onUnmounted(reset)
 </script>
 
 <template>
-  <ElDialog :model-value="modelValue" append-to-body align-center :title="host ? `更改主机名 · ${host.address}` : '更改主机名'" width="min(440px, 94vw)" class="hostname-operation-dialog" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" @update:model-value="updateVisible">
-    <ElForm label-position="top" @submit.prevent="save">
+  <ElDialog :model-value="modelValue" append-to-body align-center :title="host ? `更改主机名 · ${host.address}` : '更改主机名'" width="440px" class="hostname-operation-dialog" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" @update:model-value="updateVisible">
+    <template #header="{ titleId, titleClass }">
+      <div class="hostname-dialog-heading">
+        <span :id="titleId" :class="titleClass" role="heading" aria-level="2">更改主机名</span>
+        <p v-if="host" class="hostname-dialog-address">{{ host.address }}</p>
+      </div>
+    </template>
+    <ElForm label-position="top" class="hostname-dialog-form" @submit.prevent="save">
       <ElFormItem label="当前主机名">
-        <span v-if="loaded" class="hostname-current">{{ currentHostname }}</span>
-        <span v-else-if="loading">读取中…</span>
-        <ElButton v-else @click="loadHostname">重新读取</ElButton>
+        <div class="hostname-current" :aria-busy="loading">
+          <span v-if="loaded">{{ currentHostname }}</span>
+          <span v-else-if="loading" class="hostname-reading" role="status">读取中…</span>
+          <ElButton v-else @click="loadHostname">重新读取</ElButton>
+        </div>
       </ElFormItem>
       <ElFormItem label="新主机名" label-for="new-hostname" required :error="validationError">
-        <ElInput id="new-hostname" v-model="newHostname" :disabled="!loaded || busy || task !== null" :maxlength="253" :aria-invalid="!!validationError" @input="validationError = ''" @keydown.enter.prevent="save" />
+        <ElInput id="new-hostname" v-model="newHostname" placeholder="请输入新主机名" :disabled="!loaded || busy || task !== null" :maxlength="253" :aria-invalid="!!validationError" @input="validationError = ''" @keydown.enter.prevent="save" />
       </ElFormItem>
       <ElAlert v-if="resultFailed" title="执行结果尚未确认，请查询结果后再操作。" type="warning" :closable="false" show-icon />
       <ElAlert v-else-if="ended" :title="unknownHost ? '更改结果未知，后续写操作已阻塞。请带外核对远端进程已停止后解除阻塞。' : task?.status === 'unknown' ? '写操作阻塞已解除，更改结果仍未知，请重新打开弹窗核对当前主机名。' : '更改未完成，请重新打开弹窗核对当前主机名。'" type="warning" :closable="false" show-icon />
@@ -198,7 +206,3 @@ onUnmounted(reset)
     </template>
   </ElDialog>
 </template>
-
-<style scoped>
-.hostname-current { overflow-wrap: anywhere; }
-</style>

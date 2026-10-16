@@ -19,7 +19,7 @@ export default createRouter({
     { path: '/inspections/records/:taskId', name: 'inspection-record-detail', meta: { title: '巡检详情' }, component: () => import('@/views/InspectionRecordDetailView.vue') },
     { path: '/inspections/rules', redirect: '/settings/inspection-rules' },
     { path: '/operations/hostname', redirect: '/assets/hosts' },
-    { path: '/operations/packages', name: 'operation-packages', meta: { title: '软件包与仓库' }, component: () => import('@/views/PackagesOperationsView.vue') },
+    { path: '/operations/packages', name: 'operation-packages', meta: { title: '软件仓库' }, component: () => import('@/views/PackagesOperationsView.vue') },
     { path: '/operations/firewall', name: 'operation-firewall', meta: { title: '防火墙管理' }, component: () => import('@/views/FirewallOperationsView.vue') },
     { path: '/operations/kernel', name: 'operation-kernel', meta: { title: '内核参数' }, component: () => import('@/views/KernelOperationsView.vue') },
     { path: '/operations/system', name: 'operation-system', meta: { title: '系统优化' }, component: () => import('@/views/SystemOperationsView.vue') },
