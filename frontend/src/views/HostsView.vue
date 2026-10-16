@@ -14,7 +14,7 @@ import ListPagination from '@/components/ListPagination.vue'
 import HostnameOperationDialog from '@/components/HostnameOperationDialog.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
-import type { AuthType, ConnectionTest, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
+import type { AuthType, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
 interface HostForm {
@@ -64,10 +64,6 @@ function clearSelectedHosts() {
 watch([page, pageSize], clearSelectedHosts, { flush: 'sync' })
 const batchHosts = ref<Host[]>([])
 const batchDialog = ref(false)
-const testRecords = ref<Record<number, ConnectionTest>>({})
-function updateTest(record: ConnectionTest) {
-  testRecords.value[record.target_id] = record
-}
 function startBatchTest() {
   if (hostsLoading.value || hostsLoadFailed.value || !selectedHosts.value.length) return
   batchHosts.value = [...selectedHosts.value]
@@ -388,7 +384,7 @@ function dateLabel(value: string) {
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" :updated-record="testRecords[row.id] ?? null" /></template></ElTableColumn>
+              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
               <ElTableColumn label="操作" width="270" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton><ElDropdown trigger="click" @command="openHostnameOperation(row as Host)"><ElButton link type="primary" class="host-more-button">更多</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem command="hostname">更改主机名</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
             </ElTable>
           </div>
@@ -398,8 +394,8 @@ function dateLabel(value: string) {
       </div>
     </main>
 
-    <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @record-updated="updateTest" @inspect="openConnectionTest" />
-    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @record-updated="updateTest" @closed="refreshHosts" />
+    <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
+    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
     <HostnameOperationDialog v-model="hostnameDialog" :host="hostnameHost" />
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">

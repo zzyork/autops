@@ -4,14 +4,14 @@ from uuid import uuid4
 
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from sqlalchemy import delete, text
+from sqlalchemy import delete, text, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from ..connection_models import IdentityChallengeRecord, KnownHostKey
 from ..core.ssh import HostKeyRequired, SSHConnectionError, fingerprint, probe_host_key
-from ..models import utc_now
+from ..models import Host, utc_now
 from ..repositories.ssh_connections import get_asset, get_trust
 from ..schemas.ssh_identities import IdentityCheckInput, IdentityCheckResponse, IdentityChallenge
 from .ssh_assets import resolve_plan
@@ -134,6 +134,12 @@ def trust_identity(session: Session, cipher: Fernet, challenge_id: str) -> None:
         known.public_key = record.public_key
         known.fingerprint = record.fingerprint
         record.consumed_at = utc_now()
+        if record.target_type == "host":
+            session.execute(update(Host).where(Host.id == record.target_id).values(
+                connection_status="untested", updated_at=Host.updated_at).execution_options(synchronize_session=False))
+        else:
+            session.execute(update(Host).where(Host.jump_host_id == record.target_id).values(
+                connection_status="untested", updated_at=Host.updated_at).execution_options(synchronize_session=False))
         session.commit()
     except (IntegrityError, StaleDataError, OperationalError):
         session.rollback()

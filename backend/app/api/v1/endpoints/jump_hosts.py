@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit
@@ -58,7 +58,16 @@ def update_jump_host(jump_host_id: int, data: JumpHostUpdate, request: Request, 
     jump_host = find_jump_host(session, jump_host_id)
     if jump_host.version != data.version:
         raise HTTPException(409, STALE_MESSAGE)
+    connection_changed = data.password is not None or any(
+        getattr(jump_host, field) != getattr(data, field)
+        for field in ("address", "port", "username", "auth_type", "ssh_key_id")
+    )
     apply_connection(data, jump_host, request, "请填写跳板机密码", session)
+    affected = update(Host).where(Host.jump_host_id == jump_host_id)
+    if not connection_changed:
+        affected = affected.where(Host.connection_status == "running")
+    session.execute(affected.values(connection_status="untested" if connection_changed else "interrupted",
+             updated_at=Host.updated_at).execution_options(synchronize_session=False))
     commit(session, STALE_MESSAGE)
     return jump_host_response(session, jump_host)
 

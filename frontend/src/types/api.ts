@@ -99,18 +99,20 @@ export interface Host {
   jump_host_id: number | null
   remark: string
   has_password: boolean
+  connection_status: SSHConnectionStatus
   created_at: string
   updated_at: string
   version: number
 }
 
-export type HostInput = Omit<Host, 'id' | 'has_password' | 'created_at' | 'updated_at' | 'version'> & {
+export type HostInput = Omit<Host, 'id' | 'has_password' | 'connection_status' | 'created_at' | 'updated_at' | 'version'> & {
   password?: string
 }
 
 export type HostUpdateInput = HostInput & { version: number }
 
 export type ConnectionTargetType = 'host' | 'jump_host'
+export type SSHConnectionStatus = 'untested' | 'running' | 'succeeded' | 'failed' | 'awaiting_trust' | 'interrupted'
 
 export interface ConnectionTestInput {
   target_type: ConnectionTargetType
@@ -125,16 +127,8 @@ export interface ConnectionTestTarget {
   name: string
 }
 
-export interface ConnectionTest {
-  id: string
+export interface ConnectionTestResult {
   target_type: ConnectionTargetType
   target_id: number
-  target_name: string
-  address: string
-  port: number
-  username: string
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_trust' | 'interrupted' | 'trusted'
-  created_at: string
-  started_at: string | null
-  duration_ms: number | null
+  status: SSHConnectionStatus
 }

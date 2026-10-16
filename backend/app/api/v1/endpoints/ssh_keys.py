@@ -1,7 +1,7 @@
 from datetime import timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit
@@ -94,6 +94,14 @@ def update_key(key_id: int, data: SSHKeyUpdate, request: Request, session: Datab
         _, _, _, public = parse_private_key(raw.decode())
         key.public_key = validate_public_key(data.public_key, public)
     key.name, key.remark = data.name, data.remark
+    connection_changed = "private_key" in data.model_fields_set
+    jump_ids = select(JumpHost.id).where(JumpHost.ssh_key_id == key_id)
+    affected = update(Host).where(or_(Host.ssh_key_id == key_id, Host.jump_host_id.in_(jump_ids)))
+    if not connection_changed:
+        affected = affected.where(Host.connection_status == "running")
+    session.execute(affected.values(
+        connection_status="untested" if connection_changed else "interrupted",
+        updated_at=Host.updated_at).execution_options(synchronize_session=False))
     commit(session, STALE_MESSAGE)
     return key_response(session, key)
 

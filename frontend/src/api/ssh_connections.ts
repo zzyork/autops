@@ -1,15 +1,10 @@
-import type { ConnectionTargetType, ConnectionTest, ConnectionTestInput } from '@/types/api'
-import { get, request } from './http'
+import type { ConnectionTestInput, ConnectionTestResult } from '@/types/api'
+import { request } from './http'
 import { withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
 
+const CONNECTION_TEST_TIMEOUT_MS = 45000
+
 export const startConnectionTest = (body: ConnectionTestInput, options: SSHIdentityOptions = {}) =>
   withSSHIdentities([{ target_type: body.target_type, target_id: body.target_id, version: body.version }],
-    () => request<ConnectionTest>('/ssh/connection-tests', { method: 'POST', body, signal: options.signal }), options)
-
-export const getConnectionTest = (id: string) => get<ConnectionTest>(`/ssh/connection-tests/${id}`)
-
-export function listConnectionTests(targetType: ConnectionTargetType, targetId: number) {
-  const params = new URLSearchParams({ target_type: targetType, target_id: String(targetId) })
-  return get<ConnectionTest[]>(`/ssh/connection-tests?${params}`)
-}
+    () => request<ConnectionTestResult>('/ssh/connection-tests', { method: 'POST', body, signal: options.signal, timeoutMs: CONNECTION_TEST_TIMEOUT_MS }), options)

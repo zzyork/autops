@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from .ssh_connections import TestStatus
 
 
 def validate_network_address(value: str) -> str:
@@ -97,6 +98,7 @@ class HostResponse(BaseModel):
     jump_host_id: int | None
     remark: str
     has_password: bool
+    connection_status: TestStatus
     created_at: datetime
     updated_at: datetime
     version: int

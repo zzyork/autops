@@ -15,4 +15,4 @@ export interface SSHIdentityChallenge {
   previous_fingerprint: string | null
 }
 export type SSHIdentityCheck = { trusted: true; challenge: null } | { trusted: false; challenge: SSHIdentityChallenge }
-export interface SSHIdentityOptions { signal?: AbortSignal; isCurrent?: () => boolean }
+export interface SSHIdentityOptions { signal?: AbortSignal; isCurrent?: () => boolean; onTrusted?: () => void }

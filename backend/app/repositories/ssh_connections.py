@@ -1,8 +1,8 @@
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ..connection_models import ConnectionTest, KnownHostKey
-from ..models import Host, JumpHost, SSHKey, utc_now
+from ..connection_models import KnownHostKey
+from ..models import Host, JumpHost, SSHKey
 
 
 def get_asset(session: Session, target_type: str, target_id: int) -> Host | JumpHost | None:
@@ -20,19 +20,13 @@ def get_trust(session: Session, target_type: str, target_id: int, address: str, 
     ))
 
 
-def list_tests(session: Session, target_type: str, target_id: int) -> list[ConnectionTest]:
-    query = select(ConnectionTest).where(
-        ConnectionTest.target_type == target_type, ConnectionTest.target_id == target_id,
+def set_host_status(session: Session, host_id: int, created_at, version: int, status: str,
+                    expected_status: str | None = None) -> bool:
+    query = update(Host).where(
+        Host.id == host_id, Host.created_at == created_at, Host.version == version,
     )
-    asset = get_asset(session, target_type, target_id)
-    if asset is not None:
-        # SQLite 可能复用已删除的资产 ID；新资产不能继承旧资产的测试历史。
-        query = query.where(ConnectionTest.created_at >= asset.created_at)
-    return list(session.scalars(query.order_by(ConnectionTest.created_at.desc(), ConnectionTest.id.desc()).limit(20)))
-
-
-def interrupt_tests(session: Session) -> None:
-    session.execute(update(ConnectionTest).where(ConnectionTest.status.in_(("queued", "running"))).values(
-        status="interrupted", finished_at=utc_now(), version=ConnectionTest.version + 1,
-    ))
-    session.commit()
+    if expected_status is not None:
+        query = query.where(Host.connection_status == expected_status)
+    result = session.execute(query.values(
+        connection_status=status, updated_at=Host.updated_at).execution_options(synchronize_session=False))
+    return result.rowcount == 1

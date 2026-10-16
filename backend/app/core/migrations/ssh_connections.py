@@ -1,18 +1,17 @@
 from sqlalchemy import Engine, inspect, text
 
-from ...connection_models import ConnectionTest, IdentityChallengeRecord, KnownHostKey
+from ...connection_models import IdentityChallengeRecord, KnownHostKey
 
 
 def migrate_ssh_connections(engine: Engine) -> None:
-    """创建连接相关表并补齐历史测试记录的新增字段。"""
+    """保留身份及信任记录，移除旧测试历史。"""
     with engine.begin() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
         KnownHostKey.__table__.create(connection, checkfirst=True)
-        ConnectionTest.__table__.create(connection, checkfirst=True)
         IdentityChallengeRecord.__table__.create(connection, checkfirst=True)
-        columns = {column["name"] for column in inspect(connection).get_columns("ssh_connection_tests")}
-        if "failure_message" not in columns:
-            connection.execute(text("ALTER TABLE ssh_connection_tests ADD COLUMN failure_message VARCHAR"))
-        if "host_key_policy" not in columns:
-            connection.execute(text("ALTER TABLE ssh_connection_tests ADD COLUMN host_key_policy VARCHAR(16) NOT NULL DEFAULT 'strict'"))
-        if "auto_trusted_keys" not in columns:
-            connection.execute(text("ALTER TABLE ssh_connection_tests ADD COLUMN auto_trusted_keys JSON NOT NULL DEFAULT '[]'"))
+        if inspect(connection).has_table("hosts"):
+            columns = {column["name"] for column in inspect(connection).get_columns("hosts")}
+            if "connection_status" not in columns:
+                connection.execute(text("ALTER TABLE hosts ADD COLUMN connection_status VARCHAR(20) NOT NULL DEFAULT 'untested'"))
+            connection.execute(text("UPDATE hosts SET connection_status = 'interrupted' WHERE connection_status = 'running'"))
+        connection.execute(text("DROP TABLE IF EXISTS ssh_connection_tests"))

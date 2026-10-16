@@ -75,6 +75,7 @@ class Host(Base):
     password_encrypted: Mapped[str | None]
     vip: Mapped[str | None]
     jump_host_id: Mapped[int | None] = mapped_column(ForeignKey("jump_hosts.id", ondelete="RESTRICT"))
+    connection_status: Mapped[str] = mapped_column(String(20), default="untested", server_default="untested")
     remark: Mapped[str] = mapped_column(default="")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)

@@ -1,22 +1,21 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElDialog, ElTable, ElTableColumn } from 'element-plus'
-import { getConnectionTest, startConnectionTest } from '@/api/ssh_connections'
+import { startConnectionTest } from '@/api/ssh_connections'
 import { getJumpHost } from '@/api/jump_hosts'
 import { RequestCancelledError } from '@/api/http'
 import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities } from '@/api/sshIdentity'
-import { SSH_STATUS_UNAVAILABLE, sshTestDisplay } from '@/components/sshTestDisplay'
+import { SSH_RESULT_UNAVAILABLE, SSH_RETEST_REQUIRED, sshTestDisplay } from '@/components/sshTestDisplay'
 import TestStatus from '@/components/TestStatus.vue'
-import type { ConnectionTest, Host, JumpHost } from '@/types/api'
+import type { ConnectionTestResult, Host, JumpHost } from '@/types/api'
 
 const props = defineProps<{ modelValue: boolean; hosts: Host[] }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'record-updated': [record: ConnectionTest]
-  inspect: [host: Host]
+  'status-changed': []
 }>()
-interface Row { host: Host; record: ConnectionTest | null; state: 'pending' | 'submitting' | 'submitted' | 'unavailable' }
+interface Row { host: Host; result: ConnectionTestResult | null; state: 'pending' | 'submitting' | 'submitted' | 'confirmed' | 'unavailable' }
 const rows = ref<Row[]>([])
 const running = ref(false)
 const stopped = ref(false)
@@ -26,28 +25,12 @@ const jumpHosts = ref<JumpHost[]>([])
 const loadingScope = ref(false)
 const scopeLoaded = ref(false)
 const CONCURRENCY = 4
-const POLL_INTERVAL_MS = 800
 let generation = 0
-const promptedRecords = new Set<string>()
-const waits = new Map<ReturnType<typeof setTimeout>, () => void>()
-const completed = computed(() => rows.value.filter((row) => row.record && !isActive(row.record)).length)
+const completed = computed(() => rows.value.filter((row) => row.result !== null).length)
 const jumpHostCount = computed(() => new Set(rows.value.map((row) => row.host.jump_host_id).filter((id) => id !== null)).size)
-function isActive(record: ConnectionTest) { return record.status === 'queued' || record.status === 'running' }
 function reset() {
   generation++
-  for (const [timer, resolve] of waits) { clearTimeout(timer); resolve() }
-  waits.clear()
   running.value = false
-}
-function pause() {
-  return new Promise<void>((resolve) => {
-    const timer = setTimeout(() => { waits.delete(timer); resolve() }, POLL_INTERVAL_MS)
-    waits.set(timer, resolve)
-  })
-}
-function update(row: Row, record: ConnectionTest) {
-  row.record = record
-  emit('record-updated', record)
 }
 async function start() {
   if (started.value || !scopeLoaded.value || !rows.value.length) return
@@ -57,10 +40,12 @@ async function start() {
   running.value = true
   stopped.value = false
   confirmedCount.value = 0
-  promptedRecords.clear()
   try {
-    await ensureSSHIdentities(rows.value.map((row) => ({ target_type: 'host', target_id: row.host.id, version: row.host.version })), { isCurrent })
+    await ensureSSHIdentities(rows.value.map((row) => ({ target_type: 'host', target_id: row.host.id, version: row.host.version })), {
+      isCurrent, onTrusted: () => emit('status-changed'),
+    })
   } catch (error) {
+    emit('status-changed')
     if (current === generation) {
       started.value = false
       stopped.value = true
@@ -77,23 +62,27 @@ async function start() {
       if (!row) return
       row.state = 'submitting'
       try {
-        const record = await startConnectionTest({ target_type: 'host', target_id: row.host.id, version: row.host.version }, { isCurrent })
+        const result = await startConnectionTest({ target_type: 'host', target_id: row.host.id, version: row.host.version }, {
+          isCurrent, onTrusted: () => emit('status-changed'),
+        })
+        emit('status-changed')
         if (current !== generation || !props.modelValue) return
         row.state = 'submitted'
-        update(row, record)
-        while (row.record && isActive(row.record) && current === generation && props.modelValue) {
-          await pause()
-          if (current !== generation || !props.modelValue) return
-          const latest = await getConnectionTest(record.id)
-          if (current !== generation || !props.modelValue) return
-          update(row, latest)
-        }
-        if (!stopped.value && row.record?.status === 'awaiting_trust' && !promptedRecords.has(record.id)) {
-          promptedRecords.add(record.id)
+        row.result = result
+        if (!stopped.value && result.status === 'awaiting_trust') {
           try {
-            await ensureSSHIdentities([{ target_type: 'host', target_id: row.host.id }], { isCurrent })
-            if (isCurrent()) confirmedCount.value++
+            await ensureSSHIdentities([{ target_type: 'host', target_id: row.host.id, version: row.host.version }], {
+              isCurrent, onTrusted: () => {
+                emit('status-changed')
+                if (current === generation && props.modelValue) row.state = 'confirmed'
+              },
+            })
+            if (current === generation && props.modelValue) {
+              row.state = 'confirmed'
+              confirmedCount.value++
+            }
           } catch (error) {
+            emit('status-changed')
             if (!isCurrent()) return
             stopped.value = true
             if (!(error instanceof RequestCancelledError)) showSystemError(error)
@@ -101,10 +90,11 @@ async function start() {
           }
         }
       } catch (error) {
+        emit('status-changed')
         if (current !== generation) return
         if (error instanceof RequestCancelledError) {
           stopped.value = true
-          if (!row.record) row.state = 'pending'
+          if (!row.result) row.state = 'pending'
           return
         }
         row.state = 'unavailable'
@@ -134,16 +124,17 @@ async function loadScope() {
   }
 }
 function rowDisplay(row: Row) {
-  if (row.state === 'unavailable') return { status: 'unavailable' as const, label: SSH_STATUS_UNAVAILABLE, description: SSH_STATUS_UNAVAILABLE }
-  if (!row.record) return stopped.value && row.state !== 'submitting'
+  if (row.state === 'unavailable') return SSH_RESULT_UNAVAILABLE
+  if (row.state === 'confirmed') return SSH_RETEST_REQUIRED
+  if (!row.result) return stopped.value && row.state !== 'submitting'
     ? { status: 'untested' as const, label: '未提交', description: 'SSH 连接测试未提交' }
     : { status: 'pending' as const, label: row.state === 'submitting' ? '提交中' : '待提交', description: row.state === 'submitting' ? 'SSH 连接测试提交中' : 'SSH 连接测试待提交' }
-  return sshTestDisplay(row.record.status)
+  return sshTestDisplay(row.result.status)
 }
 watch(() => props.modelValue, (visible) => {
   reset()
   if (!visible) return
-  rows.value = props.hosts.map((host) => ({ host: { ...host }, record: null, state: 'pending' }))
+  rows.value = props.hosts.map((host) => ({ host: { ...host }, result: null, state: 'pending' }))
   started.value = false
   stopped.value = false
   confirmedCount.value = 0
@@ -171,9 +162,8 @@ onUnmounted(reset)
     <ElTable :data="rows" max-height="420">
       <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="host-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div></template></ElTableColumn>
       <ElTableColumn label="状态" min-width="140"><template #default="{ row }"><span class="batch-test-status"><TestStatus :status="rowDisplay(row as Row).status" :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`" />{{ rowDisplay(row as Row).label }}</span></template></ElTableColumn>
-      <ElTableColumn label="操作" width="100"><template #default="{ row }"><ElButton link type="primary" :disabled="!started || (row as Row).state === 'submitting' || ((row as Row).state === 'submitted' && !!((row as Row).record && isActive((row as Row).record!)))" @click="emit('inspect', (row as Row).host)">查看详情</ElButton></template></ElTableColumn>
     </ElTable>
-    <p class="batch-summary">关闭弹窗会停止提交后续主机，已提交的测试继续执行。</p>
+    <p class="batch-summary">关闭弹窗会停止提交后续主机，正在测试的主机仍会完成。</p>
     <template #footer><ElButton @click="emit('update:modelValue', false)">关闭</ElButton></template>
   </ElDialog>
 </template>

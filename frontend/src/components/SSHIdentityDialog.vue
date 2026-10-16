@@ -39,6 +39,7 @@ async function confirm() {
   try {
     assertSSHRequestCurrent(current.options)
     await trustSSHIdentity(identity.id, current.options.signal)
+    current.options.onTrusted?.()
     assertSSHRequestCurrent(current.options)
     finish()
   } catch (error) {

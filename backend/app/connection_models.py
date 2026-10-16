@@ -28,34 +28,6 @@ class KnownHostKey(Base):
     __mapper_args__ = {"version_id_col": version}
 
 
-class ConnectionTest(Base):
-    __tablename__ = "ssh_connection_tests"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    target_type: Mapped[str] = mapped_column(String(16), index=True)
-    target_id: Mapped[int] = mapped_column(index=True)
-    target_name: Mapped[str]
-    address: Mapped[str]
-    port: Mapped[int]
-    username: Mapped[str]
-    via_jump_host: Mapped[str | None]
-    snapshot: Mapped[str]
-    host_key_policy: Mapped[str] = mapped_column(String(16), default="strict")
-    auto_trusted_keys: Mapped[list[dict[str, str | int | None]]] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(default="queued")
-    stage: Mapped[str | None]
-    failure_code: Mapped[str | None]
-    failure_message: Mapped[str | None]
-    challenge: Mapped[dict | None] = mapped_column(JSON)
-    candidate_key: Mapped[str | None]
-    created_at: Mapped[datetime] = mapped_column(default=utc_now)
-    started_at: Mapped[datetime | None]
-    finished_at: Mapped[datetime | None]
-    duration_ms: Mapped[int | None]
-    version: Mapped[int] = mapped_column(default=1)
-    __mapper_args__ = {"version_id_col": version}
-
-
 class IdentityChallengeRecord(Base):
     __tablename__ = "ssh_identity_challenges"
 

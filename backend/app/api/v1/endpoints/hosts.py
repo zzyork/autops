@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...dependencies import Database, commit, find_group
 from ....models import Host, JumpHost
 from ....repositories import assets as repository
+from ....repositories.ssh_connections import set_host_status
 from ....schemas.assets import HostInput, HostResponse, HostUpdate
 from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from .credentials import apply_connection
@@ -52,10 +54,20 @@ def create_host(data: HostInput, request: Request, session: Database) -> Host:
 
 @router.put("/hosts/{host_id}", response_model=HostResponse)
 def update_host(host_id: int, data: HostUpdate, request: Request, session: Database) -> Host:
+    session.execute(text("BEGIN IMMEDIATE"))
     host = find_host(session, host_id)
     if host.version != data.version:
         raise HTTPException(409, "主机已被修改，请重新打开编辑页面")
+    connection_changed = data.password is not None or any(
+        getattr(host, field) != getattr(data, field)
+        for field in ("address", "vip", "port", "username", "auth_type", "ssh_key_id", "jump_host_id")
+    )
     apply_host(data, host, request, session)
+    # The loaded host may predate a status-only write; use the database value before flushing asset edits.
+    with session.no_autoflush:
+        set_host_status(session, host.id, host.created_at, host.version,
+                        "untested" if connection_changed else "interrupted",
+                        expected_status=None if connection_changed else "running")
     commit(session)
     return host
 
