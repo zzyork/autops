@@ -5,11 +5,12 @@ import { confirmOperation, getOperationTask, inspectOperation, prepareOperation,
 import { ensureSSHIdentities } from '@/api/sshIdentity'
 import { showRequestError } from '@/components/feedback'
 import { isRunningOperation } from '@/components/operationDisplay'
+import OperationBlockers from '@/components/OperationBlockers.vue'
 import type { Host } from '@/types/api'
 import type { OperationTask } from '@/types/operations'
 import '@/styles/operations.css'
 
-const props = defineProps<{ host: Host }>()
+const props = defineProps<{ host: Host; visible?: boolean }>()
 const formId = useId()
 const currentHostname = ref('')
 const newHostname = ref('')
@@ -19,6 +20,9 @@ const saving = ref(false)
 const resultFailed = ref(false)
 const validationError = ref('')
 const task = ref<OperationTask | null>(null)
+const blockerView = ref<InstanceType<typeof OperationBlockers> | null>(null)
+const blockersReady = ref(false)
+const blockersTotal = ref(0)
 const remoteStopped = ref(false)
 const resolutionNote = ref('')
 const POLL_MS = 1000
@@ -40,7 +44,7 @@ async function loadHostname() {
   loading.value = true
   loaded.value = false
   try {
-    const result = await inspectOperation({ module: 'hostname', host_id: host.id, sudo: false }, { isCurrent: () => isCurrent(current) })
+    const result = await inspectOperation({ module: 'hostname', host_id: host.id }, { isCurrent: () => isCurrent(current) })
     if (!isCurrent(current)) return
     currentHostname.value = result.output.trim()
     loaded.value = true
@@ -61,7 +65,7 @@ async function acceptResult(result: OperationTask, current: number) {
     newHostname.value = ''
     await loadHostname()
   } else if (isRunningOperation(result.status)) {
-    timer = setTimeout(() => { void readResult(current) }, POLL_MS)
+    if (props.visible !== false) timer = setTimeout(() => { void readResult(current) }, POLL_MS)
   } else if (result.hosts.some((host) => host.identity_required)) {
     try {
       await ensureSSHIdentities(result.hosts.filter((host) => host.identity_required).map((host) => ({ target_type: 'host' as const, target_id: host.host_id })), { isCurrent: () => isCurrent(current) })
@@ -87,7 +91,7 @@ async function readResult(current: number) {
 
 async function save() {
   const host = props.host
-  if (!host || !loaded.value || busy.value || ended.value) return
+  if (!host || !loaded.value || busy.value || ended.value || !blockersReady.value || blockersTotal.value > 0) return
   const hostname = newHostname.value.trim()
   validationError.value = !hostname ? '请输入新主机名' : hostname.length > 253 || !HOSTNAME_PATTERN.test(hostname)
     ? '主机名须由字母、数字、短横线和点组成，每段最多 63 个字符，且以字母或数字开头和结尾' : hostname === currentHostname.value ? '新主机名与当前主机名相同' : ''
@@ -95,8 +99,9 @@ async function save() {
   const current = session
   saving.value = true
   try {
+    if (!await blockerView.value?.refresh(true)) return
     if (!task.value) {
-      const plan = await prepareOperation({ module: 'hostname', action: 'set', host_ids: [host.id], params: { hostname }, sudo: host.username !== 'root' }, { isCurrent: () => isCurrent(current) })
+      const plan = await prepareOperation({ module: 'hostname', action: 'set', host_ids: [host.id], params: { hostname } }, { isCurrent: () => isCurrent(current) })
       if (!isCurrent(current)) return
       task.value = plan
     } else {
@@ -157,10 +162,15 @@ watch(() => props.host.id, () => {
   reset()
   void loadHostname()
 }, { immediate: true })
+watch(() => props.visible, (visible) => {
+  if (visible === false) clearTimeout(timer)
+  else if (running.value) void readResult(session)
+})
 onUnmounted(() => { active = false; reset() })
 </script>
 
 <template>
+  <OperationBlockers ref="blockerView" :host-id="host.id" @loaded="(ready, total) => { blockersReady = ready; blockersTotal = total }" />
   <section class="host-section operation-section hostname-operation-form" aria-label="修改主机名">
     <ElForm label-position="top" @submit.prevent="save">
       <ElFormItem label="当前主机名" class="hostname-current-field">
@@ -185,7 +195,7 @@ onUnmounted(() => { active = false; reset() })
       <ElButton v-if="resultFailed && task" type="primary" :loading="saving" @click="readResult(session)">查询结果</ElButton>
       <ElButton v-else-if="unknownHost" type="primary" :loading="saving" :disabled="!remoteStopped || resolutionNote.trim().length < 5" @click="resolveUnknown">解除阻塞</ElButton>
       <ElButton v-else-if="ended" :disabled="busy" @click="restart">重新读取</ElButton>
-      <ElButton v-else type="primary" :loading="saving || running" :disabled="!loaded || loading || ended" @click="save">保存</ElButton>
+       <ElButton v-else type="primary" :loading="saving || running" :disabled="!loaded || loading || ended || !blockersReady || blockersTotal > 0" @click="save">保存</ElButton>
     </div>
     </ElForm>
   </section>

@@ -12,14 +12,27 @@ const saving = ref(false)
 const verified = ref(false)
 let pending: { options: SSHIdentityOptions; resolve: () => void; reject: (error: unknown) => void } | null = null
 let validityTimer: ReturnType<typeof setInterval> | undefined
+let closing = false
+let closingError: unknown
 const VALIDITY_CHECK_INTERVAL_MS = 200
 function finish(error?: unknown) {
+  if (!pending || closing) return
+  clearInterval(validityTimer)
+  // 等待 closed 解除模态滚动锁后再继续，避免后续路由被全局弹窗守卫阻止。
+  closing = true
+  closingError = error
+  challenge.value = null
+  verified.value = false
+}
+function settle(error?: unknown) {
   clearInterval(validityTimer)
   const current = pending
   pending = null
+  closing = false
+  closingError = undefined
   challenge.value = null
   verified.value = false
-  if (error) current?.reject(error)
+  if (error !== undefined) current?.reject(error)
   else current?.resolve()
 }
 function cancel() { if (!saving.value) finish(new RequestCancelledError()) }
@@ -39,19 +52,21 @@ async function confirm() {
   try {
     assertSSHRequestCurrent(current.options)
     await trustSSHIdentity(identity.id, current.options.signal)
+    if (pending !== current) return
     current.options.onTrusted?.()
     assertSSHRequestCurrent(current.options)
     finish()
   } catch (error) {
+    if (pending !== current) return
     if (error instanceof RequestCancelledError) finish(error)
     else { verified.value = false; showRequestError(error) }
   } finally { saving.value = false }
 }
-onUnmounted(() => { unregister(); finish(new RequestCancelledError()) })
+onUnmounted(() => { unregister(); settle(new RequestCancelledError()) })
 </script>
 
 <template>
-  <ElDialog :model-value="challenge !== null" title="确认服务器身份" width="min(540px, 94vw)" align-center append-to-body :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!$event && cancel()">
+  <ElDialog :model-value="challenge !== null" title="确认服务器身份" width="min(540px, 94vw)" align-center append-to-body :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!$event && cancel()" @closed="closing && settle(closingError)">
     <div v-if="challenge" class="ssh-identity-content">
       <ElAlert :title="challenge.previous_fingerprint === null ? '此服务器尚未信任，是否信任该身份？' : '服务器指纹已改变，是否信任新身份？'" type="warning" :closable="false" show-icon />
       <dl class="ssh-identity-details">

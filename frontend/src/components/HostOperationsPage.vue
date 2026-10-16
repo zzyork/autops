@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElButton, ElLoading } from 'element-plus'
 import { getHost } from '@/api/assets'
@@ -7,9 +7,11 @@ import { showRequestError } from '@/components/feedback'
 import OperationsWorkbench from '@/components/OperationsWorkbench.vue'
 import type { Host } from '@/types/api'
 import type { OperationModuleId } from '@/types/operations'
+import { workspaceVisibleKey } from './workspace'
 
 defineProps<{ module?: OperationModuleId }>()
 const route = useRoute()
+const workspaceVisible = inject(workspaceVisibleKey, ref(true))
 const vLoading = ElLoading.directive
 const host = ref<Host | null>(null)
 const loading = ref(false)
@@ -42,7 +44,7 @@ onUnmounted(() => { active = false; request++ })
 </script>
 
 <template>
-  <template v-if="host"><slot :host="host"><OperationsWorkbench v-if="module" :key="`${module}-${host.id}`" :module="module" :fixed-host="host" /></slot></template>
+   <template v-if="host"><slot :host="host"><OperationsWorkbench v-if="module" :key="`${module}-${host.id}`" :module="module" :fixed-host="host" :visible="workspaceVisible" /></slot></template>
   <main v-else v-loading="loading" class="assets-main" aria-label="加载运维主机">
     <template v-if="hostId === null"><p>主机地址无效，请从主机管理选择目标主机。</p><RouterLink to="/assets/hosts">返回主机管理</RouterLink></template>
     <ElButton v-else-if="!loading" @click="loadHost">重新加载主机</ElButton>

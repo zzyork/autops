@@ -17,7 +17,6 @@ class OperationTask(Base):
     title: Mapped[str]
     status: Mapped[str] = mapped_column(default="planned")
     params: Mapped[dict] = mapped_column(JSON)
-    sudo: Mapped[bool]
     destructive: Mapped[bool]
     preflight_command: Mapped[str]
     verify_command: Mapped[str]
@@ -38,7 +37,6 @@ class OperationHost(Base):
     host_name: Mapped[str]
     address: Mapped[str]
     asset_snapshot: Mapped[str]
-    use_sudo: Mapped[bool]
     preflight_stdout: Mapped[str]
     preflight_hash: Mapped[str]
     status: Mapped[str] = mapped_column(default="planned")

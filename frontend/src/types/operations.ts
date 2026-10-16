@@ -27,14 +27,13 @@ export interface OperationModule {
 }
 
 export interface OperationCatalog { modules: OperationModule[] }
-export interface OperationInspectInput { module: OperationModuleId; host_id: number; sudo: boolean }
+export interface OperationInspectInput { module: OperationModuleId; host_id: number }
 export interface OperationInspection { host_id: number; host_name: string; module: OperationModuleId; output: string }
 export interface OperationPlanInput {
   module: OperationModuleId
   action: string
   host_ids: number[]
   params: Record<string, OperationValue>
-  sudo: boolean
 }
 
 export type OperationTaskStatus = 'planned' | 'queued' | 'running' | 'succeeded' | 'failed' | 'partial' | 'unknown' | 'interrupted' | 'expired'
@@ -75,6 +74,11 @@ export interface OperationTask {
   confirmed_at: string | null
   completed_at: string | null
   params: Record<string, OperationValue>
-  sudo: boolean
   hosts: OperationTaskHost[]
 }
+
+export interface OperationTaskSummary { id: string; module: OperationModuleId; action: string; title: string; status: OperationTaskStatus }
+export interface OperationBlocker { task_id: string; module: OperationModuleId; action: string; title: string; confirmed_at: string; status: OperationHostStatus }
+export interface OperationEventStep { position: number; title: string; status: OperationStepStatus; stdout: string; stderr: string; exit_status: number | null }
+export interface OperationEventHost { host_id: number; status: OperationHostStatus; identity_required: boolean; resolved_at: string | null; steps: OperationEventStep[] }
+export interface OperationSnapshot { task_id: string; status: OperationTaskStatus; hosts: OperationEventHost[] }

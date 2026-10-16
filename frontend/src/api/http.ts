@@ -87,14 +87,22 @@ export async function getBlob(path: string, mediaType: string): Promise<Blob> {
   }
 }
 
-export async function streamRequest<T>(path: string, options: RequestOptions & { onToken: (text: string) => void; validateResult: (value: unknown) => value is T }): Promise<T> {
+export async function streamEvents(path: string, options: RequestOptions & {
+  connectTimeoutMs: number; idleTimeoutMs: number; totalTimeoutMs?: number; onEvent: (event: string, payload: unknown) => boolean
+}): Promise<void> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  const controller = new AbortController()
+  const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const totalTimer = options.totalTimeoutMs === undefined ? undefined : setTimeout(() => controller.abort(), options.totalTimeoutMs)
+  const timeout = (ms: number) => { clearTimeout(timer); timer = setTimeout(() => controller.abort(), ms) }
   try {
+    timeout(options.connectTimeoutMs)
     const response = await fetch(`${baseUrl}${path}`, {
       method: options.method ?? 'POST',
-      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-      body: JSON.stringify(options.body),
-      signal: requestSignal(options),
+      headers: { Accept: 'text/event-stream', ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      signal,
     })
     if (!response.ok || !response.body || !response.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) throw new HttpError()
     reader = response.body.getReader()
@@ -102,31 +110,21 @@ export async function streamRequest<T>(path: string, options: RequestOptions & {
     let buffer = ''
     let event = ''
     let data: string[] = []
-    let result: T | undefined
     let completed = false
     const dispatch = () => {
       if (!event && !data.length) return
-      if (!['token', 'done', 'error'].includes(event) || !data.length) throw new HttpError()
+      if (!event || !data.length) throw new HttpError()
       let payload: unknown
       try { payload = JSON.parse(data.join('\n')) } catch { throw new HttpError() }
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new HttpError()
-      const value = payload as Record<string, unknown>
-      if (event === 'token') {
-        if (typeof value.text !== 'string') throw new HttpError()
-        options.onToken(value.text)
-      } else if (event === 'done') {
-        if (!options.validateResult(value.session)) throw new HttpError()
-        result = value.session
-        completed = true
-      } else {
-        throw new HttpError()
-      }
+      completed = options.onEvent(event, payload)
       event = ''
       data = []
     }
-    // Retain an incomplete line across chunks, including a CR at the chunk boundary.
     while (!completed) {
+      timeout(options.idleTimeoutMs)
       const chunk = await reader.read()
+      if (chunk.done) break
+      timeout(options.idleTimeoutMs)
       buffer += decoder.decode(chunk.value, { stream: !chunk.done })
       let index = 0
       while (index < buffer.length) {
@@ -143,13 +141,29 @@ export async function streamRequest<T>(path: string, options: RequestOptions & {
         if (completed) break
       }
       buffer = buffer.slice(index)
-      if (chunk.done) break
     }
-    if (!completed || result === undefined) throw new HttpError()
-    return result
-  } catch {
+    if (!completed) throw new HttpError()
+  } catch (error) {
+    if (options.signal?.aborted) throw new RequestCancelledError()
     throw new HttpError()
   } finally {
+    clearTimeout(timer)
+    clearTimeout(totalTimer)
+    controller.abort()
     if (reader) void reader.cancel().catch(() => undefined)
   }
+}
+
+export async function streamRequest<T>(path: string, options: RequestOptions & { onToken: (text: string) => void; validateResult: (value: unknown) => value is T }): Promise<T> {
+  let result: T | undefined
+  await streamEvents(path, { ...options, method: options.method ?? 'POST', connectTimeoutMs: options.timeoutMs ?? 8000,
+    idleTimeoutMs: options.timeoutMs ?? 8000, totalTimeoutMs: options.timeoutMs ?? 8000, onEvent: (event, payload) => {
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new HttpError()
+      const value = payload as Record<string, unknown>
+      if (event === 'token' && typeof value.text === 'string') { options.onToken(value.text); return false }
+      if (event === 'done' && options.validateResult(value.session)) { result = value.session; return true }
+      throw new HttpError()
+    } })
+  if (result === undefined) throw new HttpError()
+  return result
 }

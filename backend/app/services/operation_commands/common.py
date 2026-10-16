@@ -80,9 +80,9 @@ def rhel() -> str:
 source /etc/os-release
 supported=false
 for distro in "${ID:-}" ${ID_LIKE:-}; do
-  case "$distro" in rhel|fedora|centos|rocky|almalinux|ol) supported=true ;; esac
+  case "$distro" in rhel|fedora|centos|rocky|almalinux|ol|openEuler|openeuler) supported=true ;; esac
 done
-test "$supported" = true || { echo '仅支持 RHEL/DNF 系统' >&2; exit 1; }
+test "$supported" = true || { echo '仅支持具有 DNF 的 RHEL 系或 openEuler 系统' >&2; exit 1; }
 command -v dnf >/dev/null || exit 1"""
 
 

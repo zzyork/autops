@@ -1,4 +1,4 @@
-import { inject, nextTick, onScopeDispose, ref, shallowRef, watch, type InjectionKey } from 'vue'
+import { inject, nextTick, onScopeDispose, ref, shallowRef, watch, type InjectionKey, type Ref } from 'vue'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
 import { showNavigationBlocked } from './feedback'
 
@@ -106,6 +106,7 @@ export function createWorkspace(router: Router) {
 }
 
 export const workspaceKey: InjectionKey<ReturnType<typeof createWorkspace>> = Symbol('workspace')
+export const workspaceVisibleKey: InjectionKey<Ref<boolean>> = Symbol('workspace-visible')
 
 export function useWorkspace() {
   const workspace = inject(workspaceKey)

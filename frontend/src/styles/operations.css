@@ -40,3 +40,8 @@
 .hostname-current-field .el-form-item__label { font-weight: 600; }
 .hostname-current-value { display: block; width: 100%; padding: 8px 12px; border: 1px solid var(--ui-control-border); background: var(--ui-surface); font-size: 16px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
 .hostname-current-field .hostname-current { width: 100%; }
+.operation-live-scroll { max-height: 360px; overflow: auto; min-width: 0; }
+.operation-live-scroll .operation-output pre { max-height: none; overflow: visible; }
+.operation-live-scroll:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.operation-step-picker { margin-top: 8px; }
+.operation-step-picker .el-select, .operation-actions label .el-select { min-width: 220px; }

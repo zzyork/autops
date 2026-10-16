@@ -29,7 +29,6 @@
 | `backend/app/services/` | SSH 资产解析、连接与巡检执行，以及模型协议、能力测试和 AI 对话编排。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/` | 四类巡检采集器、结果校验与分发。最后同步：2026-10-12。 |
 | `backend/app/schemas/` | 接口数据模型。 |
-| `backend/tests/` | 已跟踪的主机与分组接口测试及显式放行的巡检检查、任务测试；其他新测试默认被根目录忽略规则排除。最后同步：2026-10-12。 |
 | `docs/` | 项目文档及 AI 前端、后端开发约束。最后同步：2026-10-12。 |
 | `frontend/` | Vue、TypeScript、Vite 前端项目。 |
 | `docs/plans/` | 已授权功能设计、接口契约和实施计划。最后同步：2026-10-12。 |
@@ -45,7 +44,7 @@
 
 | 路径 | 用途 |
 | --- | --- |
-| `.gitignore` | Git 文件忽略配置，忽略运行数据及默认忽略新增的 `backend/tests/*`，例外见 `backend/.gitignore`。最后同步：2026-10-12。 |
+| `.gitignore` | Git 文件忽略配置，排除运行数据、测试目录及常见 Python、前端测试文件；测试文件仅用于本地验证。最后同步：2026-10-16。 |
 | `.gitattributes` | 固定 Windows 启动脚本使用 CRLF、Shell 启动脚本使用 LF，避免跨平台检出造成解析错误。最后同步：2026-10-13。 |
 | `AGENTS.md` | 项目 Agent 工作约定，强制执行三份开发规范、技能加载及外部知识边界，包含 README、授权与验证要求。最后同步：2026-10-15。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
@@ -112,7 +111,6 @@
 | 路径 | 用途 |
 | --- | --- |
 | `backend/.env.example` | 后端环境变量模板。最后同步：2026-10-10。 |
-| `backend/.gitignore` | 从根目录测试忽略规则中放行巡检检查、任务及列表分页正式回归测试。最后同步：2026-10-14。 |
 | `backend/__init__.py` | 声明后端 Python 包。 |
 | `backend/requirements.txt` | 后端运行依赖清单，包含 Paramiko SSH 连接与 Drain3 日志模板提取依赖。最后同步：2026-10-13。 |
 | `backend/requirements-dev.txt` | 后端开发与测试依赖清单。 |
@@ -183,33 +181,34 @@
 | `backend/app/schemas/ssh_keys.py` | SSH 密钥与引用接口数据模型。 |
 | `backend/app/schemas/ssh_connections.py` | SSH 连接测试输入与最小必要结果响应模型，过滤策略、旧挑战及内部异常。最后同步：2026-10-14。 |
 | `backend/app/schemas/inspections.py` | 巡检输入校验、规则配置、结果及任务/报告响应模型；历史响应过滤未安装服务与回环监听。最后同步：2026-10-12。 |
-| `backend/tests/test_assets.py` | 使用 TestClient 验证主机、分组的 CRUD、筛选及异常路径。最后同步：2026-10-10。 |
-| `backend/tests/test_list_pagination.py` | 六类列表分页、筛选、输入边界、最小响应和旧数组契约回归测试。最后同步：2026-10-14。 |
-| `backend/tests/test_ssh_connection_status.py` | 主机连接状态字段、同步测试契约、并发配置变更、身份确认与旧历史表迁移回归测试。最后同步：2026-10-15。 |
-| `backend/tests/test_inspection_checks.py` | 使用模拟命令结果验证四类巡检采集、阈值、服务和回环监听过滤。最后同步：2026-10-12。 |
-| `backend/tests/test_inspection_tasks.py` | 使用隔离数据库与 TestClient 验证巡检规则、任务/报告接口、终态删除、历史过滤及执行边界。最后同步：2026-10-12。 |
 
 ## 服务器运维新增文件
 
 | 路径 | 用途 |
 | --- | --- |
 | `backend/app/operation_models.py` | 运维计划、主机、步骤及人工核对数据库模型。最后同步：2026-10-14。 |
-| `backend/app/core/migrations/operations.py` | 运维表及核对字段的幂等启动迁移。最后同步：2026-10-14。 |
-| `backend/app/schemas/operations.py` | 目录、读取、计划、确认、核对及当前任务详情契约。最后同步：2026-10-14。 |
-| `backend/app/repositories/operations.py` | 运维计划、确认认领、逐步记录、持久阻塞与重启中断。最后同步：2026-10-14。 |
-| `backend/app/services/operations.py` | SSH 预检、权限、计划、确认、主机互斥与有界调度。最后同步：2026-10-14。 |
-| `backend/app/services/operation_execution.py` | 资产/状态复核、逐步骤执行与核验、失败和未知结果持久化。最后同步：2026-10-14。 |
+| `backend/app/core/migrations/operations.py` | 运维表及核对字段的幂等启动迁移，清理已移除的提权字段。最后同步：2026-10-16。 |
+| `backend/app/schemas/operations.py` | 运维目录、预检、确认、详情、恢复摘要、阻塞分页与有界实时快照契约。最后同步：2026-10-16。 |
+| `backend/app/repositories/operations.py` | 运维认领、步骤输出短事务写入、恢复与阻塞查询、实时投影及重启中断。最后同步：2026-10-16。 |
+| `backend/app/services/operations.py` | SSH 预检、权限、确认、主机互斥、有界调度及只读订阅生命周期。最后同步：2026-10-16。 |
+| `backend/app/services/operation_execution.py` | 资产/状态复核、步骤增量输出保存与核验、失败和未知结果持久化。最后同步：2026-10-16。 |
+| `backend/app/services/operation_output.py` | 双流独立增量解码、控制字符清理、跨块脱敏和有界尾部输出。最后同步：2026-10-16。 |
+| `backend/app/services/operation_stream.py` | 运维 SSE 快照、心跳、主机过滤、订阅限额与幂等释放，查看断开不取消执行。最后同步：2026-10-16。 |
 | `backend/app/services/operation_commands/` | 六类固定操作目录、严格参数校验及预检/执行/核验脚本；common、hostname、packages、firewall、kernel、system、disk 按职责分文件。最后同步：2026-10-14。 |
-| `backend/app/api/v1/endpoints/operations.py` | 运维目录、现状、计划、确认、当前任务详情及人工核对接口。最后同步：2026-10-14。 |
-| `frontend/src/types/operations.ts` | 六模块目录、表单、任务状态及核对类型。最后同步：2026-10-14。 |
-| `frontend/src/api/operations.ts` | 运维 API 调用及对应时限。最后同步：2026-10-14。 |
-| `frontend/src/components/OperationsWorkbench.vue` | 运维页面请求、独立身份确认前置流程、轮询、当前计划与核对。最后同步：2026-10-14。 |
+| `backend/app/api/v1/endpoints/operations.py` | 运维目录、预检、确认、任务详情、恢复、阻塞分页、实时订阅及人工核对接口。最后同步：2026-10-16。 |
+| `frontend/src/types/operations.ts` | 六模块目录、表单、任务状态、核对、恢复和实时快照类型。最后同步：2026-10-16。 |
+| `frontend/src/api/operations.ts` | 运维请求、恢复和阻塞分页查询、实时事件校验与订阅。最后同步：2026-10-16。 |
+| `frontend/src/components/OperationsWorkbench.vue` | 运维业务操作、一次危险确认、确认歧义查询、任务恢复及实时输出协调。最后同步：2026-10-16。 |
 | `frontend/src/components/HostOperationsPage.vue` | 主机运维共用容器：按独立路由加载主机、处理失败重试；通过作用域插槽提供固定主机，或渲染指定模块工作台。最后同步：2026-10-16。 |
 | `frontend/src/views/ServerOperationsView.vue` | 统一服务器运维页面：固定主机概览，按标签组织主机名、软件包全量升级、仓库及其他运维，复用既有执行与确认组件。最后同步：2026-10-16。 |
-| `frontend/src/components/OperationSetup.vue` | 主机选择、免密 sudo、目录驱动参数表单及本地校验。最后同步：2026-10-14。 |
-| `frontend/src/components/OperationTaskDetail.vue` | 计划预览、确认弹窗、逐主机步骤和未知结果人工核对。最后同步：2026-10-14。 |
-| `frontend/src/components/operationDisplay.ts` | 运维任务、主机和步骤的状态中文与语义色映射。最后同步：2026-10-14。 |
-| `frontend/src/styles/operations.css` | 复用控制台变量的运维表单、详情、输出及任务布局。最后同步：2026-10-14。 |
+| `frontend/src/components/OperationSetup.vue` | 主机选择、业务动作与必要参数表单、本地校验。最后同步：2026-10-16。 |
+| `frontend/src/components/OperationTaskDetail.vue` | 固定主机任务结果、按需步骤证据、身份检查及未知结果人工核对。最后同步：2026-10-16。 |
+| `frontend/src/components/OperationConfirmationDialog.vue` | 展示具体目标、参数和动作影响，提供一次显式危险操作确认。最后同步：2026-10-16。 |
+| `frontend/src/components/OperationLiveOutput.vue` | 主机与步骤输出选择、双流纯文本、自动跟随及实时查看状态。最后同步：2026-10-16。 |
+| `frontend/src/components/OperationBlockers.vue` | 跨模块未知结果分页、所选主机步骤证据与人工解除阻塞。最后同步：2026-10-16。 |
+| `frontend/src/components/useOperationOutput.ts` | 组件局部实时订阅、请求失效、可见状态取消与快照替换。最后同步：2026-10-16。 |
+| `frontend/src/components/operationDisplay.ts` | 运维状态与语义色、具体动作影响、查询文案和预检业务证据过滤。最后同步：2026-10-16。 |
+| `frontend/src/styles/operations.css` | 复用控制台变量的运维表单、确认、任务结果与实时输出滚动布局。最后同步：2026-10-16。 |
 | `frontend/src/components/HostnameOperationForm.vue` | 运维标签内的主机名表单，自动读取当前名称，输入新名称后保存并重新读取；复用身份校验、任务查询及异常结果核对。最后同步：2026-10-16。 |
 | `frontend/src/views/PackagesOperationsView.vue` | 固定主机的软件仓库管理独立页面。最后同步：2026-10-16。 |
 | `frontend/src/views/FirewallOperationsView.vue` | 固定主机的防火墙管理独立页面。最后同步：2026-10-16。 |
@@ -229,7 +228,7 @@
 | `frontend/vite.config.ts` | Vite 开发与构建配置。 |
 | `frontend/src/App.vue` | 应用根组件，创建工作区状态并承载唯一控制台布局与页面标签。最后同步：2026-10-13。 |
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
-| `frontend/src/api/http.ts` | 通用 HTTP 请求封装、二进制下载、可配置超时与 SSE 事件读取和错误转换。最后同步：2026-10-13。 |
+| `frontend/src/api/http.ts` | 通用 HTTP、二进制下载、SSE 分帧及连接/空闲超时，兼容 AI token/done 协议与取消分类。最后同步：2026-10-16。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
@@ -261,9 +260,9 @@
 | `frontend/src/components/pagination.ts` | 共用分页数量配置与本地数组分页逻辑，维护当前页、数量切换重置及数据减少后的页码校正。最后同步：2026-10-13。 |
 | `frontend/src/components/serverPagination.ts` | 六类管理列表共用后端分页状态与请求，处理请求失效、页长重置及末页校正。最后同步：2026-10-14。 |
 | `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检、六类服务器运维及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-14。 |
-| `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，接收注入的标签状态并切换、关闭页面，复用 Element Plus 的键盘与溢出导航。最后同步：2026-10-13。 |
-| `frontend/src/components/WorkspacePage.vue` | 标签页面路由容器，接收独立路由快照，为业务页面隔离路由参数与查询条件。最后同步：2026-10-13。 |
-| `frontend/src/components/workspace.ts` | 布局内工作区状态与注入契约，管理标签去重、导航、关闭、滚动恢复及弹窗切页限制。最后同步：2026-10-13。 |
+| `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，传递激活状态并复用 Element Plus 键盘与溢出导航。最后同步：2026-10-16。 |
+| `frontend/src/components/WorkspacePage.vue` | 独立路由快照容器及页面可见状态注入，隔离后台页面路由与订阅。最后同步：2026-10-16。 |
+| `frontend/src/components/workspace.ts` | 工作区状态与可见性注入契约，管理标签、导航、滚动恢复及弹窗切页限制。最后同步：2026-10-16。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
 | `frontend/src/router/index.ts` | 对话、配置、资产、巡检及统一主机运维页面路由，保留各模块主机路由；旧全局运维地址转到主机管理。最后同步：2026-10-16。 |

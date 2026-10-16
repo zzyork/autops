@@ -1,7 +1,5 @@
 import hashlib
 import logging
-import re
-import shlex
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -14,41 +12,43 @@ from ..core.ssh_commands import CommandExecutionError, CommandResult, run_comman
 from ..repositories import operations as repository
 from ..schemas.operations import InspectInput, Inspection, PlanInput
 from .operation_commands import MODULES, build_operation, inspect_command
+from .operation_output import OperationOutput
+from .operation_stream import OperationStreams
 from .ssh_assets import resolve_plan
 
 logger = logging.getLogger(__name__)
 MAX_ACTIVE_HOSTS = 32
-MAX_VISIBLE_OUTPUT = 8192
-URL_PATTERN = re.compile(r"(?i)https?://[^\s\"'<>]+")
+
+
+class PrivilegeError(ValueError):
+    def __init__(self, reason_code: str, message: str):
+        self.reason_code = reason_code
+        super().__init__(message)
 
 
 def visible_output(value: str) -> str:
-    # Repository configurations can include authentication in URLs; never expose them in task history.
-    cleaned = URL_PATTERN.sub("[URL 已隐藏]", value)
-    return cleaned[:MAX_VISIBLE_OUTPUT] + ("\n[输出已截断]" if len(cleaned) > MAX_VISIBLE_OUTPUT else "")
+    output = OperationOutput()
+    output.feed("stdout", value.encode("utf-8"))
+    output.finish()
+    return output.snapshot()[1]
 
 
 def digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def command(client, body: str, sudo: bool, timeout: float = 60) -> CommandResult:
-    script = "sudo -n -- bash -c " + shlex.quote(body) if sudo else body
-    return run_command(client, script, timeout)
+def command(client, body: str, timeout: float = 60, *, on_output=None, flush_output=None) -> CommandResult:
+    if on_output is None and flush_output is None:
+        return run_command(client, body, timeout)
+    return run_command(client, body, timeout, on_output=on_output, flush_output=flush_output)
 
 
-def privilege(client, sudo_requested: bool) -> bool:
+def privilege(client) -> None:
     uid = run_command(client, "id -u", 15)
     if uid.exit_status != 0:
-        raise ValueError("无法验证远端权限")
-    if uid.stdout.strip() == "0":
-        return False
-    if not sudo_requested:
-        raise ValueError("写操作需要 root 或显式选择免密 sudo")
-    result = run_command(client, "sudo -n -- id -u", 15)
-    if result.exit_status != 0 or result.stdout.strip() != "0":
-        raise ValueError("免密 sudo 权限检查未通过")
-    return True
+        raise PrivilegeError("id_check_failed", "无法验证远端权限")
+    if uid.stdout.strip() != "0":
+        raise PrivilegeError("root_required", "写操作需要 root 权限")
 
 
 class OperationManager:
@@ -58,6 +58,7 @@ class OperationManager:
         self.lock = threading.Lock()
         self.stopping = threading.Event()
         self.persistence_failed = threading.Event()
+        self.streams = OperationStreams(sessions)
         self.active: set[int] = set()
         self.remaining: dict[str, int] = {}
         self.task_hosts: dict[str, set[int]] = {}
@@ -72,6 +73,7 @@ class OperationManager:
     def stop_accepting(self) -> None:
         with self.lock:
             self.stopping.set()
+        self.streams.close()
 
     def close(self) -> None:
         self.stop_accepting()
@@ -87,8 +89,7 @@ class OperationManager:
             body = inspect_command(data.module)
             session.rollback()
             with open_ssh_connection(plan.target, plan.jump) as client:
-                use_sudo = privilege(client, True) if data.sudo else False
-                result = command(client, body, use_sudo)
+                result = command(client, body)
             if result.exit_status != 0:
                 raise HTTPException(409, "远端读取失败")
             return Inspection(host_id=data.host_id, host_name=plan.name, module=data.module,
@@ -118,23 +119,36 @@ class OperationManager:
             raise HTTPException(422, "运维参数无效") from None
         snapshots = []
         for host_id in data.host_ids:
+            phase = "asset_resolution"
             try:
                 plan = resolve_plan(session, self.cipher, "host", host_id)
                 session.rollback()
+                phase = "connection"
                 with open_ssh_connection(plan.target, plan.jump) as client:
-                    use_sudo = privilege(client, data.sudo) if spec.destructive else False
-                    result = command(client, spec.preflight, use_sudo)
+                    phase = "privilege"
+                    if spec.destructive:
+                        privilege(client)
+                    phase = "remote_preflight"
+                    result = command(client, spec.preflight)
                 if result.exit_status != 0:
-                    raise ValueError("远端预检未通过")
+                    logger.warning("Operation prepare failed for host %s phase=%s reason=preflight_nonzero "
+                                   "exit_status=%d", host_id, phase, result.exit_status)
+                    raise HTTPException(409, "主机权限、信任、连接或预检失败")
                 snapshots.append(dict(host_id=host_id, host_name=plan.name, address=plan.target.address,
-                                      asset_snapshot=plan.snapshot, use_sudo=use_sudo,
+                                      asset_snapshot=plan.snapshot,
                                       preflight_stdout=visible_output(result.stdout), preflight_hash=digest(result.stdout),
                                       before=visible_output(result.stdout), after=None, error=None))
             except HostKeyRequired:
                 raise HTTPException(409, {"code": "ssh_identity_required", "target": {
                     "target_type": "host", "target_id": host_id}}) from None
+            except PrivilegeError as exc:
+                logger.warning("Operation prepare failed for host %s phase=%s reason=%s",
+                               host_id, phase, exc.reason_code)
+                raise HTTPException(409, "主机权限、信任、连接或预检失败") from None
             except (SSHConnectionError, CommandExecutionError, ValueError) as exc:
-                logger.warning("Operation prepare preflight failed for host %s: %s", host_id, type(exc).__name__)
+                reason = "unknown_validation" if isinstance(exc, ValueError) else (
+                    "ssh_connection_error" if isinstance(exc, SSHConnectionError) else "command_execution_error")
+                logger.warning("Operation prepare failed for host %s phase=%s reason=%s", host_id, phase, reason)
                 raise HTTPException(409, "主机权限、信任、连接或预检失败") from None
         if self.stopping.is_set() or self.persistence_failed.is_set():
             raise HTTPException(503, "运维队列不可用")

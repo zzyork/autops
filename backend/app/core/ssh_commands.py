@@ -32,6 +32,10 @@ class CommandExecutionError(Exception):
         super().__init__(ERROR_MESSAGES[code])
 
 
+class OutputObservationError(Exception):
+    pass
+
+
 def _connected(client: paramiko.SSHClient) -> bool:
     try:
         transport = client.get_transport()
@@ -50,6 +54,8 @@ def _close_channel(channel: paramiko.Channel) -> None:
 def run_command(
     client: paramiko.SSHClient, command: str, timeout_seconds: float = 30,
     deadline: float | None = None,
+    on_output: Callable[[str, bytes], None] | None = None,
+    flush_output: Callable[[], None] | None = None,
 ) -> CommandResult:
     end = time.monotonic() + timeout_seconds
     if deadline is not None:
@@ -63,6 +69,7 @@ def run_command(
     stdout = bytearray()
     stderr = bytearray()
     reader_errors: list[type[Exception]] = []
+    observation_errors: list[Exception] = []
 
     def remaining() -> float:
         value = end - time.monotonic()
@@ -75,7 +82,7 @@ def run_command(
         if channel is not None:
             _close_channel(channel)
 
-    def read_stream(recv: Callable[[int], bytes], output: bytearray) -> None:
+    def read_stream(recv: Callable[[int], bytes], output: bytearray, name: str) -> None:
         nonlocal output_size
         try:
             while True:
@@ -83,11 +90,20 @@ def run_command(
                 if not chunk:
                     return
                 with output_lock:
-                    if output_size + len(chunk) > MAX_OUTPUT_BYTES:
+                    available = MAX_OUTPUT_BYTES - output_size
+                    accepted = chunk[:available]
+                    if len(chunk) > available:
                         output_limited.set()
-                    else:
-                        output.extend(chunk)
-                        output_size += len(chunk)
+                    if accepted:
+                        output.extend(accepted)
+                        output_size += len(accepted)
+                        if on_output is not None:
+                            try:
+                                on_output(name, accepted)
+                            except Exception as exc:
+                                observation_errors.append(exc)
+                                _close_channel(channel)
+                                return
                 if output_limited.is_set():
                     _close_channel(channel)
                     return
@@ -109,13 +125,31 @@ def run_command(
         channel.exec_command("LC_ALL=C LANG=C bash -c " + shlex.quote(command))
         remaining()
         readers = [
-            threading.Thread(target=read_stream, args=(channel.recv, stdout), daemon=True),
-            threading.Thread(target=read_stream, args=(channel.recv_stderr, stderr), daemon=True),
+            threading.Thread(target=read_stream, args=(channel.recv, stdout, "stdout"), daemon=True),
+            threading.Thread(target=read_stream, args=(channel.recv_stderr, stderr, "stderr"), daemon=True),
         ]
         for reader in readers:
             reader.start()
-        for reader in readers:
-            reader.join()
+        while any(reader.is_alive() for reader in readers):
+            for reader in readers:
+                reader.join(timeout=0.25)
+            if observation_errors:
+                _close_channel(channel)
+            if flush_output is not None:
+                try:
+                    flush_output()
+                except Exception as exc:
+                    _close_channel(channel)
+                    for reader in readers:
+                        reader.join()
+                    raise OutputObservationError from exc
+        if flush_output is not None:
+            try:
+                flush_output()
+            except Exception as exc:
+                raise OutputObservationError from exc
+        if observation_errors:
+            raise OutputObservationError from observation_errors[0]
         remaining()
         if output_limited.is_set():
             raise CommandExecutionError("output_limit", _connected(client))
@@ -134,6 +168,8 @@ def run_command(
         remaining()
         return result
     except CommandExecutionError:
+        raise
+    except OutputObservationError:
         raise
     except Exception as exc:
         code = "timeout" if expired.is_set() or time.monotonic() >= end or isinstance(exc, TimeoutError) else (

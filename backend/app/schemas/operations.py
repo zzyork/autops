@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator
+
+from ..services.operation_output import safe_saved_text
 
 ModuleId = Literal["hostname", "packages", "firewall", "kernel", "system", "disk"]
 TaskStatus = Literal["planned", "queued", "running", "succeeded", "failed", "partial", "unknown", "interrupted", "expired"]
@@ -48,7 +51,6 @@ class OperationCatalog(StrictModel):
 class InspectInput(StrictModel):
     module: ModuleId
     host_id: StrictInt = Field(gt=0)
-    sudo: StrictBool = False
 
 
 class Inspection(StrictModel):
@@ -63,7 +65,6 @@ class PlanInput(StrictModel):
     action: StrictStr = Field(min_length=1, max_length=64)
     host_ids: list[StrictInt] = Field(min_length=1, max_length=16)
     params: dict[StrictStr, StrictStr | StrictInt | StrictBool | None] = Field(default_factory=dict, max_length=32)
-    sudo: StrictBool = False
 
     @field_validator("host_ids")
     @classmethod
@@ -107,6 +108,11 @@ class StepResponse(StrictModel):
     stderr: str | None
     exit_status: int | None
 
+    @field_validator("stdout", "stderr")
+    @classmethod
+    def safe_output(cls, value: str | None) -> str | None:
+        return safe_saved_text(value)
+
 
 class HostResponse(StrictModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
@@ -121,6 +127,11 @@ class HostResponse(StrictModel):
     resolved_at: datetime | None
     resolution_note: str | None
     steps: list[StepResponse]
+
+    @field_validator("before", "after")
+    @classmethod
+    def safe_output(cls, value: str | None) -> str | None:
+        return safe_saved_text(value)
 
     @field_validator("resolved_at")
     @classmethod
@@ -137,10 +148,58 @@ class TaskResponse(StrictModel):
     confirmed_at: datetime | None
     completed_at: datetime | None
     params: dict[str, str | int | bool]
-    sudo: bool
     hosts: list[HostResponse]
 
     @field_validator("created_at", "confirmed_at", "completed_at")
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
+
+
+class TaskSummary(StrictModel):
+    id: UUID
+    module: ModuleId
+    action: str
+    title: str
+    status: TaskStatus
+
+
+class TaskRecovery(StrictModel):
+    task: TaskSummary | None
+
+
+class BlockerSummary(StrictModel):
+    task_id: UUID
+    module: ModuleId
+    action: str
+    title: str
+    confirmed_at: datetime
+    status: HostStatus
+
+    @field_validator("confirmed_at")
+    @classmethod
+    def utc_timestamp(cls, value: datetime) -> datetime:
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+class EventStep(StrictModel):
+    position: int = Field(ge=0)
+    title: str = Field(min_length=1, max_length=100)
+    status: StepStatus
+    stdout: str = Field(max_length=8192)
+    stderr: str = Field(max_length=8192)
+    exit_status: int | None
+
+
+class EventHost(StrictModel):
+    host_id: int = Field(gt=0)
+    status: HostStatus
+    identity_required: bool
+    resolved_at: datetime | None
+    steps: list[EventStep] = Field(max_length=3)
+
+
+class EventSnapshot(StrictModel):
+    task_id: UUID
+    status: TaskStatus
+    hosts: list[EventHost] = Field(min_length=1, max_length=16)

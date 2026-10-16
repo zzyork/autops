@@ -14,7 +14,7 @@ function remove(name: string | number) {
     <ElTabs :model-value="activeKey" type="card" :before-leave="canSwitch" @tab-change="select(String($event))" @tab-remove="remove">
       <ElTabPane v-for="tab in tabs" :key="tab.key" :name="tab.key" :label="tab.title" :closable="tabs.length > 1">
         <template #label><span class="console-tab-title" :title="tab.title">{{ tab.title }}</span></template>
-        <WorkspacePage :location="tab.location" />
+        <WorkspacePage :location="tab.location" :active="activeKey === tab.key" />
       </ElTabPane>
     </ElTabs>
   </div>

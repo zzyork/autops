@@ -3,13 +3,15 @@ from collections.abc import Callable
 from typing import Annotated, TypeVar
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi.responses import StreamingResponse
 
 from ...dependencies import Database
 from ....repositories import operations as repository
+from ....schemas.pagination import PageNumber, PageResponse, PageSize, DEFAULT_PAGE_SIZE
 from ....schemas.operations import (ConfirmInput, InspectInput, Inspection, OperationCatalog,
-                                     PlanInput, ResolveInput, TaskResponse)
-from ....services.operation_commands import catalog as command_catalog
+                                      PlanInput, ResolveInput, TaskResponse, TaskRecovery, TaskSummary, BlockerSummary, ModuleId)
+from ....services.operation_commands import MODULES, catalog as command_catalog
 
 router = APIRouter(prefix="/operations", tags=["服务器运维"])
 logger = logging.getLogger(__name__)
@@ -55,6 +57,43 @@ def resolve(task_id: UUID, host_id: Annotated[int, Path(gt=0)], data: ResolveInp
         raise HTTPException(422, "请在带外核对远端进程已停止，并确认任务 ID")
     return safe(request, lambda: TaskResponse.model_validate(
         request.app.state.operations.resolve(str(task_id), host_id, data.note)))
+
+
+@router.get("/tasks", response_model=TaskRecovery)
+def recover_task(host_id: Annotated[int, Query(gt=0)], module: ModuleId, scope: Annotated[str, Query(pattern="^(attention|latest)$")],
+                 session: Database, actions: Annotated[list[str], Query()] = []) -> TaskRecovery:
+    allowed = {item["id"] for item in MODULES[module].ACTIONS}
+    if not actions or len(actions) > len(allowed) or len(set(actions)) != len(actions) or not set(actions) <= allowed:
+        raise HTTPException(422, "运维动作筛选无效")
+    try:
+        row = repository.latest_task(session, host_id, module, actions, scope)
+    except Exception as exc:
+        logger.warning("Operation recovery read failed: %s", type(exc).__name__)
+        raise HTTPException(503, "运维任务读取失败") from None
+    return TaskRecovery(task=TaskSummary.model_validate(dict(row)) if row else None)
+
+
+@router.get("/hosts/{host_id}/blockers", response_model=PageResponse[BlockerSummary])
+def list_blockers(host_id: Annotated[int, Path(gt=0)], session: Database,
+                  page: PageNumber = None, page_size: PageSize = DEFAULT_PAGE_SIZE) -> PageResponse[BlockerSummary]:
+    try:
+        rows, total = repository.blockers(session, host_id, page or 1, page_size)
+    except Exception as exc:
+        logger.warning("Operation blockers read failed: %s", type(exc).__name__)
+        raise HTTPException(503, "运维阻塞记录读取失败") from None
+    return PageResponse(items=[BlockerSummary.model_validate(dict(row)) for row in rows], total=total)
+
+
+@router.get("/tasks/{task_id}/events", response_class=StreamingResponse)
+def task_events(task_id: UUID, request: Request, host_id: Annotated[int, Query(gt=0)]) -> StreamingResponse:
+    request.app.state.operations.ensure_available()
+    try:
+        return request.app.state.operations.streams.subscribe(str(task_id), host_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Operation stream startup failed: %s", type(exc).__name__)
+        raise HTTPException(503, "运维实时查看不可用") from None
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
