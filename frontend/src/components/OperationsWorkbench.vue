@@ -12,7 +12,7 @@ import type { Host } from '@/types/api'
 import type { OperationCatalog, OperationInspectInput, OperationInspection, OperationModuleId, OperationPlanInput, OperationTask } from '@/types/operations'
 import '@/styles/operations.css'
 
-const props = defineProps<{ module: OperationModuleId; fixedHost?: Host; initialAction?: string; embedded?: boolean }>()
+const props = defineProps<{ module: OperationModuleId; fixedHost?: Host; initialAction?: string; allowedActions?: string[]; embedded?: boolean }>()
 const emit = defineEmits<{ busy: [value: boolean] }>()
 const vLoading = ElLoading.directive
 const catalog = ref<OperationCatalog | null>(null)
@@ -34,7 +34,11 @@ const preparedDialogOpen = ref(false)
 const preparedDetailBusy = ref(false)
 const busy = computed(() => pendingRequests.value > 0 || loading.value || inspecting.value || planning.value || confirming.value || resolving.value !== null || preparedDialogOpen.value || preparedDetailBusy.value)
 watch(busy, (value) => emit('busy', value), { immediate: true, flush: 'sync' })
-const moduleInfo = computed(() => catalog.value?.modules.find((item) => item.id === props.module))
+const moduleInfo = computed(() => {
+  const source = catalog.value?.modules.find((item) => item.id === props.module)
+  if (!source || !props.allowedActions) return source
+  return { ...source, actions: source.actions.filter((item) => props.allowedActions?.includes(item.id)) }
+})
 const preparedAction = computed(() => moduleInfo.value?.actions.find((item) => item.id === prepared.value?.action))
 const POLL_MS = 2000
 let active = true
@@ -96,7 +100,8 @@ async function inspect(input: OperationInspectInput) {
 }
 
 async function prepare(input: OperationPlanInput) {
-  if (props.fixedHost && (input.module !== props.module || input.action !== props.initialAction || input.host_ids.length !== 1 || input.host_ids[0] !== props.fixedHost.id)) return
+  if (!moduleInfo.value?.actions.some((item) => item.id === input.action)) return
+  if (props.fixedHost && (input.module !== props.module || props.initialAction !== undefined && input.action !== props.initialAction || input.host_ids.length !== 1 || input.host_ids[0] !== props.fixedHost.id)) return
   clearTimeout(planTimer)
   const current = ++planRequest
   planning.value = true
@@ -145,7 +150,7 @@ async function loadPrepared(id: string) {
 }
 
 function canConfirmTarget(task: OperationTask) {
-  return !props.fixedHost || task.module === props.module && task.action === props.initialAction && task.hosts.length === 1 && task.hosts[0]?.host_id === props.fixedHost.id
+  return !props.fixedHost || task.module === props.module && (props.initialAction === undefined || task.action === props.initialAction) && task.hosts.length === 1 && task.hosts[0]?.host_id === props.fixedHost.id
 }
 
 async function confirm(id: string) {
@@ -207,7 +212,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="assets-main operations-main" :class="{ 'operations-embedded': embedded }">
+  <component :is="embedded ? 'section' : 'main'" class="assets-main operations-main" :class="{ 'operations-embedded': embedded }">
     <div v-if="!embedded" class="assets-heading"><h1>{{ moduleInfo?.title ?? '服务器运维' }}</h1></div>
     <div v-loading="loading" class="operation-options">
       <template v-if="ready && catalog && moduleInfo">
@@ -218,5 +223,5 @@ onUnmounted(() => {
       </template>
       <section v-else-if="!loading" class="host-section operation-section">{{ ready ? '当前模块不在操作目录中。' : '' }}<ElButton v-if="!ready" @click="loadOptions">重试加载</ElButton></section>
     </div>
-  </main>
+  </component>
 </template>

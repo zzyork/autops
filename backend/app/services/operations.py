@@ -154,6 +154,10 @@ class OperationManager:
                 task = repository.get_task(session, task_id)
                 if task is None:
                     raise HTTPException(404, "运维任务不存在")
+                if task.module not in MODULES or task.action not in {
+                    item["id"] for item in MODULES[task.module].ACTIONS
+                }:
+                    raise HTTPException(409, "运维操作已移除")
                 host_ids = {host.host_id for host in task.hosts}
                 if self.active & host_ids:
                     raise HTTPException(409, "所选主机有未完成的运维任务")

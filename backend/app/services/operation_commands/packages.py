@@ -3,18 +3,11 @@ from urllib.parse import urlsplit
 
 from .common import OperationSpec, OperationStep, action, boolean, field, fields, quote, read_spec, restore_new, rhel, selinux_context_check, shell, text, tools
 
-TITLE = "软件包与仓库"
-BASE_DEPS = "unzip zip vim git net-tools lrzsz bind-utils dos2unix sysstat irqbalance tree nmap iptraf gcc gcc-c++ rsync net-snmp openssh-clients lvm2 wget bc glibc-headers python3 telnet"
-BASE_TOOLS = "htop iotop tar make ntpdate lsof"
-PACKAGE_RE = r"[A-Za-z0-9][A-Za-z0-9+_.-]{0,127}"
+TITLE = "软件仓库与升级"
 REPO_RE = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}"
 REPO_DIR = "/etc/yum.repos.d"
 ACTIONS = [
     action("list_repos", "查看软件仓库", "列出 DNF 仓库", False, []),
-    action("install", "安装软件包", "安装明确指定的软件包", True, [field("packages", "包名（空格分隔）")]),
-    action("install_base_deps", "安装基础依赖", "原项目预设基础依赖", True, []),
-    action("install_base_tools", "安装基础工具", "原项目预设工具", True, []),
-    action("upgrade", "升级指定软件包", "仅升级明确指定的软件包", True, [field("packages", "包名（空格分隔）")]),
     action("upgrade_all", "升级所有软件包", "DNF 全量升级", True, []),
     action("add_repo", "新增仓库", "新增独立的受管 repo 文件", True, [
         field("repo", "仓库 ID"), field("url", "baseurl"),
@@ -82,34 +75,19 @@ def inspect() -> str:
 
 
 def build(name: str, params: dict) -> OperationSpec:
+    if name not in ACTION_TITLE:
+        raise ValueError("不支持的运维操作")
     if name == "list_repos":
         fields(params, set())
         return read_spec("查看软件仓库", inspect())
-    if name in {"install", "upgrade", "install_base_deps", "install_base_tools", "upgrade_all"}:
-        fields(params, {"packages"} if name in {"install", "upgrade"} else set(),
-               {"packages"} if name in {"install", "upgrade"} else set())
-        if name in {"install", "upgrade"}:
-            raw = params["packages"]
-            if not isinstance(raw, str) or len(raw) > 2048:
-                raise ValueError("软件包列表无效")
-            names = raw.split()
-            if not 1 <= len(names) <= 50 or any(not re.fullmatch(PACKAGE_RE, part, re.ASCII) for part in names):
-                raise ValueError("软件包名只能包含字母、数字、点、加号、下划线和短横线")
-        else:
-            names = (BASE_DEPS if name == "install_base_deps" else BASE_TOOLS if name == "install_base_tools" else "").split()
-        names = list(dict.fromkeys(names))
-        args = " ".join(quote(item) for item in names)
+    if name == "upgrade_all":
+        fields(params, set())
         pre = rhel() + "\n" + tools("rpm", "sha256sum", "sort") + "\nrpm -qa | sort | sha256sum"
         pre += f"\nfor file in {REPO_DIR}/*.repo; do test -f \"$file\" || continue; test ! -L \"$file\"; sha256sum -- \"$file\"; done"
-        op = "install" if name.startswith("install") else "upgrade"
-        step = f"dnf -y {op} {args}" if names else "dnf -y upgrade"
-        if op == "install":
-            verify = "\n".join(f"rpm -q -- {quote(item)} >/dev/null" for item in names)
-        else:
-            # DNF returns 100 when further updates remain. A nonzero result is verification failure.
-            verify = f"dnf -q check-update {args}"
+        # DNF returns 100 when further updates remain. A nonzero result is verification failure.
         return OperationSpec(ACTION_TITLE[name], True, shell(pre),
-                             (OperationStep(ACTION_TITLE[name], shell(step), 3600),), shell(verify))
+                             (OperationStep(ACTION_TITLE[name], shell("dnf -y upgrade"), 3600),),
+                             shell("dnf -q check-update"))
     fields(params, {"repo", "url", "gpg_key", "enabled"} if name == "add_repo" else
            {"repo", "url"} if name == "update_repo" else {"repo"},
            {"repo", "url", "gpg_key"} if name == "add_repo" else

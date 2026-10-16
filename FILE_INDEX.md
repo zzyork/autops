@@ -204,16 +204,18 @@
 | `frontend/src/types/operations.ts` | 六模块目录、表单、任务状态及核对类型。最后同步：2026-10-14。 |
 | `frontend/src/api/operations.ts` | 运维 API 调用及对应时限。最后同步：2026-10-14。 |
 | `frontend/src/components/OperationsWorkbench.vue` | 运维页面请求、独立身份确认前置流程、轮询、当前计划与核对。最后同步：2026-10-14。 |
+| `frontend/src/components/HostOperationsPage.vue` | 主机运维共用容器：按独立路由加载主机、处理失败重试；通过作用域插槽提供固定主机，或渲染指定模块工作台。最后同步：2026-10-16。 |
+| `frontend/src/views/ServerOperationsView.vue` | 统一服务器运维页面：固定主机概览，按标签组织主机名、软件包全量升级、仓库及其他运维，复用既有执行与确认组件。最后同步：2026-10-16。 |
 | `frontend/src/components/OperationSetup.vue` | 主机选择、免密 sudo、目录驱动参数表单及本地校验。最后同步：2026-10-14。 |
 | `frontend/src/components/OperationTaskDetail.vue` | 计划预览、确认弹窗、逐主机步骤和未知结果人工核对。最后同步：2026-10-14。 |
 | `frontend/src/components/operationDisplay.ts` | 运维任务、主机和步骤的状态中文与语义色映射。最后同步：2026-10-14。 |
 | `frontend/src/styles/operations.css` | 复用控制台变量的运维表单、详情、输出及任务布局。最后同步：2026-10-14。 |
-| `frontend/src/components/HostnameOperationDialog.vue` | 简单主机名编辑弹窗，自动读取当前名称，输入新名称后保存；复用身份校验、运维执行及异常结果核对。最后同步：2026-10-14。 |
-| `frontend/src/views/PackagesOperationsView.vue` | 软件包与仓库管理独立页面。最后同步：2026-10-14。 |
-| `frontend/src/views/FirewallOperationsView.vue` | 防火墙管理独立页面。最后同步：2026-10-14。 |
-| `frontend/src/views/KernelOperationsView.vue` | 内核参数与资源限制独立页面。最后同步：2026-10-14。 |
-| `frontend/src/views/SystemOperationsView.vue` | 系统优化独立页面。最后同步：2026-10-14。 |
-| `frontend/src/views/DiskOperationsView.vue` | 磁盘管理独立页面。最后同步：2026-10-14。 |
+| `frontend/src/components/HostnameOperationForm.vue` | 运维标签内的主机名表单，自动读取当前名称，输入新名称后保存并重新读取；复用身份校验、任务查询及异常结果核对。最后同步：2026-10-16。 |
+| `frontend/src/views/PackagesOperationsView.vue` | 固定主机的软件仓库管理独立页面。最后同步：2026-10-16。 |
+| `frontend/src/views/FirewallOperationsView.vue` | 固定主机的防火墙管理独立页面。最后同步：2026-10-16。 |
+| `frontend/src/views/KernelOperationsView.vue` | 固定主机的内核参数与资源限制独立页面。最后同步：2026-10-16。 |
+| `frontend/src/views/SystemOperationsView.vue` | 固定主机的系统优化独立页面。最后同步：2026-10-16。 |
+| `frontend/src/views/DiskOperationsView.vue` | 固定主机的磁盘管理独立页面。最后同步：2026-10-16。 |
 
 ## 前端文件
 
@@ -264,13 +266,13 @@
 | `frontend/src/components/workspace.ts` | 布局内工作区状态与注入契约，管理标签去重、导航、关闭、滚动恢复及弹窗切页限制。最后同步：2026-10-13。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
-| `frontend/src/router/index.ts` | 对话、配置、资产、巡检及五个独立运维页面路由；旧主机名地址转到主机管理。最后同步：2026-10-14。 |
+| `frontend/src/router/index.ts` | 对话、配置、资产、巡检及统一主机运维页面路由，保留各模块主机路由；旧全局运维地址转到主机管理。最后同步：2026-10-16。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
 | `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-10。 |
 | `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
 | `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |
-| `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择、单台/批量连接测试及行内“更多 → 更改主机名”入口。最后同步：2026-10-14。 |
+| `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择、单台/批量连接测试及“更多 → 服务器运维”统一入口。最后同步：2026-10-16。 |
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |

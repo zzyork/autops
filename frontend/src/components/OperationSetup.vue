@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { ElAlert, ElButton, ElCheckbox, ElInput, ElInputNumber, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus'
 import type { Host } from '@/types/api'
 import type { OperationAction, OperationField, OperationInspectInput, OperationModuleId, OperationPlanInput, OperationValue } from '@/types/operations'
@@ -21,6 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const mode = ref<'single' | 'multiple'>('single')
+const formId = useId()
 const singleHost = ref<number | null>(null)
 const multipleHosts = ref<number[]>([])
 const sudo = ref(false)
@@ -95,7 +96,7 @@ function prepare() {
       <template v-else>
         <div class="field"><span>目标范围 <em>*</em></span><ElRadioGroup v-model="mode" :disabled="busy" aria-label="目标范围"><ElRadioButton value="single">单台主机</ElRadioButton><ElRadioButton value="multiple">多台主机</ElRadioButton></ElRadioGroup></div>
         <label v-if="mode === 'single'" class="field" :class="{ 'is-error': invalid === 'hosts' }"><span>主机 <em>*</em></span><ElSelect v-model="singleHost" filterable :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect></label>
-        <div v-else class="field" :class="{ 'is-error': invalid === 'hosts' }"><label :for="`operation-${module}-hosts`">主机 <em>*</em></label><ElSelect :id="`operation-${module}-hosts`" v-model="multipleHosts" multiple :multiple-limit="16" filterable collapse-tags :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择多台主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect><span class="ssh-field-hint">已选 {{ multipleHosts.length }} / 16 台；读取现状仅支持单台。</span></div>
+        <div v-else class="field" :class="{ 'is-error': invalid === 'hosts' }"><label :for="`${formId}-hosts`">主机 <em>*</em></label><ElSelect :id="`${formId}-hosts`" v-model="multipleHosts" multiple :multiple-limit="16" filterable collapse-tags :disabled="!hostsReady || busy" :aria-invalid="invalid === 'hosts'" placeholder="选择多台主机" class="full-width"><ElOption v-for="host in hosts" :key="host.id" :label="`${host.name} · ${host.address}`" :value="host.id" /></ElSelect><span class="ssh-field-hint">已选 {{ multipleHosts.length }} / 16 台；读取现状仅支持单台。</span></div>
       </template>
       <div class="field"><ElCheckbox v-model="sudo" :disabled="busy" label="使用免密 sudo（需目标主机已配置）" /></div>
       <div class="operation-actions"><ElButton :loading="inspecting" :disabled="!hostsReady || busy || hostIds.length !== 1" @click="inspect">读取现状</ElButton><span v-if="hostIds.length > 1" class="ssh-field-hint">读取现状须仅选一台主机。</span></div>
@@ -104,11 +105,11 @@ function prepare() {
       <p v-if="action" class="ssh-field-hint">{{ action.description }}</p>
       <div v-if="action" class="field-grid">
         <div v-for="field in action.fields" :key="field.key" class="field" :class="{ 'is-error': invalid === field.key }">
-          <label v-if="field.kind !== 'boolean'" :for="`operation-${module}-${field.key}`">{{ field.label }} <em v-if="field.required">*</em></label>
-          <ElInput v-if="field.kind === 'text' || field.kind === 'textarea'" :id="`operation-${module}-${field.key}`" :model-value="String(params[field.key] ?? '')" :type="field.kind === 'textarea' ? 'textarea' : 'text'" :rows="3" :disabled="busy" :aria-invalid="invalid === field.key" @update:model-value="updateParam(field, $event)" />
-          <ElInputNumber v-else-if="field.kind === 'number'" :id="`operation-${module}-${field.key}`" :model-value="typeof params[field.key] === 'number' ? params[field.key] as number : undefined" :controls="false" :disabled="busy" :aria-invalid="invalid === field.key" class="full-width" @update:model-value="updateParam(field, $event ?? null)" />
-          <ElSelect v-else-if="field.kind === 'select'" :id="`operation-${module}-${field.key}`" :model-value="params[field.key]" :disabled="busy" :aria-invalid="invalid === field.key" placeholder="请选择" class="full-width" @update:model-value="updateParam(field, $event)"><ElOption v-for="option in field.options ?? []" :key="String(option.value)" :label="option.label" :value="option.value" /></ElSelect>
-          <ElCheckbox v-else :id="`operation-${module}-${field.key}`" :model-value="params[field.key] === true" :disabled="busy" @update:model-value="updateParam(field, $event === true)">{{ field.label }} <em v-if="field.required">*</em></ElCheckbox>
+          <label v-if="field.kind !== 'boolean'" :for="`${formId}-${field.key}`">{{ field.label }} <em v-if="field.required">*</em></label>
+          <ElInput v-if="field.kind === 'text' || field.kind === 'textarea'" :id="`${formId}-${field.key}`" :model-value="String(params[field.key] ?? '')" :type="field.kind === 'textarea' ? 'textarea' : 'text'" :rows="3" :disabled="busy" :aria-invalid="invalid === field.key" @update:model-value="updateParam(field, $event)" />
+          <ElInputNumber v-else-if="field.kind === 'number'" :id="`${formId}-${field.key}`" :model-value="typeof params[field.key] === 'number' ? params[field.key] as number : undefined" :controls="false" :disabled="busy" :aria-invalid="invalid === field.key" class="full-width" @update:model-value="updateParam(field, $event ?? null)" />
+          <ElSelect v-else-if="field.kind === 'select'" :id="`${formId}-${field.key}`" :model-value="params[field.key]" :disabled="busy" :aria-invalid="invalid === field.key" placeholder="请选择" class="full-width" @update:model-value="updateParam(field, $event)"><ElOption v-for="option in field.options ?? []" :key="String(option.value)" :label="option.label" :value="option.value" /></ElSelect>
+          <ElCheckbox v-else :id="`${formId}-${field.key}`" :model-value="params[field.key] === true" :disabled="busy" @update:model-value="updateParam(field, $event === true)">{{ field.label }} <em v-if="field.required">*</em></ElCheckbox>
           <span v-if="field.description" class="ssh-field-hint">{{ field.description }}</span>
         </div>
       </div>

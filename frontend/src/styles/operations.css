@@ -32,5 +32,11 @@
 .operation-warning { color: var(--ui-danger); }
 .operation-section > .operation-actions { margin-top: 20px; }
 .operations-embedded { padding: 0; }
-.hostname-operation-dialog .el-dialog__body { max-height: calc(100vh - 190px); overflow-y: auto; }
-.hostname-operation-dialog .el-dialog__title { overflow-wrap: anywhere; }
+.server-operation-target { display: flex; align-items: center; gap: 16px; padding: 12px; overflow-wrap: anywhere; }
+.server-operation-target > span { color: var(--ui-text-secondary); }
+.hostname-operation-form { padding: 16px; }
+.hostname-operation-form .el-form { max-width: 440px; }
+.hostname-operation-form .operation-actions { margin-top: 20px; }
+.hostname-current-field .el-form-item__label { font-weight: 600; }
+.hostname-current-value { display: block; width: 100%; padding: 8px 12px; border: 1px solid var(--ui-control-border); background: var(--ui-surface); font-size: 16px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
+.hostname-current-field .hostname-current { width: 100%; }

@@ -15,7 +15,6 @@ export function createWorkspace(router: Router) {
   const menuCollapsed = ref(false)
   const assetsExpanded = ref(true)
   const inspectionsExpanded = ref(true)
-  const operationsExpanded = ref(true)
   const settingsExpanded = ref(true)
   let navigationSequence = 0
   let pendingLocation: string | null = null
@@ -52,7 +51,8 @@ export function createWorkspace(router: Router) {
     const key = location.path
     const title = String(location.meta.title)
     const taskId = location.params.taskId
-    const label = location.name === 'inspection-record-detail' ? `${title} · ${String(taskId)}` : title
+    const label = location.params.hostId ? `${title} · 主机 ${String(location.params.hostId)}`
+      : location.name === 'inspection-record-detail' ? `${title} · ${String(taskId)}` : title
     const existing = tabs.value.find((tab) => tab.key === key)
     tabs.value = existing
       ? tabs.value.map((tab) => tab.key === key ? { ...tab, location, title: label } : tab)
@@ -102,7 +102,7 @@ export function createWorkspace(router: Router) {
     return true
   }
 
-  return { tabs, activeKey, menuCollapsed, assetsExpanded, inspectionsExpanded, operationsExpanded, settingsExpanded, select, close, canSwitch }
+  return { tabs, activeKey, menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded, select, close, canSwitch }
 }
 
 export const workspaceKey: InjectionKey<ReturnType<typeof createWorkspace>> = Symbol('workspace')

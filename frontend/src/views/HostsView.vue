@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
   ElDropdown, ElDropdownItem, ElDropdownMenu, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
@@ -11,7 +12,6 @@ import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
-import HostnameOperationDialog from '@/components/HostnameOperationDialog.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
@@ -32,6 +32,7 @@ interface HostForm {
 }
 
 const groups = ref<HostGroup[]>([])
+const router = useRouter()
 const jumpHosts = ref<JumpHost[]>([])
 const sshKeys = ref<SSHKey[]>([])
 const vLoading = ElLoading.directive
@@ -54,8 +55,6 @@ const openingHost = ref(false)
 const hostDialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
-const hostnameDialog = ref(false)
-const hostnameHost = ref<Host | null>(null)
 const selectedHosts = ref<Host[]>([])
 function clearSelectedHosts() {
   selectedHosts.value = []
@@ -336,9 +335,10 @@ function openConnectionTest(host: Host) {
   testDialog.value = true
 }
 
-function openHostnameOperation(host: Host) {
-  hostnameHost.value = host
-  hostnameDialog.value = true
+function openHostOperation(command: unknown, host: Host) {
+  if (command === 'operations') {
+    void router.push({ name: 'host-operations', params: { hostId: String(host.id) } })
+  }
 }
 
 function jumpHostName(id: number | null) {
@@ -385,7 +385,7 @@ function dateLabel(value: string) {
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
-              <ElTableColumn label="操作" width="270" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton><ElDropdown trigger="click" @command="openHostnameOperation(row as Host)"><ElButton link type="primary" class="host-more-button">更多</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem command="hostname">更改主机名</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
+              <ElTableColumn label="操作" width="270" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton><ElDropdown trigger="click" @command="openHostOperation($event, row as Host)"><ElButton link type="primary" class="host-more-button" :aria-label="`${row.name}的更多操作`">更多</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem command="operations">服务器运维</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
             </ElTable>
           </div>
           <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
@@ -396,7 +396,6 @@ function dateLabel(value: string) {
 
     <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
-    <HostnameOperationDialog v-model="hostnameDialog" :host="hostnameHost" />
     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div class="asset-form host-form">
         <div class="form-section-title">基本信息</div>

@@ -1,4 +1,4 @@
 <script setup lang="ts">
-import OperationsWorkbench from '@/components/OperationsWorkbench.vue'
+import HostOperationsPage from '@/components/HostOperationsPage.vue'
 </script>
-<template><OperationsWorkbench module="system" /></template>
+<template><HostOperationsPage module="system" /></template>
