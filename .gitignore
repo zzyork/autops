@@ -15,4 +15,4 @@ backend/runtime/
 backend/tests/*
 .vscode/*
 .agents/*
-backend/tests/test_ssh_connection_status.py
+docs/plans/*
