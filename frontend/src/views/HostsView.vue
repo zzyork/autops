@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
-  ElDropdown, ElDropdownItem, ElDropdownMenu, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
+  ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
 import { createHost, deleteHost, getHost, listGroups, listHostsPage, updateHost } from '@/api/assets'
 import { listJumpHosts } from '@/api/jump_hosts'
@@ -32,7 +31,6 @@ interface HostForm {
 }
 
 const groups = ref<HostGroup[]>([])
-const router = useRouter()
 const jumpHosts = ref<JumpHost[]>([])
 const sshKeys = ref<SSHKey[]>([])
 const vLoading = ElLoading.directive
@@ -335,12 +333,6 @@ function openConnectionTest(host: Host) {
   testDialog.value = true
 }
 
-function openHostOperation(command: unknown, host: Host) {
-  if (command === 'operations') {
-    void router.push({ name: 'host-operations', params: { hostId: String(host.id) } })
-  }
-}
-
 function jumpHostName(id: number | null) {
   if (id === null) return '未关联'
   const jumpHost = jumpHosts.value.find((item) => item.id === id)
@@ -385,7 +377,7 @@ function dateLabel(value: string) {
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
-              <ElTableColumn label="操作" width="270" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton><ElDropdown trigger="click" @command="openHostOperation($event, row as Host)"><ElButton link type="primary" class="host-more-button" :aria-label="`${row.name}的更多操作`">更多</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem command="operations">服务器运维</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
+              <ElTableColumn label="操作" width="220" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
             </ElTable>
           </div>
           <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>

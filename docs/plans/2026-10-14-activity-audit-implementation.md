@@ -14,7 +14,7 @@
 
 强制依据为 [AI 前端开发约束规范](../AI-前端开发约束规范.md)和 [AI 后端开发约束规范](../AI-后端开发约束规范.md)。本轮已完整重读，重点落实前端第 9.1 节、后端第 3.1 节，以及两份规范的分层、类型、安全和验收清单。本文件独立包含执行所需契约，不依赖当前已不存在的上一版设计文档。
 
-已确认的实施基线：数据库变更和成功事件同事务，写入失败使该事务失败；文件配置继续使用现有文件与原子替换，保留无法确认结果的窗口；首期不自动清理记录、不迁移配置到数据库、不建设用户系统。范围包括资产增改删、AI 会话/消息/计划决策、SSH 测试及身份确认、巡检/汇报/下载、服务器运维和模型配置。普通列表读取、轮询、翻页、搜索、切换工作区及 SSE token 不记录。
+已确认的实施基线：数据库变更和成功事件同事务，写入失败使该事务失败；文件配置继续使用现有文件与原子替换，保留无法确认结果的窗口；首期不自动清理记录、不迁移配置到数据库、不建设用户系统。范围包括资产增改删、AI 会话/消息/计划决策、SSH 测试及身份确认、巡检/汇报/下载和模型配置。普通列表读取、轮询、翻页、搜索、切换工作区及 SSE token 不记录。
 
 影响范围是现有业务提交点、后台终态/恢复、新增只读查询及独立页面。不得扩大为权限体系改造、通用异常格式重写、SSH 信任行为改变或远端失败补偿。当前源码变化较多，执行前重新检查实际文件，不覆盖其他未提交修改。
 
@@ -23,7 +23,7 @@
 - 项目尚无 Web 用户认证，SSH 用户名不是 Web 操作者；后台线程独立创建 Session。
 - 主机有版本并发控制；成功记录必须覆盖 flush 与 commit 的冲突边界。
 - 新建对话按钮只清空页面，首条发送才调用创建会话；创建成功和消息失败是两项不同事实。
-- 外部 SSH/模型执行不能和本地数据库原子提交，断流不等于业务失败；运维 unknown 门禁必须保留。
+- 外部 SSH/模型执行不能和本地数据库原子提交，断流不等于业务失败。
 - 巡检规则和功能模型配置是文件；可能已生效却未成功写入审计终态，不得假称已回滚。
 - 数据长期增长，首期只做只读容量检查；SQLite 文件管理员仍可修改记录，不能宣称防篡改或不可抵赖。
 
@@ -53,7 +53,7 @@ accepted 的 outcome 为 accepted；finished 为 succeeded/failed/denied/interru
 
 保持同一操作的 action、主要对象、发起上下文一致；终态 actor 可为 system/service。事件唯一键不能代替业务幂等或并发状态认领，重复终态必须先检查实际状态转换，不捕获全部冲突后静默忽略。
 
-action 使用稳定的对象.动作编码：host/host_group/jump_host/ssh_key.create/update/delete；ai_session.create/delete、ai_message.send、ai_proposal.confirm/reject；ssh_test.submit、ssh_identity.check、ssh_trust.confirm；inspection.create/delete/export、inspection_report.generate、inspection_rules.update；operation.inspect/plan/confirm/execute/resolve；model_connection.create/update/delete/test、feature_models.update。ssh_trust.auto_accept 仅接入实际存在的自动信任写入，不为审计新增自动信任业务。
+action 使用稳定的对象.动作编码：host/host_group/jump_host/ssh_key.create/update/delete；ai_session.create/delete、ai_message.send、ai_proposal.confirm/reject；ssh_test.submit、ssh_identity.check、ssh_trust.confirm；inspection.create/delete/export、inspection_report.generate、inspection_rules.update；model_connection.create/update/delete/test、feature_models.update。ssh_trust.auto_accept 仅接入实际存在的自动信任写入，不为审计新增自动信任业务。
 
 ### 3.2 事件内部字段
 
@@ -77,7 +77,7 @@ event Schema 定义枚举组合、UUID、UTC 时间、长度和 UTF-8 载荷上�
 - 主机仅记录名称、地址、端口、远端用户名、分组和资产关联等必要字段；备注仅 changed，凭据仅 credential_changed，不能记录密码、密文、密钥或密码摘要。
 - 对话仅 session/message/model ID、字符数和结果；禁止消息正文、AI 回答、工具输入输出、由提示词截取的会话标题。名称使用“AI 对话”加短 ID。
 - 模型地址仅“地址已变更”或经允许的协议/主机，不记录用户信息、查询参数和 fragment；主/备用标识切换需记录受影响连接的标识差异。
-- SSH 记录指纹变更和授权决策，不记录公私钥原文；巡检/运维记录计数与任务引用，不复制日志、命令输出或人工核对自由备注。
+- SSH 记录指纹变更和授权决策，不记录公私钥原文；巡检记录计数与任务引用，不复制日志或命令输出。
 - 同值保存 changes=[]、changed=false。批量目标复用业务任务明细，通过关联 ID 获取，不塞入巨型 JSON。
 - 测试动作 metadata 保存该次实际测试的状态快照：SSH 的 queued/running/awaiting_trust/succeeded/failed/interrupted、模型对话和工具能力各自的受控状态。HTTP/业务请求 succeeded 不等于能力 passed，列表不能读取当前模型或最新 SSH 测试来覆盖旧记录；处理中需要的排队/运行状态仅从同 operation 的已关联业务记录投影，不改写 accepted 历史。
 
@@ -159,7 +159,6 @@ SSH 测试和模型能力测试历史结果必须使用 TestStatus.vue、types/t
 | IdentityChallengeRecord | activity_operation_id | 独立身份探测的来源 |
 | InspectionTask | activity_operation_id | 巡检汇总、自动汇报发起关系 |
 | InspectionAIReport | activity_operation_id | 当前 generation，重新生成使用新操作 |
-| OperationTask | plan_activity_operation_id、execution_activity_operation_id | 分别保留计划提出者、确认执行者 |
 
 主体快照在 origin 事件保存，线程读取 origin 构造只读上下文，不把 Request/Session 跨线程传递。不重复给全部 Host/AISession 增加身份字段。旧行 NULL 明确是接入前数据：原恢复流程照常，不补造事件；新行要求关联却找不到 origin 时是完整性故障，不能退回默认用户。
 
@@ -169,7 +168,7 @@ SSH 测试和模型能力测试历史结果必须使用 TestStatus.vue、types/t
 
 文件配置在原配置协调锁内校验/准备白名单载荷→短事务 accepted→已有原子替换→短事务 finished。SQLite 写事务不跨文件/网络等待。确认替换前失败为 failed，无法确认替换结果或替换后审计提交失败不伪造回滚；启动扫描补 finished/unknown，显示“结果待核对”，不根据当前值相同倒推成功、不自动恢复旧配置。
 
-各管理器先复用已有未完任务恢复，再扫描没有任务行的未完外部动作：身份探测、现状读取、模型测试、运维预检中断为 interrupted；文件写入窗口为 unknown。远端写操作沿用已有 unknown 阻塞，不重跑命令。自动 AI 汇报独立于巡检终态，恢复巡检不自动新增汇报行为。
+各管理器先复用已有未完任务恢复，再扫描没有任务行的未完外部动作：身份探测、模型测试中断为 interrupted；文件写入窗口为 unknown。自动 AI 汇报独立于巡检终态，恢复巡检不自动新增汇报行为。
 
 生成中的 AI 汇报可能在终态巡检任务删除时被级联删除。删除事务先读取 generation/operation ID，若未结束则追加 finished/interrupted（内部原因 resource_deleted），再删除业务行并写删除事件，同事务提交后才 cancel 内存任务。worker 条件更新零行不追加迟到终态；若 worker 先完成保留其结果。删除 rollback 不先取消执行。
 
@@ -189,7 +188,7 @@ SSH 测试和模型能力测试历史结果必须使用 TestStatus.vue、types/t
 
 ### 任务 1：基础模型、目录和迁移
 
-新增 backend/app/activity_models.py、schemas/activities.py、services/activity_catalog.py、services/activities.py、repositories/activities.py、core/migrations/activities.py。修改 core/storage.py、ai_models.py、connection_models.py、inspection_models.py、operation_models.py。
+新增 backend/app/activity_models.py、schemas/activities.py、services/activity_catalog.py、services/activities.py、repositories/activities.py、core/migrations/activities.py。修改 core/storage.py、ai_models.py、connection_models.py、inspection_models.py。
 
 按第 3 节实现类型/唯一键/索引/脱敏，按第 5.2 节幂等补列。services/activities 负责构建和政策，repository 仅数据访问，不独立提交。首期索引覆盖 origin 时间、action、对象、operation/request ID；用户索引结合主体查询契约，不为每个 JSON 建索引。
 
@@ -229,21 +228,11 @@ check_identity 网络前 accepted，挑战/结果同事务 finished；已受信�
 
 report claim 生成独立 generation 操作，手动取当前主体、自动继承巡检发起者并关联巡检终态；finish 根据 generation/状态命中转换。保留自动回调在巡检 commit 后运行、不在恢复时自动生成汇报。生成中删除按第 5.3 节处理。
 
-Markdown/ZIP 只在内容构建成功后返回前记录 export/succeeded，代表服务端提供内容，不证明浏览器保存文件；不改变原文件/流式契约。业务证据仍通过原报告/运维详情接口按权限保留，不以审计精简删除诊断必需数据。
+Markdown/ZIP 只在内容构建成功后返回前记录 export/succeeded，代表服务端提供内容，不证明浏览器保存文件；不改变原文件/流式契约。业务证据仍通过原报告接口按权限保留，不以审计精简删除诊断必需数据。
 
 验证：复用 test_inspection_tasks.py，加本地 test_activity_inspections.py；并发多主机仅一个终态、部分结果、恢复、手动/自动归因、generation 竞争、生成中删除/完成竞态、删除 rollback、报告导出失败和实际下载内容边界。
 
-### 任务 7：服务器运维
-
-修改 services/operations.py、operation_execution.py、repositories/operations.py、endpoints/operations.py。inspect 主动远端读取和 prepare 预检写 accepted/finished；计划成功仅表示生成计划。
-
-confirm 事件与 execute accepted、claim_plan→queued 同事务，保存独立计划和执行 ID，区分提出/确认者；summarize 首次终态更新+execute finished。步骤原文继续留原业务表，不复制。resolve_host 核对与独立事件同事务，不改原 unknown 事实。
-
-保留当前 safe、persistence_failed、ensure_available 等服务故障门禁，不能新写入失败被捕获为远端业务失败后继续命令。执行前数据库失败不得执行命令，执行后提交失败不重放。恢复、未调度中断和过期沿用现有语义。
-
-验证：本地 test_activity_operations.py，现状读取、预检、双用户提出/确认、重复确认、partial/unknown、核对、调度/持久化失败、无远端重复执行、重启门禁保留。
-
-### 任务 8：模型与文件配置
+### 任务 7：模型与文件配置
 
 修改 repositories/ai.py、endpoints/ai.py、services/ai_feature_models.py、inspection_rules.py、endpoints/inspections.py。连接增改删共事务并记录切换主/备用造成的关联变化；test_connection 外部测试前 accepted，版本复核后结果/finished 共事务，旧配置测试不能证明新配置。
 
@@ -251,13 +240,13 @@ confirm 事件与 execute accepted、claim_plan→queued 同事务，保存独�
 
 验证：本地 test_activity_config.py，同值/并发、替换前故障、替换后审计失败、重启 unknown、主备用关联、敏感地址和凭据哨兵。真实呈现可能请求失败但配置已生效。
 
-### 任务 9：查询 API 与最小必要投影
+### 任务 8：查询 API 与最小必要投影
 
 新增 api/v1/endpoints/activities.py，修改 api/v1/router.py；完善 activities Schema/Service/Repository。按第 4.1 节显式选择列、聚合分页、详情投影和权限，不返回完整实体。
 
 验证：本地 test_activity_queries.py，阶段聚合计数、单失败、无终态、待确认、同时间排序、仅 from/仅 to/完整时间/非法区间、筛选/越界页、双主体权限替换、敏感字段过滤、整数 ID 删除后复用不产生错链。覆盖 HTTP 测试操作成功但模型能力失败、历史快照不受当前配置影响、queued/running/中断和状态不可用，断言 test_display 的合法状态/中文语义。验证实际 JSON 的允许字段及未知字段不泄露，不只比较内部对象。
 
-### 任务 10：WebUI
+### 任务 9：WebUI
 
 新增 frontend/src/types/activities.ts、api/activities.ts、views/ActivitiesView.vue、components/ActivityFilters.vue、ActivityTable.vue、ActivityDetail.vue、activityDisplay.ts、styles/activities.css。修改 router/index.ts 和 AssetsLayout.vue，并对 api/http.ts 的 JSON 读取主动取消分支做上述局部修正；复用 workspace，不新增全局状态或请求封装。
 
@@ -265,13 +254,13 @@ confirm 事件与 execute accepted、claim_plan→queued 同事务，保存独�
 
 验证：既有 typecheck/build；有浏览器条件时 1440px 检查加载/失败/空数据/筛选、10/20/50、长名称/差异、键盘和折叠、请求失效/主动取消（包括响应头已到而 JSON 体尚未读完）、超时/真实解析错误仍提示、共用错误合并、测试历史 tooltip/聚焦及工作区切换。不新增移动断点或假定存在 Lint/UI 测试框架。
 
-### 任务 11：集成、部署和文档
+### 任务 10：集成、部署和文档
 
 新增 docs/activity-records.md，记录实际入口覆盖、使用、容量和未认证边界；更新 FILE_INDEX 和相关已存在文档的必要说明。README 非必要不修改，修改须遵守模块顺序与 1000 字要求，不恢复与任务无关的已删除文档。
 
 按入口矩阵完成相关/完整回归；隔离库约 10 万操作数据，EXPLAIN QUERY PLAN/分页耗时记录实际环境，验证无全表 Python 聚合或资源 N+1，不虚报硬件无关延迟指标。只读检查 COUNT、时间范围、page_count×page_size，首期不新增无用户用途的统计 UI/API、清理任务或 VACUUM。
 
-部署前停止单实例、排空任务，备份整个运行目录含数据库/配置/加密密钥，副本上演练幂等迁移；正式启动迁移完毕再管理器恢复。失败停止流量，保留失败后副本，回退整套一致备份，不单独回退库而保留新配置，不重放远端命令。完成后人工审核，未经授权不提交/推送/合并。
+部署前停止单实例、排空任务，备份整个运行目录含数据库/配置/加密密钥，副本上演练幂等迁移；正式启动迁移完毕再管理器恢复。失败停止流量，保留失败后副本，回退整套一致备份，不单独回退库而保留新配置。完成后人工审核，未经授权不提交/推送/合并。
 
 ## 7. 里程碑、检查命令与完成条件
 
@@ -279,9 +268,9 @@ confirm 事件与 execute accepted、claim_plan→queued 同事务，保存独�
 | --- | --- | --- |
 | M0 基础设施 | 0–2 | 入口/字段消费表、旧库迁移、脱敏/失败上下文可验证 |
 | M1 资产与对话 | 3–4 | 原业务契约不破坏，同事务与计划来源测试通过 |
-| M2 后台与配置 | 5–8 | 所有已接入操作有真实终态，未知/删除/恢复边界验证 |
-| M3 查询与界面 | 9–10 | 实际响应最小且受控，页面必要信息和规范验收通过 |
-| M4 全量交付 | 11 | 全部实际入口覆盖、回归/容量/迁移演练和人工审核 |
+| M2 后台与配置 | 5–7 | 所有已接入操作有真实终态，未知/删除/恢复边界验证 |
+| M3 查询与界面 | 8–9 | 实际响应最小且受控，页面必要信息和规范验收通过 |
+| M4 全量交付 | 10 | 全部实际入口覆盖、回归/容量/迁移演练和人工审核 |
 
 按主线顺序执行；契约稳定后查询/UI 可与其他业务接入并行，同文件/迁移/事务入口顺序协调。只完成主机和对话不得称为全系统交付。每个任务记录文件、实际命令/结果、规范条款证据及未完成项，不把计划当测试结论。
 
@@ -289,7 +278,7 @@ confirm 事件与 execute accepted、claim_plan→queued 同事务，保存独�
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_activity_storage.py backend/tests/test_activity_requests.py backend/tests/test_activity_assets.py -q
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_activity_ai.py backend/tests/test_activity_ssh.py backend/tests/test_activity_inspections.py backend/tests/test_activity_operations.py backend/tests/test_activity_config.py backend/tests/test_activity_queries.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_activity_ai.py backend/tests/test_activity_ssh.py backend/tests/test_activity_inspections.py backend/tests/test_activity_config.py backend/tests/test_activity_queries.py -q
 .\.venv\Scripts\python.exe -m pytest
 npm --prefix frontend run typecheck
 npm --prefix frontend run build
@@ -303,13 +292,13 @@ build 当前包含 typecheck，完整构建时不需重复独立类型检查；�
 - [ ] 原入口/调用方、响应状态和危险确认契约完整；没有无关架构或规范文件修改。
 - [ ] route/Schema/Service/Repository 职责清楚，类型明确、字段白名单、SQL 参数化、迁移同步。
 - [ ] 内部留存字段有追溯用途，对外字段有当前程序消费者，页面内容有用户用途；无秘密/原始异常/冗余调试信息。
-- [ ] 短操作共事务、异步身份持久化、实际状态认领、恢复/删除竞态和远端未知边界可验证。
+- [ ] 短操作共事务、异步身份持久化、实际状态认领、恢复/删除竞态和配置未知结果边界可验证。
 - [ ] 局部状态和统一 API/请求/feedback 复用；失败不伪装空数据，失效/取消请求不错误更新或提示。
 - [ ] 所有新列表提供真实 10/20/50 分页，测试历史复用 TestStatus，折叠/焦点/对比度/桌面滚动合规。
 - [ ] 已执行相关及集成检查并记录真实结果，未执行项明确；代码经人工审核，部署和 Git 操作在授权范围内。
 
 ## 8. 本轮文档修订与未执行项
 
-当前工作区缺少上一轮方案文件，本次在 docs/plans 重新落盘并补充索引。相较此前方案：增加逐条规范映射、最小响应与展示消费表；取消没有现阶段用途的 IP/User-Agent/交互头等字段；明确测试历史复用、组件完整契约、未知响应校验、现有请求取消及服务故障门禁兼容；保留已同意的事务、异步、未来用户身份和恢复设计。
+当前工作区缺少上一轮方案文件，本次在 docs/plans 重新落盘并补充索引。相较此前方案：增加逐条规范映射、最小响应与展示消费表；取消没有现阶段用途的 IP/User-Agent/交互头等字段；明确测试历史复用、组件完整契约、未知响应校验及现有请求取消；保留已同意的事务、异步、未来用户身份和恢复设计。
 
 本轮只优化文档；未实施业务代码、迁移、认证、测试或构建。后续若需偏离上述已确认架构/失败策略、调整规范或增加其他兜底，必须先说明具体影响并按授权确认，不以已有代码代替规范依据。

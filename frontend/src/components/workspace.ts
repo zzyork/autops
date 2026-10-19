@@ -51,8 +51,7 @@ export function createWorkspace(router: Router) {
     const key = location.path
     const title = String(location.meta.title)
     const taskId = location.params.taskId
-    const label = location.params.hostId ? `${title} · 主机 ${String(location.params.hostId)}`
-      : location.name === 'inspection-record-detail' ? `${title} · ${String(taskId)}` : title
+    const label = location.name === 'inspection-record-detail' ? `${title} · ${String(taskId)}` : title
     const existing = tabs.value.find((tab) => tab.key === key)
     tabs.value = existing
       ? tabs.value.map((tab) => tab.key === key ? { ...tab, location, title: label } : tab)

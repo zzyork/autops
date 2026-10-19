@@ -12,7 +12,7 @@ from ..ai_models import AIConnection
 from .migrations.ai import migrate_ai
 from .migrations.ssh_connections import migrate_ssh_connections
 from .migrations.inspections import migrate_inspections
-from .migrations.operations import migrate_operations
+from .migrations.retired_features import migrate_retired_features
 
 
 def protect_key(path: Path) -> None:
@@ -58,10 +58,10 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
         connection.execute("PRAGMA foreign_keys=ON")
 
     try:
+        migrate_retired_features(engine)
         migrate_ssh_connections(engine)
         migrate_inspections(engine)
         migrate_ai(engine)
-        migrate_operations(engine)
         Base.metadata.create_all(engine)
         sessions = sessionmaker(engine)
         with engine.connect() as connection:
