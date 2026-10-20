@@ -67,7 +67,6 @@ onUnmounted(() => { active = false; request++ })
 
 <template>
     <main class="assets-main">
-      <div class="assets-heading"><h1>巡检规则</h1></div>
       <section v-loading="loading" class="host-section" aria-label="巡检规则">
         <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :loading="saving" :disabled="!loaded || loading" @click="saveRules">保存</ElButton><span class="inspection-muted">修改后点击保存生效；刷新会重新加载已保存的规则。</span></div><ElButton :loading="loading" :disabled="saving" @click="loadRules">刷新</ElButton></div>
         <fieldset v-if="loaded && draft" :disabled="loading || saving" class="inspection-rules-form" aria-label="编辑巡检规则">

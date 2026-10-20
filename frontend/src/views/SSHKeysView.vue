@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from "vue";
+import { onUnmounted, ref, useId, watch } from "vue";
 import {
   ElAlert,
   ElButton,
@@ -23,6 +23,8 @@ import {
   updateSSHKey,
 } from "@/api/ssh_keys";
 import { showSystemError } from "@/components/feedback";
+import FieldError from "@/components/FieldError.vue";
+import { focusFormFeedback } from "@/components/formFeedback";
 import ListPagination from "@/components/ListPagination.vue";
 import { useServerPagination } from "@/components/serverPagination";
 import type { SSHKey, SSHKeySummary, SSHKeyReferences, SSHKeyUpdateInput } from "@/types/api";
@@ -36,6 +38,8 @@ const opening = ref(false);
 const saving = ref(false);
 const dialog = ref(false);
 const dialogError = ref("");
+const formRoot = ref<HTMLElement | null>(null);
+const formId = useId();
 const editing = ref<SSHKey | null>(null);
 const form = ref({ name: "", remark: "", private_key: "", public_key: "" });
 const invalid = ref(false);
@@ -85,11 +89,13 @@ watch(search, () => {
 watch(
   () => form.value.name,
   () => {
+    if (invalid.value) dialogError.value = "";
     invalid.value = false;
   },
 );
 
 function clearPrivateKey(resetFileInput = true) {
+  if (privateInvalid.value && !invalid.value && !publicInvalid.value) dialogError.value = "";
   readId++;
   reading.value = false;
   form.value.private_key = "";
@@ -100,6 +106,7 @@ function clearPrivateKey(resetFileInput = true) {
 }
 
 function clearPublicKey(resetFileInput = true) {
+  if (publicInvalid.value && !invalid.value && !privateInvalid.value) dialogError.value = "";
   publicReadId++;
   publicReading.value = false;
   form.value.public_key = "";
@@ -129,6 +136,7 @@ watch(
 watch(
   () => form.value.private_key,
   () => {
+    if (privateInvalid.value && !invalid.value && !publicInvalid.value) dialogError.value = "";
     privateInvalid.value = false;
   },
   { flush: "sync" },
@@ -136,6 +144,7 @@ watch(
 watch(
   () => form.value.public_key,
   () => {
+    if (publicInvalid.value && !invalid.value && !privateInvalid.value) dialogError.value = "";
     publicInvalid.value = false;
   },
   { flush: "sync" },
@@ -313,10 +322,15 @@ async function selectPublicFile(event: Event) {
 
 async function save() {
   if (saving.value || reading.value || publicReading.value) return;
+  invalid.value = false;
+  privateInvalid.value = false;
+  publicInvalid.value = false;
+  dialogError.value = "";
   const name = form.value.name.trim();
   if (!name) {
     invalid.value = true;
     dialogError.value = "请输入密钥名称。";
+    focusFormFeedback(formRoot.value);
     return;
   }
   const previous = editing.value;
@@ -327,11 +341,13 @@ async function save() {
     if (!privateKey.trim() || (inputMode.value === "file" && !fileName.value)) {
       privateInvalid.value = true;
       dialogError.value = fileError.value || "请选择私钥文件或粘贴私钥内容。";
+      focusFormFeedback(formRoot.value);
       return;
     }
     if (new TextEncoder().encode(privateKey).byteLength > 64 * 1024) {
       privateInvalid.value = true;
       dialogError.value = "私钥内容不能超过 64 KiB。";
+      focusFormFeedback(formRoot.value);
       return;
     }
   }
@@ -343,11 +359,13 @@ async function save() {
       publicInvalid.value = true;
       dialogError.value =
         publicFileError.value || "请选择公钥文件或粘贴公钥内容。";
+      focusFormFeedback(formRoot.value);
       return;
     }
     if (new TextEncoder().encode(publicKeyContent).byteLength > 64 * 1024) {
       publicInvalid.value = true;
       dialogError.value = "公钥内容不能超过 64 KiB。";
+      focusFormFeedback(formRoot.value);
       return;
     }
   }
@@ -476,7 +494,6 @@ function dateLabel(value: string) {
 
 <template>
     <main class="assets-main">
-      <div class="assets-heading"><h1>SSH 密钥管理</h1></div>
       <section class="host-section" aria-label="SSH 密钥列表">
         <div class="host-toolbar">
           <ElButton type="primary" @click="openNew">新增密钥</ElButton>
@@ -532,7 +549,7 @@ function dateLabel(value: string) {
                 dateLabel(row.updated_at)
               }}</template></ElTableColumn
             >
-            <ElTableColumn label="操作" width="220" fixed="right"
+            <ElTableColumn label="操作" width="252" fixed="right"
               ><template #default="{ row }"
                 ><ElButton
                   link
@@ -546,7 +563,7 @@ function dateLabel(value: string) {
                   :disabled="opening"
                   @click="openEdit(row.id)"
                   >编辑</ElButton
-                ><span
+                ><span class="wrapped-action"
                   :title="
                     row.host_count || row.jump_host_count
                       ? '请先解除主机和跳板机的关联'
@@ -584,20 +601,23 @@ function dateLabel(value: string) {
       v-model="dialog"
       align-center
       :title="editing ? '编辑 SSH 密钥' : '新增 SSH 密钥'"
-      width="min(720px, 94vw)"
+      width="min(var(--ui-dialog-width), calc(100vw - 32px))"
       :close-on-click-modal="false"
       :close-on-press-escape="!saving"
       :show-close="!saving"
     >
-      <div class="asset-form">
-        <label class="field" :class="{ 'is-error': invalid }"
-          ><span>密钥名称 <em>*</em></span
+      <div ref="formRoot" class="asset-form">
+        <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
+        <div class="field" :class="{ 'is-error': invalid }"
+          ><label :for="`${formId}-name`">密钥名称 <em>*</em></label
           ><ElInput
+            :id="`${formId}-name`"
             v-model="form.name"
             maxlength="100"
             :disabled="saving || reading || publicReading"
             :aria-invalid="invalid ? 'true' : undefined"
-        /></label>
+            :aria-describedby="invalid ? `${formId}-name-error` : undefined"
+        /><FieldError :id="`${formId}-name-error`" :message="invalid ? dialogError : ''" /></div>
         <label class="field"
           ><span>备注</span
           ><ElInput
@@ -658,31 +678,32 @@ function dateLabel(value: string) {
             class="field"
             :class="{ 'is-error': privateInvalid }"
           >
-            <label for="ssh-private-file">私钥文件 <em>*</em></label
+            <label :for="`${formId}-private-file`">私钥文件 <em>*</em></label
             ><input
-              id="ssh-private-file"
+              :id="`${formId}-private-file`"
               ref="fileInput"
               type="file"
               class="ssh-file-input"
               :disabled="saving || reading || publicReading"
               :aria-invalid="privateInvalid ? 'true' : undefined"
+              :aria-describedby="privateInvalid ? `${formId}-private-error` : undefined"
               @change="selectFile"
             /><span v-if="reading" class="ssh-field-hint">读取中...</span
-            ><span v-if="fileError" class="ssh-field-error">{{
-              fileError
-            }}</span>
+            ><FieldError :id="`${formId}-private-error`" :message="privateInvalid ? fileError || dialogError : ''" />
           </div>
-          <label v-else class="field" :class="{ 'is-error': privateInvalid }"
-            ><span>私钥内容 <em>*</em></span
+          <div v-else class="field" :class="{ 'is-error': privateInvalid }"
+            ><label :for="`${formId}-private-text`">私钥内容 <em>*</em></label
             ><ElInput
+              :id="`${formId}-private-text`"
               v-model="form.private_key"
               type="textarea"
               :rows="7"
               :disabled="saving || reading || publicReading"
               autocomplete="off"
               :aria-invalid="privateInvalid ? 'true' : undefined"
+              :aria-describedby="privateInvalid ? `${formId}-private-error` : undefined"
               placeholder="粘贴 OpenSSH 或 PEM 私钥"
-          /></label>
+          /><FieldError :id="`${formId}-private-error`" :message="privateInvalid ? dialogError : ''" /></div>
           <div class="ssh-field-hint">
             仅支持无口令的 OpenSSH / PEM 私钥，最大 64 KiB。
           </div>
@@ -705,42 +726,36 @@ function dateLabel(value: string) {
             class="field"
             :class="{ 'is-error': publicInvalid }"
           >
-            <label for="ssh-public-file">公钥文件 <em>*</em></label
+            <label :for="`${formId}-public-file`">公钥文件 <em>*</em></label
             ><input
-              id="ssh-public-file"
+              :id="`${formId}-public-file`"
               ref="publicFileInput"
               type="file"
               class="ssh-file-input"
               :disabled="saving || reading || publicReading"
               :aria-invalid="publicInvalid ? 'true' : undefined"
+              :aria-describedby="publicInvalid ? `${formId}-public-error` : undefined"
               @change="selectPublicFile"
             /><span v-if="publicReading" class="ssh-field-hint">读取中...</span
-            ><span v-if="publicFileError" class="ssh-field-error">{{
-              publicFileError
-            }}</span>
+            ><FieldError :id="`${formId}-public-error`" :message="publicInvalid ? publicFileError || dialogError : ''" />
           </div>
-          <label v-else class="field" :class="{ 'is-error': publicInvalid }"
-            ><span>公钥内容 <em>*</em></span
+          <div v-else class="field" :class="{ 'is-error': publicInvalid }"
+            ><label :for="`${formId}-public-text`">公钥内容 <em>*</em></label
             ><ElInput
+              :id="`${formId}-public-text`"
               v-model="form.public_key"
               type="textarea"
               :rows="5"
               :disabled="saving || reading || publicReading"
               :aria-invalid="publicInvalid ? 'true' : undefined"
+              :aria-describedby="publicInvalid ? `${formId}-public-error` : undefined"
               placeholder="粘贴 OpenSSH .pub 或 PEM 公钥"
-          /></label>
+          /><FieldError :id="`${formId}-public-error`" :message="publicInvalid ? dialogError : ''" /></div>
           <div class="ssh-field-hint">
             支持 OpenSSH .pub 文本或 PEM 公钥，最大 64
             KiB。保存时校验公私钥匹配。
           </div>
         </template>
-        <ElAlert
-          v-if="dialogError"
-          :title="dialogError"
-          type="error"
-          :closable="false"
-          show-icon
-        />
       </div>
       <template #footer
         ><ElButton
@@ -761,7 +776,7 @@ function dateLabel(value: string) {
       v-model="publicDialog"
       align-center
       :title="`公钥：${publicName}`"
-      width="min(720px, 94vw)"
+      width="min(var(--ui-dialog-width), calc(100vw - 32px))"
     >
       <div v-loading="publicLoading" class="ssh-public-view">
         <template v-if="!publicLoading && !publicLoadFailed">
@@ -792,7 +807,7 @@ function dateLabel(value: string) {
       v-model="referencesDialog"
       align-center
       :title="`密钥引用：${referencesName}`"
-      width="min(440px, 92vw)"
+      width="min(var(--ui-confirm-width), calc(100vw - 32px))"
     >
       <div v-loading="referencesLoading" class="ssh-references">
         <template v-if="references"
@@ -829,6 +844,7 @@ function dateLabel(value: string) {
 </template>
 
 <style scoped>
+.wrapped-action { display: inline-block; margin-left: var(--ui-space-2); }
 .ssh-public-view {
   min-height: 90px;
 }

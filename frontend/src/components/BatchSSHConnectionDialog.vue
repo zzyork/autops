@@ -147,7 +147,7 @@ onUnmounted(reset)
 </script>
 
 <template>
-  <ElDialog :model-value="modelValue" title="批量测试连接" width="720px" align-center :close-on-click-modal="false" @update:model-value="emit('update:modelValue', $event)">
+  <ElDialog :model-value="modelValue" title="批量测试连接" width="min(var(--ui-dialog-width), calc(100vw - 32px))" align-center :close-on-click-modal="false" @update:model-value="emit('update:modelValue', $event)">
     <div class="batch-policy">
       <p class="batch-summary">本次范围：下列 {{ rows.length }} 台主机及其关联的 {{ jumpHostCount }} 台跳板机。</p>
       <p v-if="loadingScope" class="batch-summary">正在读取跳板机范围…</p>
@@ -169,11 +169,11 @@ onUnmounted(reset)
 </template>
 
 <style scoped>
-.batch-summary { margin: 0 0 16px; color: var(--ui-text-secondary); }
-.batch-test-status { display: inline-flex; align-items: center; gap: 8px; }
-.batch-policy { display: grid; gap: 8px; margin-bottom: 16px; }
+.batch-summary { margin: 0 0 var(--ui-space-4); color: var(--ui-text-secondary); }
+.batch-test-status { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
+.batch-policy { display: grid; gap: var(--ui-space-2); margin-bottom: var(--ui-space-4); }
 .batch-policy .batch-summary { margin: 0; }
-.batch-policy .el-button { justify-self: start; }
+.batch-policy .el-button { justify-self: start; margin-left: 0; }
 .batch-jump-hosts { max-height: 100px; overflow: auto; overflow-wrap: anywhere; }
-.batch-jump-hosts p { margin: 0 0 4px; color: var(--ui-text-secondary); }
+.batch-jump-hosts p { margin: 0 0 var(--ui-space-1); color: var(--ui-text-secondary); }
 </style>

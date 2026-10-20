@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
+import FieldError from '@/components/FieldError.vue'
+import { focusFormFeedback } from '@/components/formFeedback'
 import ListPagination from '@/components/ListPagination.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { createSession, decideProposal, deleteSession, getFeatureModels, getSession, listConnections, listSessionsPage, sendMessage } from '@/api/ai'
@@ -23,10 +25,13 @@ const detailLoaded = ref(false)
 const detailLoading = ref(false)
 const input = ref('')
 const inputError = ref('')
+const inputInvalid = ref(false)
 const streamingText = ref('')
 const sendingContent = ref('')
 const operation = ref<'create' | 'send' | 'decision' | 'delete' | null>(null)
 const conversation = ref<HTMLElement | null>(null)
+const composer = ref<HTMLElement | null>(null)
+const inputId = useId()
 const newChatConnection = computed(() => {
   if (!connectionsLoaded.value || !featureModels.value) return undefined
   return featureModels.value.chat_connection_id === null
@@ -88,6 +93,7 @@ function select(id: string) {
   detail.value = null
   input.value = ''
   inputError.value = ''
+  inputInvalid.value = false
   void loadDetail(id)
 }
 function newChat() {
@@ -102,6 +108,7 @@ function newChat() {
   detailLoading.value = false
   input.value = ''
   inputError.value = ''
+  inputInvalid.value = false
   void loadConnections()
 }
 async function send() {
@@ -109,9 +116,12 @@ async function send() {
   if (operation.value || (selectedId.value ? !detailLoaded.value : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value)) return
   if (!content || content.length > MAX_MESSAGE_LENGTH) {
     inputError.value = `消息须填写且不超过 ${MAX_MESSAGE_LENGTH} 字符。`
+    inputInvalid.value = true
+    focusFormFeedback(composer.value)
     return
   }
   inputError.value = ''
+  inputInvalid.value = false
   operation.value = selectedId.value ? 'send' : 'create'
   sendingContent.value = content
   streamingText.value = ''
@@ -242,7 +252,7 @@ onUnmounted(() => {
               <p v-else class="ai-placeholder">开始对话</p>
             </template>
           </div>
-           <div class="ai-composer"><label for="chat-input">消息</label><ElInput id="chat-input" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="!!inputError" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable)" placeholder="输入运维问题" @input="inputError = ''" @keydown.ctrl.enter.prevent="send" /><p v-if="inputError" class="ssh-field-error" role="alert">{{ inputError }}</p><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable) || !input.trim()" @click="send">发送</ElButton></div></div>
+           <div ref="composer" class="ai-composer"><label :for="inputId">消息</label><ElInput :id="inputId" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="inputInvalid" :aria-describedby="inputError ? `${inputId}-error` : undefined" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable)" placeholder="输入运维问题" @input="inputError = ''; inputInvalid = false" @keydown.ctrl.enter.prevent="send" /><FieldError v-if="inputError" :id="`${inputId}-error`" :message="inputError" /><div class="ai-composer-actions"><span class="inspection-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable) || !input.trim()" @click="send">发送</ElButton></div></div>
         </section>
       </div>
     </main>

@@ -93,7 +93,7 @@ async function startTest() {
 </script>
 
 <template>
-  <ElDialog :model-value="modelValue" align-center :title="`SSH 连接测试：${target?.name ?? ''}`" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!submitting && !trusting" :show-close="!submitting && !trusting" @update:model-value="updateVisible">
+  <ElDialog :model-value="modelValue" align-center :title="`SSH 连接测试：${target?.name ?? ''}`" width="min(var(--ui-confirm-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!submitting && !trusting" :show-close="!submitting && !trusting" @update:model-value="updateVisible">
     <div class="ssh-test-dialog">
       <ElButton type="primary" :loading="submitting" :disabled="!target || trusting" @click="startTest">开始测试</ElButton>
       <span v-if="requestFailed" class="ssh-test-status"><TestStatus :status="SSH_RESULT_UNAVAILABLE.status" :description="SSH_RESULT_UNAVAILABLE.description" />{{ SSH_RESULT_UNAVAILABLE.label }}</span>
@@ -109,8 +109,8 @@ async function startTest() {
 </template>
 
 <style scoped>
-.ssh-test-dialog { display: grid; justify-items: start; gap: 16px; min-height: 80px; }
-.ssh-test-result { display: grid; justify-items: start; gap: 12px; width: 100%; border-top: 1px solid var(--ui-border); padding-top: 16px; }
-.ssh-test-result h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
-.ssh-test-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; }
+.ssh-test-dialog { display: grid; justify-items: start; gap: var(--ui-space-4); min-height: 80px; }
+.ssh-test-result { display: grid; justify-items: start; gap: var(--ui-space-3); width: 100%; border-top: 1px solid var(--ui-border); padding-top: var(--ui-space-4); }
+.ssh-test-result h2 { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); }
+.ssh-test-status { display: inline-flex; align-items: center; gap: var(--ui-space-2); font-size: var(--ui-font-size-base); font-weight: 400; }
 </style>

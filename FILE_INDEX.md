@@ -31,7 +31,7 @@
 | `backend/app/schemas/` | 接口数据模型。 |
 | `docs/` | 项目文档、三份核心及三份补充规范、接入/初始化/来源参考和本项目合并记录。最后同步：2026-10-19。 |
 | `docs/templates/` | 统一维护需求、开发任务、架构决策、缺陷及合并请求模板。最后同步：2026-10-19。 |
-| `profiles/` | 项目配置明确启用的 Vue、FastAPI 技术栈专项与按既有前端规范填写的 UI 专项。最后同步：2026-10-19。 |
+| `profiles/` | 项目配置明确启用的 Vue、FastAPI 技术栈专项及本项目紧凑桌面 UI 专项。最后同步：2026-10-20。 |
 | `frontend/` | Vue、TypeScript、Vite 前端项目。 |
 | `docs/plans/` | 执行中的功能设计、接口契约和实施方案；对应方案完成后删除，方案文件不加入索引。最后同步：2026-10-19。 |
 | `frontend/src/` | 前端应用源码。 |
@@ -77,7 +77,7 @@
 | 路径 | 用途 |
 | --- | --- |
 | `docs/AI-奥卡姆剃刀开发规范.md` | 基于出版论文及工程指南的跨端简约设计约束，定义必要复杂度、合理冗余、拆分合并、Agent 决策流程、审核清单及文献历史适用边界。最后同步：2026-10-19。 |
-| `docs/AI-前端开发约束规范.md` | 保留本项目完整前端与 UI 权威约束，补充通用规范的写入未知结果、秘密边界与专项导航。最后同步：2026-10-19。 |
+| `docs/AI-前端开发约束规范.md` | 通用前端、状态和可访问性约束；本项目已采用的 UI 数值与交互见已启用 UI 专项。最后同步：2026-10-20。 |
 | `docs/AI-后端开发约束规范.md` | AI 后端分层、FastAPI 生命周期、接口、事务、迁移、有界任务、安全与验证约束。最后同步：2026-10-19。 |
 | `docs/AI-工程治理与需求规范.md` | 完整规范导航、用语与冲突处理、需求验收、架构决策、依赖准入和文档生命周期；真实基线引用项目配置。最后同步：2026-10-19。 |
 | `docs/AI-接口与安全规范.md` | API 契约、SSE 与下载、访问边界、外部调用、敏感数据和风险验证。最后同步：2026-10-19。 |
@@ -94,17 +94,17 @@
 | `docs/templates/架构决策记录模板.md` | 长期架构决定、候选方案、成本、维护、恢复和复审模板。最后同步：2026-10-19。 |
 | `docs/templates/缺陷报告模板.md` | 脱敏证据、复现、根因与本地回归验收模板。最后同步：2026-10-19。 |
 | `docs/templates/合并请求模板.md` | 唯一通用变更说明、实际验证、兼容风险与暂存区自检模板。最后同步：2026-10-19。 |
-| `docs/前端样式推荐表.md` | 常见前端组件的尺寸、间距、排版、状态与无障碍选型参考，区分官方值和候选建议，不自动启用为项目规范 |
+| `docs/前端样式推荐表.md` | 组件样式候选参考；仅 UI 专项登记的紧凑规则已采用，其余不自动启用。最后同步：2026-10-20。 |
 
 ## 技术栈与界面专项
 
-文件存在不等于启用，具体范围以 `项目配置.md` 为准。以下条目最后同步：2026-10-19。
+文件存在不等于启用，具体范围以 `项目配置.md` 为准。未单列日期的条目最后同步：2026-10-19。
 
 | 路径 | 用途 |
 | --- | --- |
 | `profiles/Vue3前端技术栈规范.md` | 已启用的 Vue、TypeScript、Vite、Element Plus 类型、状态、生命周期、请求和验证约束。 |
 | `profiles/FastAPI技术栈规范.md` | 已启用的 FastAPI 路由、模型、依赖、事务、I/O、资源和契约约束。 |
-| `profiles/UI规范样板.md` | 按本项目已有规范填写的 UI 基线、变量映射、组件编号、页面组合和扩展模板；具体数值仍引用前端规范附录。 |
+| `profiles/UI规范样板.md` | 已采用的桌面紧凑 UI 数值、变量、状态、现有组件及页面组合的唯一权威登记；未填写候选仍未启用。最后同步：2026-10-20。 |
 
 ## AI 编程技能与入口
 
@@ -233,25 +233,27 @@
 | `frontend/src/types/ai.ts` | 模型能力、会话消息状态及巡检计划类型。最后同步：2026-10-12。 |
 | `frontend/src/components/ChatProposalCard.vue` | 待确认时显示计划执行范围并发出确认或拒绝事件，决策后仅保留名称和状态。最后同步：2026-10-14。 |
 | `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务与 AI 报告状态，展示执行摘要及本次报告、巡检记录的工作区跳转入口。最后同步：2026-10-14。 |
-| `frontend/src/components/DisclosurePanel.vue` | 单项详情共用展开入口，接收名称、可选上下文、双向展开状态与内容插槽，使用中性描边按钮、左侧状态箭头和唯一内容关联；按需挂载详情。最后同步：2026-10-14。 |
-| `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入。最后同步：2026-10-12。 |
+| `frontend/src/components/DisclosurePanel.vue` | 单项详情共用展开入口，支持键盘与焦点回退，紧凑箭头和入口间距；唯一内容关联、按需挂载。最后同步：2026-10-20。 |
+| `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入，复用字段错误提示和无效字段定位。最后同步：2026-10-20。 |
 | `frontend/src/components/FeatureModelsForm.vue` | 独立功能模型表单，接收连接列表及加载状态，读取和保存对话、巡检汇报模型并发出配置状态事件。最后同步：2026-10-14。 |
-| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、首次发送自动使用主模型创建会话、流式输入输出和计划决策。最后同步：2026-10-12。 |
+| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、流式输入输出和计划决策；输入错误复用字段提示与定位。最后同步：2026-10-20。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |
-| `frontend/src/styles/ai.css` | 复用控制台主题的对话、模型配置和任务卡片样式。最后同步：2026-10-12。 |
-| `frontend/src/components/SSHConnectionDialog.vue` | 单台连接测试，仅展示本次结果，身份阻断接入独立确认并发出状态变更事件。最后同步：2026-10-15。 |
-| `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量范围、逐身份显式确认、有界同步测试及停止后续提交；输入所选主机，展示本次结果并发出状态变更事件。最后同步：2026-10-15。 |
+| `frontend/src/styles/ai.css` | 紧凑对话会话区、模型配置字段错误和任务卡片样式，复用控制台变量。最后同步：2026-10-20。 |
+| `frontend/src/components/SSHConnectionDialog.vue` | 单台连接测试，紧凑弹窗内仅展示本次结果，身份阻断接入独立确认并发出状态变更事件。最后同步：2026-10-20。 |
+| `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量范围、逐身份显式确认、有界同步测试及停止后续提交；输入所选主机，在紧凑弹窗展示本次结果。最后同步：2026-10-20。 |
 | `frontend/src/components/HostSSHStatus.vue` | 纯展示主机记录中的连接状态，复用统一测试图标，无额外请求及轮询。最后同步：2026-10-15。 |
-| `frontend/src/components/TestStatus.vue` | 各类测试共用圆形状态图标、语义颜色、tooltip 与键盘焦点，接收状态、说明及可聚焦选项。最后同步：2026-10-13。 |
+| `frontend/src/components/TestStatus.vue` | 测试共用状态图标、语义颜色、tooltip 与键盘焦点，紧凑热区展示状态说明。最后同步：2026-10-20。 |
 | `frontend/src/components/sshTestDisplay.ts` | 主机列表、单台与批量 SSH 测试共用状态映射及提示文案。最后同步：2026-10-13。 |
 | `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单与本地校验。最后同步：2026-10-12。 |
-| `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交。最后同步：2026-10-12。 |
+| `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单，本地逐字段校验、提示与渲染后聚焦。最后同步：2026-10-20。 |
+| `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交；字段错误和选择组错误定位。最后同步：2026-10-20。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机概览、可折叠检查结果与风险、报告导出展示；详情不展示配置。最后同步：2026-10-12。 |
 | `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
-| `frontend/src/components/feedback.ts` | 共用消息提示。 |
-| `frontend/src/components/ListPagination.vue` | 共用列表分页控件，接收总数、加载可用状态及紧凑布局选项，双向绑定页码与每页数量，统一提供 10、20、50、100 条选择。最后同步：2026-10-15。 |
+| `frontend/src/components/feedback.ts` | 共用请求错误和导航阻断消息；请求错误置顶偏移、时长、取消忽略与同时去重。最后同步：2026-10-20。 |
+| `frontend/src/components/FieldError.vue` | 共用字段级错误图标和文字，按消息显示带 ID 的告警提示，复用紧凑错误样式。最后同步：2026-10-20。 |
+| `frontend/src/components/formFeedback.ts` | 共用表单首错与关联提示滚动/聚焦工具，及 Select、InputNumber 原生输入的 ARIA 属性同步指令。最后同步：2026-10-20。 |
+| `frontend/src/components/ListPagination.vue` | 共用列表分页控件，紧凑页码 28 与可换行布局，双向绑定页码/页长及 10、20、50、100 条选项。最后同步：2026-10-20。 |
 | `frontend/src/components/pagination.ts` | 共用分页数量配置与本地数组分页逻辑，维护当前页、数量切换重置及数据减少后的页码校正。最后同步：2026-10-13。 |
 | `frontend/src/components/serverPagination.ts` | 六类管理列表共用后端分页状态与请求，处理请求失效、页长重置及末页校正。最后同步：2026-10-14。 |
 | `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-20。 |
@@ -261,22 +263,22 @@
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
 | `frontend/src/router/index.ts` | 对话、配置、资产和巡检页面路由。最后同步：2026-10-20。 |
-| `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
-| `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含主机选择工具栏、导航选中态和分组表格样式。最后同步：2026-10-20。 |
-| `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
+| `frontend/src/styles/main.css` | 紧凑排版、尺寸、间距和颜色变量及 Element Plus 映射，统一按钮、输入、表格、浮层、焦点和减少动态效果。最后同步：2026-10-20。 |
+| `frontend/src/styles/assets.css` | 控制台顶栏/侧栏/标签栏及资产列表、工具栏、表单与宽表的紧凑布局。最后同步：2026-10-20。 |
+| `frontend/src/styles/inspections.css` | 巡检选择/配置、任务详情与证据列表的紧凑间距、错误态和长内容布局。最后同步：2026-10-20。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
 | `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |
-| `frontend/src/views/HostsView.vue` | 主机管理、当前页全选、跳板机关联选择及单台/批量连接测试，批量入口仅在多选后显示。最后同步：2026-10-20。 |
-| `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
-| `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
-| `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |
+| `frontend/src/views/HostsView.vue` | 主机管理、工具栏全选与单台/多台连接测试，新增编辑表单复用字段错误和焦点定位。最后同步：2026-10-20。 |
+| `frontend/src/views/HostGroupsView.vue` | 分组列表、主机计数和分组增删改；紧凑表单复用字段错误定位。最后同步：2026-10-20。 |
+| `frontend/src/views/JumpHostsView.vue` | 跳板机管理与 SSH 连接测试，新增编辑表单复用字段错误定位。最后同步：2026-10-20。 |
+| `frontend/src/views/SSHKeysView.vue` | SSH 密钥管理与文件/文本输入，本地字段错误、长表单定位及危险确认。最后同步：2026-10-20。 |
 | `frontend/src/views/InspectionsView.vue` | 独立巡检任务页面，提供创建、任务进度与记录跳转。最后同步：2026-10-12。 |
 | `frontend/src/views/InspectionRecordsView.vue` | 独立巡检记录入口，默认历史列表，选择记录后展示任务概览、AI 汇报和主机详情入口。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRecordDetailView.vue` | 独立服务器巡检记录详情页面，通过任务路由参数读取、轮询并复用主机检查详情与报告导出；提供返回记录入口。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionRecordSummary.vue` | 巡检记录概览，接收任务详情，展示全任务严重/警告统计及详情跳转，复用状态与时间显示映射。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionAnalysisReport.vue` | 经巡检 API 层生成、读取及轮询报告，展示巡检风险和精简错误分析，向问题组件传递日志证据并导出完整原文，兼容旧报告。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionAnalysisEvidence.vue` | 接收报告证据与可选编号筛选，展示原文和来源表/结果行位置，复用 10/20/50 条分页，发出清除筛选事件；可复用于巡检报告证据查看。最后同步：2026-10-13。 |
-| `frontend/src/components/InspectionAnalysisIssue.vue` | 接收问题、主机说明与日志证据，展示等级、名称、影响主机、原因和建议，折叠分页展示具体报错、主机、可用路径及时间次数。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionAnalysisEvidence.vue` | 证据原文/来源与筛选分页展示，紧凑控制和长内容布局；支持清除筛选。最后同步：2026-10-20。 |
+| `frontend/src/components/InspectionAnalysisIssue.vue` | 问题等级、主机与原因建议展示，紧凑折叠分页呈现报错及时间次数。最后同步：2026-10-20。 |
 | `frontend/src/components/inspectionAnalysisDisplay.ts` | 报告与问题组件共用的严重程度映射、诊断信息读取及新旧分段日志证据的具体报错详情转换。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，展示检查项、当前阈值、时限与服务判定，并编辑保存规则。最后同步：2026-10-12。 |
 | `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表；历史页默认终态分页列表，点击后仅显示记录概览与 AI 汇报，支持返回列表、删除和活跃执行轮询。最后同步：2026-10-13。 |
@@ -291,4 +293,4 @@
 | `frontend/src/types/sshIdentity.ts` | 身份目标、挑战、检查结果及取消边界类型。最后同步：2026-10-14。 |
 | `frontend/src/api/ssh_identities.ts` | 独立身份接口调用与响应验证。最后同步：2026-10-14。 |
 | `frontend/src/api/sshIdentity.ts` | 跨入口身份检查队列、确认桥接、取消与本次任务识别，不缓存信任状态。最后同步：2026-10-14。 |
-| `frontend/src/components/SSHIdentityDialog.vue` | 全应用共用身份询问弹窗，显示服务器及新旧指纹，显式确认或取消。最后同步：2026-10-14。 |
+| `frontend/src/components/SSHIdentityDialog.vue` | 全应用共用身份询问弹窗，紧凑显示服务器及新旧指纹，显式确认或取消。最后同步：2026-10-20。 |

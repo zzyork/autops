@@ -113,7 +113,6 @@ onUnmounted(() => { active = false; allSequence++ })
 
 <template>
     <main class="assets-main">
-      <div class="assets-heading"><h1>模型配置</h1></div>
       <section class="host-section" aria-label="模型连接">
         <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading || allLoading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
         <div v-loading="loading" class="host-table-wrap">

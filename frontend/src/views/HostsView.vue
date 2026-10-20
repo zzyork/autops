@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
   ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
@@ -11,6 +11,8 @@ import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
+import FieldError from '@/components/FieldError.vue'
+import { focusFormFeedback, vNativeFieldAria } from '@/components/formFeedback'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
@@ -48,6 +50,8 @@ const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
 const groupsLoadFailed = ref(false)
 const dialogError = ref('')
+const formRoot = ref<HTMLElement | null>(null)
+const formId = useId()
 const saving = ref(false)
 const openingHost = ref(false)
 const hostDialog = ref(false)
@@ -74,6 +78,7 @@ function startBatchTest() {
 }
 const editingHost = ref<Host | null>(null)
 const hostInvalidFields = ref<Set<keyof HostForm>>(new Set())
+const missingRequiredFields = ref(false)
 const hostAuthChanged = ref(false)
 
 function emptyHost(groupId: number | null): HostForm {
@@ -88,9 +93,24 @@ watch(() => ({ ...hostForm.value }), (next, previous) => {
   for (const key of Object.keys(next) as (keyof HostForm)[]) {
     if (next[key] !== previous[key]) hostInvalidFields.value.delete(key)
   }
+  if (!hostInvalidFields.value.size) dialogError.value = ''
 }, { flush: 'sync' })
+function fieldMessage(field: keyof HostForm): string {
+  if (!hostInvalidFields.value.has(field) || !dialogError.value) return ''
+  if (missingRequiredFields.value) {
+    return field === 'name' ? '请填写主机名称。' : field === 'address' ? '请填写地址。' : '请填写用户名。'
+  }
+  return dialogError.value
+}
+function showHostValidation(message: string) {
+  dialogError.value = message
+  focusFormFeedback(formRoot.value)
+}
 watch(() => hostForm.value.auth_type, (next, previous) => {
   if (hostDialog.value && next !== previous) {
+    hostInvalidFields.value.delete('password')
+    hostInvalidFields.value.delete('ssh_key_id')
+    if (!hostInvalidFields.value.size) dialogError.value = ''
     hostAuthChanged.value = true
     hostForm.value.password = ''
     hostForm.value.ssh_key_id = null
@@ -230,7 +250,9 @@ function isIpAddress(value: string): boolean {
 function validateHost(): string | false {
   const form = hostForm.value
   hostInvalidFields.value.clear()
+  missingRequiredFields.value = false
   if (!form.name.trim() || !form.address.trim() || !form.username.trim()) {
+    missingRequiredFields.value = true
     if (!form.name.trim()) hostInvalidFields.value.add('name')
     if (!form.address.trim()) hostInvalidFields.value.add('address')
     if (!form.username.trim()) hostInvalidFields.value.add('username')
@@ -283,13 +305,15 @@ function validateHost(): string | false {
 async function saveHost() {
   const groupId = hostForm.value.group_id
   if (groupId === '' || !Number.isInteger(groupId) || groupId <= 0) {
+    hostInvalidFields.value.clear()
+    missingRequiredFields.value = false
     hostInvalidFields.value.add('group_id')
-    dialogError.value = '请选择所属分组。'
+    showHostValidation('请选择所属分组。')
     return
   }
   const validation = validateHost()
   if (validation === false) { dialogError.value = ''; showSystemError(); return }
-  if (validation) { dialogError.value = validation; return }
+  if (validation) { showHostValidation(validation); return }
   const form = hostForm.value
   const previous = editingHost.value
   const body: HostInput = {
@@ -352,7 +376,6 @@ function dateLabel(value: string) {
 
 <template>
     <main class="assets-main">
-      <div class="assets-heading"><h1>主机管理</h1></div>
       <ElAlert v-if="!groupsLoading && !groupsLoadFailed && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
@@ -386,7 +409,7 @@ function dateLabel(value: string) {
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
-              <ElTableColumn label="操作" width="300" fixed="right">
+              <ElTableColumn label="操作" width="344" fixed="right">
                 <template #default="{ row }">
                   <ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton>
                   <ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton>
@@ -404,19 +427,27 @@ function dateLabel(value: string) {
 
     <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
-    <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(720px, 94vw)" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div class="asset-form host-form">
-        <div class="form-section-title">基本信息</div>
-        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><span>主机名称 <em>*</em></span><ElInput v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="hostForm.address" placeholder="IPv4 或 IPv6 地址" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><span>所属分组 <em>*</em></span><ElSelect v-model="hostForm.group_id" placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect></label><label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label></div>
-        <div class="form-section-title">登录信息</div>
-        <div class="field-grid"><label class="field" :class="{ 'is-error': hostInvalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="hostForm.username" autocomplete="off" :aria-invalid="hostInvalidFields.has('username') ? 'true' : undefined" /></label><label class="field" :class="{ 'is-error': hostInvalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="hostForm.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('port') ? 'true' : undefined" /></label></div>
+     <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+       <div ref="formRoot" class="asset-form host-form">
+         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
+         <div class="form-section-title">基本信息</div>
+         <div class="field-grid">
+           <div class="field" :class="{ 'is-error': hostInvalidFields.has('name') }"><label :for="`${formId}-name`">主机名称 <em>*</em></label><ElInput :id="`${formId}-name`" v-model="hostForm.name" placeholder="例：生产主机 01" :aria-invalid="hostInvalidFields.has('name') ? 'true' : undefined" :aria-describedby="fieldMessage('name') ? `${formId}-name-error` : undefined" /><FieldError :id="`${formId}-name-error`" :message="fieldMessage('name')" /></div>
+           <div class="field" :class="{ 'is-error': hostInvalidFields.has('address') }"><label :for="`${formId}-address`">地址 <em>*</em></label><ElInput :id="`${formId}-address`" v-model="hostForm.address" placeholder="IPv4 或 IPv6 地址" :aria-invalid="hostInvalidFields.has('address') ? 'true' : undefined" :aria-describedby="fieldMessage('address') ? `${formId}-address-error` : undefined" /><FieldError :id="`${formId}-address-error`" :message="fieldMessage('address')" /></div>
+            <div class="field" :class="{ 'is-error': hostInvalidFields.has('group_id') }"><label :for="`${formId}-group`">所属分组 <em>*</em></label><ElSelect :id="`${formId}-group`" v-model="hostForm.group_id" v-native-field-aria placeholder="请选择分组" class="full-width" :aria-invalid="hostInvalidFields.has('group_id') ? 'true' : undefined" :aria-describedby="fieldMessage('group_id') ? `${formId}-group-error` : undefined"><ElOption v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" /></ElSelect><FieldError :id="`${formId}-group-error`" :message="fieldMessage('group_id')" /></div>
+           <label class="field"><span>虚拟 IP（VIP）</span><ElInput v-model="hostForm.vip" placeholder="可选" /></label>
+         </div>
+         <div class="form-section-title">登录信息</div>
+         <div class="field-grid">
+           <div class="field" :class="{ 'is-error': hostInvalidFields.has('username') }"><label :for="`${formId}-username`">用户名 <em>*</em></label><ElInput :id="`${formId}-username`" v-model="hostForm.username" autocomplete="off" :aria-invalid="hostInvalidFields.has('username') ? 'true' : undefined" :aria-describedby="fieldMessage('username') ? `${formId}-username-error` : undefined" /><FieldError :id="`${formId}-username-error`" :message="fieldMessage('username')" /></div>
+            <div class="field" :class="{ 'is-error': hostInvalidFields.has('port') }"><label :for="`${formId}-port`">端口 <em>*</em></label><ElInputNumber :id="`${formId}-port`" v-model="hostForm.port" v-native-field-aria :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="hostInvalidFields.has('port') ? 'true' : undefined" :aria-describedby="fieldMessage('port') ? `${formId}-port-error` : undefined" /><FieldError :id="`${formId}-port-error`" :message="fieldMessage('port')" /></div>
+         </div>
         <div class="field"><span>认证方式</span><ElRadioGroup v-model="hostForm.auth_type" aria-label="主机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
-        <label v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><span>密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></span><ElInput v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" /></label>
-        <template v-else><label class="field" :class="{ 'is-error': hostInvalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="hostForm.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="hostInvalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editingHost?.auth_type === 'key' && editingHost.ssh_key_id === null && hostForm.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
-        <div class="form-section-title">跳板机</div>
-        <label class="field" :class="{ 'is-error': hostInvalidFields.has('jump_host_id') }"><span>关联跳板机</span><ElSelect v-model="hostForm.jump_host_id" clearable :value-on-clear="null" :disabled="jumpHostsLoading || !jumpHostsLoaded" placeholder="不使用跳板机" class="full-width" :aria-invalid="hostInvalidFields.has('jump_host_id') ? 'true' : undefined"><ElOption v-for="jumpHost in jumpHosts" :key="jumpHost.id" :label="`${jumpHost.name} · ${jumpHost.address}`" :value="jumpHost.id" /></ElSelect></label>
-        <label class="field"><span>备注</span><ElInput v-model="hostForm.remark" type="textarea" :rows="3" placeholder="可选" /></label>
-        <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
+         <div v-if="hostForm.auth_type === 'password'" class="field" :class="{ 'is-error': hostInvalidFields.has('password') }"><label :for="`${formId}-password`">密码 <em v-if="!editingHost || editingHost.auth_type !== 'password' || !editingHost.has_password || hostAuthChanged">*</em></label><ElInput :id="`${formId}-password`" v-model="hostForm.password" type="password" show-password autocomplete="new-password" :placeholder="editingHost?.auth_type === 'password' && editingHost.has_password && !hostAuthChanged ? '留空保留原密码' : '请输入密码'" :aria-invalid="hostInvalidFields.has('password') ? 'true' : undefined" :aria-describedby="fieldMessage('password') ? `${formId}-password-error` : undefined" /><FieldError :id="`${formId}-password-error`" :message="fieldMessage('password')" /></div>
+          <template v-else><div class="field" :class="{ 'is-error': hostInvalidFields.has('ssh_key_id') }"><label :for="`${formId}-key`">SSH 密钥 <em>*</em></label><ElSelect :id="`${formId}-key`" v-model="hostForm.ssh_key_id" v-native-field-aria :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="hostInvalidFields.has('ssh_key_id') ? 'true' : undefined" :aria-describedby="fieldMessage('ssh_key_id') ? `${formId}-key-error` : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect><FieldError :id="`${formId}-key-error`" :message="fieldMessage('ssh_key_id')" /></div><ElAlert v-if="editingHost?.auth_type === 'key' && editingHost.ssh_key_id === null && hostForm.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
+         <div class="form-section-title">跳板机</div>
+          <div class="field" :class="{ 'is-error': hostInvalidFields.has('jump_host_id') }"><label :for="`${formId}-jump`">关联跳板机</label><ElSelect :id="`${formId}-jump`" v-model="hostForm.jump_host_id" v-native-field-aria clearable :value-on-clear="null" :disabled="jumpHostsLoading || !jumpHostsLoaded" placeholder="不使用跳板机" class="full-width" :aria-invalid="hostInvalidFields.has('jump_host_id') ? 'true' : undefined" :aria-describedby="fieldMessage('jump_host_id') ? `${formId}-jump-error` : undefined"><ElOption v-for="jumpHost in jumpHosts" :key="jumpHost.id" :label="`${jumpHost.name} · ${jumpHost.address}`" :value="jumpHost.id" /></ElSelect><FieldError :id="`${formId}-jump-error`" :message="fieldMessage('jump_host_id')" /></div>
+         <label class="field"><span>备注</span><ElInput v-model="hostForm.remark" type="textarea" :rows="3" placeholder="可选" /></label>
       </div>
       <template #footer><ElButton :disabled="saving" @click="hostDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveHost">保存</ElButton></template>
     </ElDialog>

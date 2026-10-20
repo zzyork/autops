@@ -31,9 +31,9 @@ withDefaults(defineProps<{ status: TestStatus; description: string; focusable?: 
 </template>
 
 <style scoped>
-.test-status { display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px; vertical-align: middle; }
-.test-status svg { width: 100%; height: 100%; }
-.test-status text { font-size: 13px; font-weight: 600; }
+.test-status { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 var(--ui-inline-control-height); width: var(--ui-inline-control-height); height: var(--ui-inline-control-height); vertical-align: middle; }
+.test-status svg { width: 18px; height: 18px; }
+.test-status text { font-size: var(--ui-font-size-code); font-weight: 600; }
 .test-status.is-untested, .test-status.is-unavailable { color: var(--ui-text-muted); }
 .test-status.is-pending { color: var(--ui-info); }
 .test-status.is-passed { color: var(--ui-success); }

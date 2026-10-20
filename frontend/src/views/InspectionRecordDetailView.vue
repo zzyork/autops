@@ -56,7 +56,6 @@ onUnmounted(() => {
 <template>
     <main class="assets-main">
       <div class="assets-heading inspection-section-heading">
-        <h1>巡检记录详情</h1>
         <ElButton @click="router.push({ path: '/inspections/records', query: { task: route.params.taskId } })">返回巡检记录</ElButton>
       </div>
       <section v-loading="loading" class="host-section inspection-record-detail" aria-label="服务器巡检记录">

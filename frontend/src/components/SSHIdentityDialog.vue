@@ -66,7 +66,7 @@ onUnmounted(() => { unregister(); settle(new RequestCancelledError()) })
 </script>
 
 <template>
-  <ElDialog :model-value="challenge !== null" title="确认服务器身份" width="min(540px, 94vw)" align-center append-to-body :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!$event && cancel()" @closed="closing && settle(closingError)">
+  <ElDialog :model-value="challenge !== null" title="确认服务器身份" width="min(var(--ui-confirm-width), calc(100vw - 32px))" align-center append-to-body :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="!$event && cancel()" @closed="closing && settle(closingError)">
     <div v-if="challenge" class="ssh-identity-content">
       <ElAlert :title="challenge.previous_fingerprint === null ? '此服务器尚未信任，是否信任该身份？' : '服务器指纹已改变，是否信任新身份？'" type="warning" :closable="false" show-icon />
       <dl class="ssh-identity-details">
@@ -83,9 +83,9 @@ onUnmounted(() => { unregister(); settle(new RequestCancelledError()) })
 </template>
 
 <style scoped>
-.ssh-identity-content { display: grid; gap: 16px; }
+.ssh-identity-content { display: grid; gap: var(--ui-space-4); }
 .ssh-identity-content p { margin: 0; }
-.ssh-identity-details { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; margin: 0; }
+.ssh-identity-details { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: var(--ui-space-2); margin: 0; }
 .ssh-identity-details dt { color: var(--ui-text-secondary); }
 .ssh-identity-details dd { margin: 0; overflow-wrap: anywhere; }
 .ssh-identity-content .el-checkbox { height: auto; white-space: normal; }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { onUnmounted, ref, useId, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessageBox,
   ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
@@ -8,6 +8,8 @@ import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHostsPage, updateJ
 import { listSSHKeys } from '@/api/ssh_keys'
 import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
+import FieldError from '@/components/FieldError.vue'
+import { focusFormFeedback, vNativeFieldAria } from '@/components/formFeedback'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
@@ -34,21 +36,35 @@ const opening = ref(false)
 const saving = ref(false)
 const localError = ref('')
 const dialogError = ref('')
+const formRoot = ref<HTMLElement | null>(null)
+const formId = useId()
 const dialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
 const editing = ref<JumpHost | null>(null)
 const authChanged = ref(false)
 const invalidFields = ref<Set<keyof JumpHostForm>>(new Set())
+const missingRequiredFields = ref(false)
+function fieldMessage(field: keyof JumpHostForm): string {
+  if (!invalidFields.value.has(field) || !dialogError.value) return ''
+  if (missingRequiredFields.value) {
+    return field === 'name' ? '请填写跳板机名称。' : field === 'address' ? '请填写地址。' : '请填写用户名。'
+  }
+  return dialogError.value
+}
 const form = ref<JumpHostForm>({ name: '', address: '', username: '', port: 22, auth_type: 'password', ssh_key_id: null, password: '', remark: '' })
 
 watch(() => ({ ...form.value }), (next, previous) => {
   for (const key of Object.keys(next) as (keyof JumpHostForm)[]) {
     if (next[key] !== previous[key]) invalidFields.value.delete(key)
   }
+  if (!invalidFields.value.size) dialogError.value = ''
 }, { flush: 'sync' })
 watch(() => form.value.auth_type, (next, previous) => {
   if (dialog.value && next !== previous) {
+    invalidFields.value.delete('password')
+    invalidFields.value.delete('ssh_key_id')
+    if (!invalidFields.value.size) dialogError.value = ''
     authChanged.value = true
     form.value.password = ''
     form.value.ssh_key_id = null
@@ -126,7 +142,9 @@ async function openEdit(id: number) {
 function validate(): string | false {
   const value = form.value
   invalidFields.value.clear()
+  missingRequiredFields.value = false
   if (!value.name.trim() || !value.address.trim() || !value.username.trim()) {
+    missingRequiredFields.value = true
     if (!value.name.trim()) invalidFields.value.add('name')
     if (!value.address.trim()) invalidFields.value.add('address')
     if (!value.username.trim()) invalidFields.value.add('username')
@@ -163,7 +181,7 @@ function validate(): string | false {
 async function save() {
   const validation = validate()
   if (validation === false) { dialogError.value = ''; showSystemError(); return }
-  if (validation) { dialogError.value = validation; return }
+  if (validation) { dialogError.value = validation; focusFormFeedback(formRoot.value); return }
   const value = form.value
   const previous = editing.value
   const body: JumpHostInput = {
@@ -215,7 +233,6 @@ function openConnectionTest(item: JumpHost) {
 
 <template>
     <main class="assets-main">
-      <div class="assets-heading"><h1>跳板机管理</h1></div>
       <section class="host-section" aria-label="跳板机列表">
         <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
         <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
@@ -226,7 +243,7 @@ function openConnectionTest(item: JumpHost) {
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
             <ElTableColumn label="备注" min-width="180"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-            <ElTableColumn label="操作" width="210" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as JumpHost)">连接测试</ElButton><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
+            <ElTableColumn label="操作" width="248" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as JumpHost)">连接测试</ElButton><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span class="wrapped-action" :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
         <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
@@ -235,24 +252,28 @@ function openConnectionTest(item: JumpHost) {
     </main>
 
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" />
-    <ElDialog v-model="dialog" align-center :title="editing ? '编辑跳板机' : '新增跳板机'" width="min(720px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div class="asset-form">
+    <ElDialog v-model="dialog" align-center :title="editing ? '编辑跳板机' : '新增跳板机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+      <div ref="formRoot" class="asset-form">
+        <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
         <div class="form-section-title">基本信息</div>
         <div class="field-grid">
-          <label class="field" :class="{ 'is-error': invalidFields.has('name') }"><span>跳板机名称 <em>*</em></span><ElInput v-model="form.name" maxlength="100" :aria-invalid="invalidFields.has('name') ? 'true' : undefined" /></label>
-          <label class="field" :class="{ 'is-error': invalidFields.has('address') }"><span>地址 <em>*</em></span><ElInput v-model="form.address" maxlength="253" placeholder="IP 或域名" :aria-invalid="invalidFields.has('address') ? 'true' : undefined" /></label>
+          <div class="field" :class="{ 'is-error': invalidFields.has('name') }"><label :for="`${formId}-name`">跳板机名称 <em>*</em></label><ElInput :id="`${formId}-name`" v-model="form.name" maxlength="100" :aria-invalid="invalidFields.has('name') ? 'true' : undefined" :aria-describedby="fieldMessage('name') ? `${formId}-name-error` : undefined" /><FieldError :id="`${formId}-name-error`" :message="fieldMessage('name')" /></div>
+          <div class="field" :class="{ 'is-error': invalidFields.has('address') }"><label :for="`${formId}-address`">地址 <em>*</em></label><ElInput :id="`${formId}-address`" v-model="form.address" maxlength="253" placeholder="IP 或域名" :aria-invalid="invalidFields.has('address') ? 'true' : undefined" :aria-describedby="fieldMessage('address') ? `${formId}-address-error` : undefined" /><FieldError :id="`${formId}-address-error`" :message="fieldMessage('address')" /></div>
         </div>
         <div class="form-section-title">登录信息</div>
         <div class="field-grid">
-          <label class="field" :class="{ 'is-error': invalidFields.has('username') }"><span>用户名 <em>*</em></span><ElInput v-model="form.username" maxlength="100" autocomplete="off" :aria-invalid="invalidFields.has('username') ? 'true' : undefined" /></label>
-          <label class="field" :class="{ 'is-error': invalidFields.has('port') }"><span>端口 <em>*</em></span><ElInputNumber v-model="form.port" :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="invalidFields.has('port') ? 'true' : undefined" /></label>
+          <div class="field" :class="{ 'is-error': invalidFields.has('username') }"><label :for="`${formId}-username`">用户名 <em>*</em></label><ElInput :id="`${formId}-username`" v-model="form.username" maxlength="100" autocomplete="off" :aria-invalid="invalidFields.has('username') ? 'true' : undefined" :aria-describedby="fieldMessage('username') ? `${formId}-username-error` : undefined" /><FieldError :id="`${formId}-username-error`" :message="fieldMessage('username')" /></div>
+          <div class="field" :class="{ 'is-error': invalidFields.has('port') }"><label :for="`${formId}-port`">端口 <em>*</em></label><ElInputNumber :id="`${formId}-port`" v-model="form.port" v-native-field-aria :min="1" :max="65535" :controls="false" class="full-width" :aria-invalid="invalidFields.has('port') ? 'true' : undefined" :aria-describedby="fieldMessage('port') ? `${formId}-port-error` : undefined" /><FieldError :id="`${formId}-port-error`" :message="fieldMessage('port')" /></div>
         </div>
         <div class="field"><span>认证方式</span><ElRadioGroup v-model="form.auth_type" aria-label="跳板机认证方式"><ElRadioButton value="password">密码</ElRadioButton><ElRadioButton value="key">SSH 密钥</ElRadioButton></ElRadioGroup></div>
-        <label v-if="form.auth_type === 'password'" class="field" :class="{ 'is-error': invalidFields.has('password') }"><span>密码 <em v-if="!editing || editing.auth_type !== 'password' || !editing.has_password || authChanged || (form.address.trim() !== editing.address || form.username.trim() !== editing.username || form.port !== editing.port)">*</em></span><ElInput v-model="form.password" type="password" show-password autocomplete="new-password" :placeholder="editing?.auth_type === 'password' && editing.has_password && !authChanged ? '连接信息不变时留空保留原密码' : '请输入密码'" :aria-invalid="invalidFields.has('password') ? 'true' : undefined" /></label>
-        <template v-else><label class="field" :class="{ 'is-error': invalidFields.has('ssh_key_id') }"><span>SSH 密钥 <em>*</em></span><ElSelect v-model="form.ssh_key_id" :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="invalidFields.has('ssh_key_id') ? 'true' : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect></label><ElAlert v-if="editing?.auth_type === 'key' && editing.ssh_key_id === null && form.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
+        <div v-if="form.auth_type === 'password'" class="field" :class="{ 'is-error': invalidFields.has('password') }"><label :for="`${formId}-password`">密码 <em v-if="!editing || editing.auth_type !== 'password' || !editing.has_password || authChanged || (form.address.trim() !== editing.address || form.username.trim() !== editing.username || form.port !== editing.port)">*</em></label><ElInput :id="`${formId}-password`" v-model="form.password" type="password" show-password autocomplete="new-password" :placeholder="editing?.auth_type === 'password' && editing.has_password && !authChanged ? '连接信息不变时留空保留原密码' : '请输入密码'" :aria-invalid="invalidFields.has('password') ? 'true' : undefined" :aria-describedby="fieldMessage('password') ? `${formId}-password-error` : undefined" /><FieldError :id="`${formId}-password-error`" :message="fieldMessage('password')" /></div>
+        <template v-else><div class="field" :class="{ 'is-error': invalidFields.has('ssh_key_id') }"><label :for="`${formId}-key`">SSH 密钥 <em>*</em></label><ElSelect :id="`${formId}-key`" v-model="form.ssh_key_id" v-native-field-aria :disabled="sshKeysLoading || !sshKeysLoaded" :placeholder="sshKeysLoading ? '加载中' : '请选择密钥'" class="full-width" :aria-invalid="invalidFields.has('ssh_key_id') ? 'true' : undefined" :aria-describedby="fieldMessage('ssh_key_id') ? `${formId}-key-error` : undefined"><ElOption v-for="key in sshKeys" :key="key.id" :label="`${key.name} · ${key.key_type} · ${key.fingerprint}`" :value="key.id" /></ElSelect><FieldError :id="`${formId}-key-error`" :message="fieldMessage('ssh_key_id')" /></div><ElAlert v-if="editing?.auth_type === 'key' && editing.ssh_key_id === null && form.ssh_key_id === null" title="旧记录尚未关联密钥，请先导入并选择 SSH 密钥。" type="warning" :closable="false" show-icon /><RouterLink to="/assets/ssh-keys">管理 SSH 密钥</RouterLink></template>
         <label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" maxlength="2000" placeholder="可选" /></label>
-        <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon />
       </div>
       <template #footer><ElButton :disabled="saving" @click="dialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="save">保存</ElButton></template>
     </ElDialog>
 </template>
+
+<style scoped>
+.wrapped-action { display: inline-block; margin-left: var(--ui-space-2); }
+</style>

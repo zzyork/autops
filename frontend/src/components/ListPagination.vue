@@ -40,12 +40,13 @@ function changeSize(next: number) {
 </template>
 
 <style scoped>
-.list-pagination { display: flex; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--ui-border); }
-.list-pagination :deep(.el-pagination) { align-items: center; --el-pagination-font-size: 13px; --el-pagination-button-height: 30px; }
-.list-pagination :deep(.el-pagination__total) { margin-right: 16px; color: var(--ui-text); font-size: 13px; line-height: 30px; white-space: nowrap; }
-.page-size-control { display: flex; align-items: center; gap: 8px; margin-right: 16px; color: var(--ui-text); font-size: 13px; line-height: 30px; white-space: nowrap; }
+.list-pagination { display: flex; justify-content: flex-end; padding: var(--ui-space-3) var(--ui-panel-padding); border-top: 1px solid var(--ui-border); }
+.list-pagination :deep(.el-pagination) { align-items: center; --el-pagination-font-size: var(--ui-font-size-base); --el-pagination-button-height: var(--ui-inline-control-height); --el-pagination-button-width: var(--ui-inline-control-height); }
+.list-pagination :deep(.el-pagination__total) { margin-right: var(--ui-space-4); color: var(--ui-text); font-size: var(--ui-font-size-base); line-height: var(--ui-control-height); white-space: nowrap; }
+.page-size-control { display: flex; align-items: center; gap: var(--ui-space-2); margin-right: var(--ui-space-4); color: var(--ui-text); font-size: var(--ui-font-size-base); line-height: var(--ui-control-height); white-space: nowrap; }
 .page-size-control .el-select { width: 80px; }
-.is-compact { flex: none; padding: 8px; }
-.is-compact :deep(.el-pagination) { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.page-size-control :deep(.el-select__wrapper) { min-height: var(--ui-control-height); }
+.is-compact { flex: none; padding: var(--ui-space-2); }
+.is-compact :deep(.el-pagination) { flex-wrap: wrap; justify-content: flex-end; gap: var(--ui-space-2); }
 .is-compact :deep(.el-pagination > *) { margin: 0; }
 </style>

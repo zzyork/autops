@@ -28,9 +28,9 @@ function toggle() {
 
 <style scoped>
 .ui-disclosure { min-width: 0; }
-.ui-disclosure .ui-disclosure-toggle { --el-button-hover-bg-color: var(--ui-row-hover); }
-.ui-disclosure-toggle > :deep(span) { display: inline-flex; align-items: center; gap: 8px; }
-.ui-disclosure-arrow { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.ui-disclosure .ui-disclosure-toggle { --el-button-hover-bg-color: var(--ui-row-hover); min-height: 36px; height: auto; padding: var(--ui-space-2) var(--ui-space-3); white-space: normal; text-align: left; }
+.ui-disclosure-toggle > :deep(span) { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
+.ui-disclosure-arrow { width: var(--ui-icon-size); height: var(--ui-icon-size); flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .ui-disclosure-arrow.is-expanded { transform: rotate(90deg); }
-.ui-disclosure-content { margin-top: 12px; min-width: 0; }
+.ui-disclosure-content { margin-top: var(--ui-space-3); min-width: 0; }
 </style>

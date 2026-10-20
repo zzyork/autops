@@ -40,9 +40,10 @@ watch(() => props.selectedIds, resetPage)
 </template>
 
 <style scoped>
-.analysis-evidence { display: grid; gap: 8px; min-width: 0; }
-.analysis-evidence-toolbar { display: flex; align-items: center; gap: 8px; }
-.analysis-evidence-item { padding: 12px 16px; border-bottom: 1px solid var(--ui-border); }
+.analysis-evidence { display: grid; gap: var(--ui-space-2); min-width: 0; }
+.analysis-evidence-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); }
+.analysis-evidence-item { padding: var(--ui-space-3) var(--ui-panel-padding); border-bottom: 1px solid var(--ui-border); }
 .analysis-evidence-item :is(p, strong) { overflow-wrap: anywhere; white-space: pre-wrap; }
-.analysis-evidence-item p { margin: 8px 0 0; }
+.analysis-evidence-item p { margin: var(--ui-space-2) 0 0; }
+.analysis-evidence-item > p:last-child { font-family: var(--ui-font-mono); font-size: var(--ui-font-size-code); line-height: var(--ui-line-height-code); }
 </style>

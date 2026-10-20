@@ -42,21 +42,21 @@ const { page, pageSize, total, pageItems } = useListPagination(details)
 </template>
 
 <style scoped>
-.inspection-analysis-issue { display: grid; gap: 16px; border: 1px solid var(--ui-border); min-width: 0; }
-.issue-heading { display: grid; gap: 8px; padding: 12px 16px; background: var(--ui-row-hover); border-bottom: 1px solid var(--ui-border); }
-.issue-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.issue-title h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.inspection-analysis-issue { display: grid; gap: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-panel-radius); min-width: 0; }
+.issue-heading { display: grid; gap: var(--ui-space-2); padding: var(--ui-space-3) var(--ui-panel-padding); background: var(--ui-row-hover); border-bottom: 1px solid var(--ui-border); border-radius: var(--ui-panel-radius) var(--ui-panel-radius) 0 0; }
+.issue-title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); min-width: 0; }
+.issue-title h4 { margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); font-weight: 600; }
 .inspection-analysis-issue :is(p, strong, h4, dd) { overflow-wrap: anywhere; min-width: 0; }
-.inspection-analysis-issue p { margin: 0; white-space: pre-wrap; line-height: 1.6; }
-.issue-context, .issue-detail-context { display: grid; gap: 8px; margin: 0; }
-.issue-context { padding: 0 16px; }
-.issue-context > div, .issue-detail-context > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 16px; }
+.inspection-analysis-issue p { margin: 0; white-space: pre-wrap; line-height: var(--ui-line-height-base); }
+.issue-context, .issue-detail-context { display: grid; gap: var(--ui-space-2); margin: 0; }
+.issue-context { padding: 0 var(--ui-panel-padding); }
+.issue-context > div, .issue-detail-context > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: var(--ui-space-4); }
 .issue-context dt, .issue-detail-context dt { color: var(--ui-text-secondary); }
 .issue-context dd, .issue-detail-context dd { margin: 0; white-space: pre-wrap; }
-.issue-message { font-family: ui-monospace, Consolas, monospace; }
-.issue-analysis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0 16px; }
-.issue-analysis-grid section { min-width: 0; border-top: 1px solid var(--ui-border); padding-top: 12px; }
-.issue-analysis-grid h5 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
-.issue-footer { display: grid; gap: 8px; padding: 0 16px 12px; }
-.issue-group { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--ui-border); }
+.inspection-analysis-issue .issue-message { font-family: var(--ui-font-mono); font-size: var(--ui-font-size-code); line-height: var(--ui-line-height-code); }
+.issue-analysis-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-4); padding: 0 var(--ui-panel-padding); }
+.issue-analysis-grid section { min-width: 0; border-top: 1px solid var(--ui-border); padding-top: var(--ui-space-3); }
+.issue-analysis-grid h5 { margin: 0 0 var(--ui-space-2); font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); font-weight: 600; }
+.issue-footer { display: grid; gap: var(--ui-space-2); padding: 0 var(--ui-panel-padding) var(--ui-space-3); }
+.issue-group { display: grid; gap: var(--ui-space-2); padding: var(--ui-space-3) 0; border-bottom: 1px solid var(--ui-border); }
 </style>
