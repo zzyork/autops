@@ -15,6 +15,7 @@ from .services.ssh_connections import ConnectionTestManager
 from .services.inspection_tasks import InspectionManager
 from .services.ai_chat import ChatManager
 from .services.inspection_analysis import InspectionAnalysisManager
+from .services.ssh_executions import SSHExecutionManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,9 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         inspections = None
         ai = None
         analysis = None
+        executions = None
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
+            executions = await run_in_threadpool(SSHExecutionManager, sessions, cipher)
+            application.state.ssh_executions = executions
             analysis = await run_in_threadpool(InspectionAnalysisManager, sessions, cipher, settings.data_dir)
             application.state.inspection_analysis = analysis
             inspections = await run_in_threadpool(InspectionManager, sessions, cipher, analysis.automatic)
@@ -40,6 +44,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application.state.ai = ai
             yield
         finally:
+            if executions is not None:
+                executions.stop_accepting()
             if analysis is not None:
                 analysis.stop_accepting()
             try:
@@ -58,7 +64,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     if manager is not None:
                         await run_in_threadpool(manager.close)
             finally:
-                await run_in_threadpool(engine.dispose)
+                try:
+                    if executions is not None:
+                        await run_in_threadpool(executions.close)
+                finally:
+                    await run_in_threadpool(engine.dispose)
 
     application = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
     application.state.data_dir = settings.data_dir
