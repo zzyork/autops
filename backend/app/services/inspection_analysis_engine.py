@@ -13,10 +13,9 @@ from .ai_provider import MAX_CONTEXT_BUDGET, MAX_OUTPUT_TOKENS, MAX_RESPONSE_BUD
 from .inspection_analysis_input import AnalysisInput, serialize
 from .inspection_analysis_groups import diagnostic_records
 
-REPORT_OUTPUT_TOKENS = 2048
 logger = logging.getLogger(__name__)
-REPORT_BASE_OUTPUT_TOKENS = 256
-REPORT_TOKENS_PER_LOG = 384
+# 组数无法估计中文 JSON 与模型推理开销，单次全量分析沿用 provider 的有界输出上限。
+REPORT_OUTPUT_TOKENS = MAX_OUTPUT_TOKENS
 REPORT_MAX_TEXT = 65_536
 # 流式事件包装和模型附加字段也占传输字节，独立于最终 JSON 正文限额。
 REPORT_MAX_RESPONSE = MAX_RESPONSE_BUDGET
@@ -113,16 +112,13 @@ def analyze(client: httpx.Client, snapshot: ModelSnapshot, api_key: str | None,
                                          current_step=step, step_started_at=utc_now()))
         content = [item.model_input() for item in records]
         input_text = serialize(content)
-        logger.info("Inspection AI log input: evidence_fragments=%s diagnostic_groups=%s input_characters=%s",
-                    len(logs), len(records), len(input_text))
-        # 预算随日志数量增长；达到上限后仍由 provider 检查是否正常结束，禁止保存截断结果。
-        output_tokens = min(MAX_OUTPUT_TOKENS, max(REPORT_OUTPUT_TOKENS,
-                            REPORT_BASE_OUTPUT_TOKENS + len(records) * REPORT_TOKENS_PER_LOG))
+        logger.info("Inspection AI log input: evidence_fragments=%s diagnostic_groups=%s input_characters=%s max_output_tokens=%s",
+                    len(logs), len(records), len(input_text), REPORT_OUTPUT_TOKENS)
         try:
             reply = request(client, snapshot.protocol, snapshot.base_url, snapshot.model, api_key,
                              [{"role": "system", "content": SYSTEM + OUTPUT_PROMPT},
                               {"role": "user", "content": input_text}], [], cancel=cancel,
-                            deadline=deadline, max_tokens=output_tokens,
+                            deadline=deadline, max_tokens=REPORT_OUTPUT_TOKENS,
                             max_text=REPORT_MAX_TEXT, max_response=REPORT_MAX_RESPONSE,
                             read_timeout_seconds=REPORT_READ_TIMEOUT_SECONDS, max_context=REPORT_MAX_CONTEXT)
             if reply.calls:

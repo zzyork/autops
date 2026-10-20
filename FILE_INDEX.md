@@ -198,7 +198,7 @@
 | `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、当前生成批次进度与耗时日志和按任务取消。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_input.py` | 提取日志与巡检风险，按主机、来源表及忽略行首时间戳的正文精确合并，保留全部原文、表位置、结果序号、次数与时间。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_groups.py` | 任务内 Drain3 模板提取、显式非诊断标识归一化、精确保护键和来源边界，构建紧凑模型输入与全部证据映射。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis_engine.py` | 单次请求由 AI 合并诊断组并分析，校验每个组编号恰好被覆盖一次，关联全部模板与原始证据；非日志问题保留巡检事实。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis_engine.py` | 单次请求由 AI 合并诊断组并分析，使用 provider 的有界输出 token 上限并记录预算，校验每个组编号恰好被覆盖一次，关联全部模板与原始证据；非日志问题保留巡检事实。最后同步：2026-10-20。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
