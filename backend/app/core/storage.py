@@ -12,7 +12,6 @@ from ..ai_models import AIConnection
 from .migrations.ai import migrate_ai
 from .migrations.ssh_connections import migrate_ssh_connections
 from .migrations.inspections import migrate_inspections
-from .migrations.ssh_executions import migrate_ssh_executions
 from .migrations.retired_features import migrate_retired_features
 
 
@@ -62,7 +61,6 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
         migrate_retired_features(engine)
         migrate_ssh_connections(engine)
         migrate_inspections(engine)
-        migrate_ssh_executions(engine)
         migrate_ai(engine)
         Base.metadata.create_all(engine)
         sessions = sessionmaker(engine)

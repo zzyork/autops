@@ -19,9 +19,6 @@ const { menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded } =
       <nav aria-label="AI 运维">
         <RouterLink to="/ai/chat" class="console-menu-item console-menu-root" aria-label="AI 对话" title="AI 对话"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v13H9l-5 4V4zM8 9h8M8 13h5" /></svg><span v-if="!menuCollapsed">AI 对话</span></RouterLink>
       </nav>
-      <nav aria-label="SSH 操作">
-        <RouterLink to="/ssh/executions" class="console-menu-item console-menu-root" aria-label="SSH 执行" title="SSH 执行"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 10l3 2-3 2M13 16h5" /></svg><span v-if="!menuCollapsed">SSH 执行</span></RouterLink>
-      </nav>
       <button class="console-menu-label" type="button" :aria-expanded="assetsExpanded" aria-controls="assets-navigation" :aria-label="assetsExpanded ? '收起资产管理菜单' : '展开资产管理菜单'" title="资产管理" @click="assetsExpanded = !assetsExpanded">
         <svg class="console-menu-label-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5" /></svg>
         <span v-if="!menuCollapsed">资产管理</span>

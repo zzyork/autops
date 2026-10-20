@@ -17,7 +17,6 @@ export default createRouter({
     { path: '/inspections', name: 'inspections', meta: { title: '巡检任务' }, component: () => import('@/views/InspectionsView.vue') },
     { path: '/inspections/records', name: 'inspection-records', meta: { title: '巡检记录' }, component: () => import('@/views/InspectionRecordsView.vue') },
     { path: '/inspections/records/:taskId', name: 'inspection-record-detail', meta: { title: '巡检详情' }, component: () => import('@/views/InspectionRecordDetailView.vue') },
-    { path: '/ssh/executions', name: 'ssh-executions', meta: { title: 'SSH 执行' }, component: () => import('@/views/SSHExecutionsView.vue') },
     { path: '/inspections/rules', redirect: '/settings/inspection-rules' },
     { path: '/:pathMatch(.*)*', redirect: '/ai/chat' },
   ],
