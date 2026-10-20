@@ -493,31 +493,31 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-    <main class="assets-main">
-      <section class="host-section" aria-label="SSH 密钥列表">
-        <div class="host-toolbar">
+    <main class="console-main">
+      <section class="ui-panel" aria-label="SSH 密钥列表">
+        <div class="ui-toolbar">
           <ElButton type="primary" @click="openNew">新增密钥</ElButton>
-          <div class="host-toolbar-right">
+          <div class="ui-toolbar-right">
             <ElInput
               v-model="search"
               clearable
               placeholder="搜索密钥名称"
               aria-label="搜索密钥名称"
-              class="host-search"
+              class="ui-search"
             /><ElButton :loading="loading" @click="refresh">刷新</ElButton>
           </div>
         </div>
-        <div class="host-table-wrap">
+        <div class="ui-table-wrap">
           <ElTable
             v-loading="loading || opening"
             :data="keys"
             row-key="id"
-            class="host-table"
+            class="ui-table"
             :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无 SSH 密钥'"
           >
             <ElTableColumn label="密钥名称" min-width="170"
               ><template #default="{ row }"
-                ><div class="host-name">{{ row.name }}</div></template
+                ><div class="ui-item-title">{{ row.name }}</div></template
               ></ElTableColumn
             >
             <ElTableColumn prop="key_type" label="类型" min-width="100" />
@@ -541,7 +541,7 @@ function dateLabel(value: string) {
             >
             <ElTableColumn label="备注" min-width="160"
               ><template #default="{ row }"
-                ><div class="group-remark">{{ row.remark }}</div></template
+                ><div class="ui-text-pre-wrap">{{ row.remark }}</div></template
               ></ElTableColumn
             >
             <ElTableColumn label="更新时间" min-width="160"
@@ -588,7 +588,7 @@ function dateLabel(value: string) {
           :description="
             search ? '暂无符合条件的密钥' : '暂无 SSH 密钥，请新增密钥'
           "
-          class="host-empty"
+          class="ui-empty"
           ><ElButton v-if="!search" type="primary" plain @click="openNew"
             >新增密钥</ElButton
           ></ElEmpty
@@ -606,7 +606,7 @@ function dateLabel(value: string) {
       :close-on-press-escape="!saving"
       :show-close="!saving"
     >
-      <div ref="formRoot" class="asset-form">
+      <div ref="formRoot" class="ui-form">
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
         <div class="field" :class="{ 'is-error': invalid }"
           ><label :for="`${formId}-name`">密钥名称 <em>*</em></label
@@ -688,7 +688,7 @@ function dateLabel(value: string) {
               :aria-invalid="privateInvalid ? 'true' : undefined"
               :aria-describedby="privateInvalid ? `${formId}-private-error` : undefined"
               @change="selectFile"
-            /><span v-if="reading" class="ssh-field-hint">读取中...</span
+            /><span v-if="reading" class="ui-field-hint">读取中...</span
             ><FieldError :id="`${formId}-private-error`" :message="privateInvalid ? fileError || dialogError : ''" />
           </div>
           <div v-else class="field" :class="{ 'is-error': privateInvalid }"
@@ -704,7 +704,7 @@ function dateLabel(value: string) {
               :aria-describedby="privateInvalid ? `${formId}-private-error` : undefined"
               placeholder="粘贴 OpenSSH 或 PEM 私钥"
           /><FieldError :id="`${formId}-private-error`" :message="privateInvalid ? dialogError : ''" /></div>
-          <div class="ssh-field-hint">
+          <div class="ui-field-hint">
             仅支持无口令的 OpenSSH / PEM 私钥，最大 64 KiB。
           </div>
         </template>
@@ -736,7 +736,7 @@ function dateLabel(value: string) {
               :aria-invalid="publicInvalid ? 'true' : undefined"
               :aria-describedby="publicInvalid ? `${formId}-public-error` : undefined"
               @change="selectPublicFile"
-            /><span v-if="publicReading" class="ssh-field-hint">读取中...</span
+            /><span v-if="publicReading" class="ui-field-hint">读取中...</span
             ><FieldError :id="`${formId}-public-error`" :message="publicInvalid ? publicFileError || dialogError : ''" />
           </div>
           <div v-else class="field" :class="{ 'is-error': publicInvalid }"
@@ -751,7 +751,7 @@ function dateLabel(value: string) {
               :aria-describedby="publicInvalid ? `${formId}-public-error` : undefined"
               placeholder="粘贴 OpenSSH .pub 或 PEM 公钥"
           /><FieldError :id="`${formId}-public-error`" :message="publicInvalid ? dialogError : ''" /></div>
-          <div class="ssh-field-hint">
+          <div class="ui-field-hint">
             支持 OpenSSH .pub 文本或 PEM 公钥，最大 64
             KiB。保存时校验公私钥匹配。
           </div>
@@ -788,7 +788,7 @@ function dateLabel(value: string) {
             readonly
             aria-label="公钥内容"
           />
-          <div v-else class="ssh-field-hint">
+          <div v-else class="ui-field-hint">
             尚未上传公钥，请编辑密钥补传。
           </div>
         </template>
@@ -812,7 +812,7 @@ function dateLabel(value: string) {
       <div v-loading="referencesLoading" class="ssh-references">
         <template v-if="references"
           ><h2>主机</h2>
-          <div v-if="!references.hosts.length" class="ssh-field-hint">
+          <div v-if="!references.hosts.length" class="ui-field-hint">
             无关联主机
           </div>
           <RouterLink
@@ -824,7 +824,7 @@ function dateLabel(value: string) {
             >{{ host.name }}</RouterLink
           >
           <h2>跳板机</h2>
-          <div v-if="!references.jump_hosts.length" class="ssh-field-hint">
+          <div v-if="!references.jump_hosts.length" class="ui-field-hint">
             无关联跳板机
           </div>
           <RouterLink

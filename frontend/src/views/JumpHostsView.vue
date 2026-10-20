@@ -13,6 +13,7 @@ import { focusFormFeedback, vNativeFieldAria } from '@/components/formFeedback'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
+import '@/styles/assets.css'
 
 interface JumpHostForm {
   name: string
@@ -232,28 +233,28 @@ function openConnectionTest(item: JumpHost) {
 </script>
 
 <template>
-    <main class="assets-main">
-      <section class="host-section" aria-label="跳板机列表">
-        <div class="host-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="host-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="host-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
-        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
-        <div class="host-table-wrap">
-          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
-            <ElTableColumn label="跳板机" min-width="200"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
-            <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
+    <main class="console-main">
+      <section class="ui-panel" aria-label="跳板机列表">
+        <div class="ui-toolbar"><ElButton type="primary" @click="openNew">新增跳板机</ElButton><div class="ui-toolbar-right"><ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索跳板机名称或地址" class="ui-search" /><ElButton :loading="loading" @click="refresh">刷新</ElButton></div></div>
+        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="ui-page-alert" />
+        <div class="ui-table-wrap">
+          <ElTable v-loading="loading || opening" :data="jumpHosts" row-key="id" class="ui-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无跳板机'">
+            <ElTableColumn label="跳板机" min-width="200"><template #default="{ row }"><div class="ui-item-title">{{ row.name }}</div><div class="ui-item-secondary">{{ row.address }}</div></template></ElTableColumn>
+            <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="ui-item-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
-            <ElTableColumn label="备注" min-width="180"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
+            <ElTableColumn label="备注" min-width="180"><template #default="{ row }"><div class="ui-text-pre-wrap">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
             <ElTableColumn label="操作" width="248" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as JumpHost)">连接测试</ElButton><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span class="wrapped-action" :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
-        <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="host-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
+        <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="ui-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!loading && !loadFailed" :disabled="loading || loadFailed" />
       </section>
     </main>
 
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" />
     <ElDialog v-model="dialog" align-center :title="editing ? '编辑跳板机' : '新增跳板机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div ref="formRoot" class="asset-form">
+      <div ref="formRoot" class="ui-form">
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
         <div class="form-section-title">基本信息</div>
         <div class="field-grid">

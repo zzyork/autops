@@ -173,14 +173,10 @@ a { color: var(--ui-primary); text-decoration: none; }
 a:hover { color: var(--ui-primary-hover); }
 :focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
 .el-button:focus-visible, .el-input__wrapper:has(input:focus-visible), .el-select__wrapper:has(input:focus-visible) { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.console-topbar :focus-visible { outline-color: var(--ui-header-text); }
 h1 { margin: 0; font-size: var(--ui-font-size-title); line-height: var(--ui-line-height-title); font-weight: 600; }
 h2 { margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); font-weight: 600; }
 h3, h4, h5 { font-size: var(--ui-font-size-base); line-height: var(--ui-line-height-base); }
 p { margin: 0; line-height: inherit; }
-.topbar, .brand { display: flex; align-items: center; }
-.brand { gap: var(--ui-space-2); color: inherit; font-weight: 600; }
-.brand-mark { display: grid; place-items: center; background: var(--ui-header-bg); color: var(--ui-header-text); }
 
 .service-panel { display: flex; flex-direction: column; gap: var(--ui-space-2); padding: var(--ui-panel-padding); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-panel-radius); }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); }
@@ -227,7 +223,7 @@ p { margin: 0; line-height: inherit; }
 .el-textarea__inner { min-height: 80px; padding: var(--ui-space-2) var(--ui-space-3); border: 0; line-height: var(--ui-line-height-base); }
 .el-input__wrapper:hover, .el-select__wrapper:hover, .el-textarea__inner:hover { box-shadow: inset 0 0 0 1px var(--ui-control-border); }
 .el-input__wrapper.is-focus, .el-select__wrapper.is-focused, .el-textarea__inner:focus { box-shadow: inset 0 0 0 1px var(--ui-primary); }
-.asset-form .field.is-error .el-input__wrapper, .asset-form .field.is-error .el-select__wrapper, .asset-form .field.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
+.ui-form .field.is-error .el-input__wrapper, .ui-form .field.is-error .el-select__wrapper, .ui-form .field.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
 .el-input.is-disabled .el-input__wrapper, .el-select.is-disabled .el-select__wrapper, .el-textarea.is-disabled .el-textarea__inner,
 .el-input-number.is-disabled .el-input__wrapper { background: var(--ui-disabled-bg); box-shadow: inset 0 0 0 1px var(--ui-control-border); opacity: 1; }
 .el-input.is-disabled .el-input__inner, .el-select.is-disabled .el-select__selected-item, .el-textarea.is-disabled .el-textarea__inner,

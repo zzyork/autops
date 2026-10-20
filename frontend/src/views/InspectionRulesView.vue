@@ -66,17 +66,17 @@ onUnmounted(() => { active = false; request++ })
 </script>
 
 <template>
-    <main class="assets-main">
-      <section v-loading="loading" class="host-section" aria-label="巡检规则">
-        <div class="host-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :loading="saving" :disabled="!loaded || loading" @click="saveRules">保存</ElButton><span class="inspection-muted">修改后点击保存生效；刷新会重新加载已保存的规则。</span></div><ElButton :loading="loading" :disabled="saving" @click="loadRules">刷新</ElButton></div>
+    <main class="console-main">
+      <section v-loading="loading" class="ui-panel" aria-label="巡检规则">
+        <div class="ui-toolbar"><div class="inspection-rules-actions"><ElButton type="primary" :loading="saving" :disabled="!loaded || loading" @click="saveRules">保存</ElButton><span class="ui-text-muted">修改后点击保存生效；刷新会重新加载已保存的规则。</span></div><ElButton :loading="loading" :disabled="saving" @click="loadRules">刷新</ElButton></div>
         <fieldset v-if="loaded && draft" :disabled="loading || saving" class="inspection-rules-form" aria-label="编辑巡检规则">
           <ElForm :disabled="loading || saving" @submit.prevent="saveRules">
             <InspectionConfigForm :key="formRevision" ref="configForm" v-model="draft" />
           </ElForm>
-          <p class="inspection-muted">达到阈值触发对应结论；无 Swap 时不产生 Swap 阈值告警。</p>
-          <p class="inspection-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
+          <p class="ui-text-muted">达到阈值触发对应结论；无 Swap 时不产生 Swap 阈值告警。</p>
+          <p class="ui-text-muted">必需服务未安装、已找到但未加载或未运行的服务产生警告；未安装的可选服务不代表正常运行。</p>
         </fieldset>
-        <p v-else-if="!loading" class="inspection-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>
+        <p v-else-if="!loading" class="ui-load-retry">规则未加载。<ElButton @click="loadRules">重试</ElButton></p>
       </section>
     </main>
 </template>

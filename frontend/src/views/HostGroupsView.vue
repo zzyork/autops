@@ -8,6 +8,7 @@ import { focusFormFeedback } from '@/components/formFeedback'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
 import type { HostGroup } from '@/types/api'
+import '@/styles/assets.css'
 
 const vLoading = ElLoading.directive
 const { items: groups, page, pageSize, total, loading, loadFailed, refresh: loadGroups } =
@@ -71,15 +72,15 @@ async function removeGroup(group: HostGroup) {
 </script>
 
 <template>
-    <main class="assets-main">
-      <section class="host-section" aria-label="分组列表">
-        <div class="host-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
-        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="assets-alert" />
-        <div class="host-table-wrap">
-          <ElTable v-loading="loading" :data="groups" row-key="id" class="host-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
-            <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="host-name">{{ row.name }}</div></template></ElTableColumn>
+    <main class="console-main">
+      <section class="ui-panel" aria-label="分组列表">
+        <div class="ui-toolbar"><ElButton type="primary" @click="openGroup()">新增分组</ElButton><ElButton :loading="loading" @click="refreshGroups">刷新</ElButton></div>
+        <ElAlert v-if="localError" :title="localError" type="error" :closable="false" show-icon class="ui-page-alert" />
+        <div class="ui-table-wrap">
+          <ElTable v-loading="loading" :data="groups" row-key="id" class="ui-table" :empty-text="loadFailed ? '' : loading ? '加载中' : '暂无分组，请新增分组'">
+            <ElTableColumn prop="name" label="分组名称" min-width="180"><template #default="{ row }"><div class="ui-item-title">{{ row.name }}</div></template></ElTableColumn>
             <ElTableColumn prop="host_count" label="主机数量" width="120" />
-            <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="group-remark">{{ row.remark }}</div></template></ElTableColumn>
+            <ElTableColumn prop="remark" label="备注" min-width="260"><template #default="{ row }"><div class="ui-text-pre-wrap">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="操作" width="144" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openGroup(row as HostGroup)">编辑</ElButton><span class="wrapped-action" :title="row.host_count ? '请先移动或删除组内主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="removeGroup(row as HostGroup)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
         </div>
@@ -87,7 +88,7 @@ async function removeGroup(group: HostGroup) {
       </section>
     </main>
     <ElDialog v-model="dialog" align-center :title="editingGroup ? '编辑分组' : '新增分组'" width="min(var(--ui-confirm-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-      <div ref="formRoot" class="asset-form"><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" /><div class="field" :class="{ 'is-error': nameError }"><label :for="`${formId}-name`">分组名称 <em>*</em></label><ElInput :id="`${formId}-name`" v-model="form.name" maxlength="100" placeholder="输入分组名称" :aria-invalid="nameError ? 'true' : undefined" :aria-describedby="nameError ? `${formId}-name-error` : undefined" /><FieldError :id="`${formId}-name-error`" :message="nameError ? dialogError : ''" /></div><label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" placeholder="可选" /></label></div>
+      <div ref="formRoot" class="ui-form"><ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" /><div class="field" :class="{ 'is-error': nameError }"><label :for="`${formId}-name`">分组名称 <em>*</em></label><ElInput :id="`${formId}-name`" v-model="form.name" maxlength="100" placeholder="输入分组名称" :aria-invalid="nameError ? 'true' : undefined" :aria-describedby="nameError ? `${formId}-name-error` : undefined" /><FieldError :id="`${formId}-name-error`" :message="nameError ? dialogError : ''" /></div><label class="field"><span>备注</span><ElInput v-model="form.remark" type="textarea" :rows="3" placeholder="可选" /></label></div>
       <template #footer><ElButton :disabled="saving" @click="dialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveGroup">保存</ElButton></template>
     </ElDialog>
 </template>

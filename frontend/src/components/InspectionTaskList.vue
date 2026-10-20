@@ -8,7 +8,8 @@ import InspectionRecordSummary from '@/components/InspectionRecordSummary.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
-import { isActiveRun, runLabel, runType, timeLabel } from '@/components/inspectionDisplay'
+import { isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
+import { timeLabel } from '@/components/timeDisplay'
 import type { TaskDetail, TaskSummary } from '@/types/inspections'
 import '@/styles/inspections.css'
 
@@ -205,15 +206,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-      <section v-if="records && selectedId" v-loading="detailLoading" class="host-section inspection-record-detail" aria-label="巡检记录概览">
+      <section v-if="records && selectedId" v-loading="detailLoading" class="ui-panel inspection-record-detail" aria-label="巡检记录概览">
         <div class="section-header"><ElButton @click="router.push({ path: '/inspections/records' })">返回历史记录</ElButton></div>
         <InspectionRecordSummary v-if="detailLoaded && detail" :task="detail" />
-        <p v-else-if="!detailLoading" class="inspection-retry">详情未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
+        <p v-else-if="!detailLoading" class="ui-load-retry">详情未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
       </section>
-      <section v-else class="host-section" :aria-label="records ? '巡检记录列表' : '巡检任务列表'">
-        <div class="host-toolbar"><div><ElButton v-if="!records" type="primary" @click="creating = true">创建巡检</ElButton></div><ElButton :loading="listLoading" @click="loadList()">刷新</ElButton></div>
-        <div v-loading="listLoading" class="host-table-wrap">
-           <ElTable v-if="listLoaded" :data="tasks" row-key="id" class="host-table" :empty-text="records ? '暂无历史记录' : '暂无巡检任务'">
+      <section v-else class="ui-panel" :aria-label="records ? '巡检记录列表' : '巡检任务列表'">
+        <div class="ui-toolbar"><div><ElButton v-if="!records" type="primary" @click="creating = true">创建巡检</ElButton></div><ElButton :loading="listLoading" @click="loadList()">刷新</ElButton></div>
+        <div v-loading="listLoading" class="ui-table-wrap">
+           <ElTable v-if="listLoaded" :data="tasks" row-key="id" class="ui-table" :empty-text="records ? '暂无历史记录' : '暂无巡检任务'">
             <ElTableColumn label="任务名称" min-width="210"><template #default="{ row }"><ElButton link type="primary" class="inspection-name" @click="selectTask(row.id)">{{ row.name }}</ElButton></template></ElTableColumn>
             <ElTableColumn label="执行状态" width="115"><template #default="{ row }"><ElTag :type="runType(row.status)" size="small">{{ runLabel(row.status) }}</ElTag></template></ElTableColumn>
             <ElTableColumn label="主机进度" width="160"><template #default="{ row }">{{ row.completed_hosts }} / {{ row.host_count }} 完成 · {{ row.failed_hosts }} 失败</template></ElTableColumn>
@@ -222,7 +223,7 @@ onUnmounted(() => {
             <ElTableColumn v-if="!records" label="操作" width="110" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="selectTask(row.id)">查看记录</ElButton></template></ElTableColumn>
             <ElTableColumn v-else label="操作" width="110" fixed="right"><template #default="{ row }"><span :title="isActiveRun(row.status) ? '执行中的记录不可删除' : undefined"><ElButton link type="danger" :loading="deletingId === row.id" :disabled="isActiveRun(row.status) || deletingId !== null" @click="removeRecord(row as TaskSummary)">删除</ElButton></span></template></ElTableColumn>
           </ElTable>
-           <p v-else-if="!listLoading" class="inspection-retry">{{ records ? '历史记录' : '任务列表' }}未加载。<ElButton @click="loadList()">重试</ElButton></p>
+           <p v-else-if="!listLoading" class="ui-load-retry">{{ records ? '历史记录' : '任务列表' }}未加载。<ElButton @click="loadList()">重试</ElButton></p>
         </div>
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="listLoaded && !listLoading" :disabled="listLoading || !listLoaded || deletingId !== null" @change="changePage" />
       </section>

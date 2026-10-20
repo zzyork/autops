@@ -112,19 +112,19 @@ onUnmounted(() => { active = false; allSequence++ })
 </script>
 
 <template>
-    <main class="assets-main">
-      <section class="host-section" aria-label="模型连接">
-        <div class="host-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading || allLoading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
-        <div v-loading="loading" class="host-table-wrap">
-          <ElTable v-if="loaded" :data="connections" class="host-table" empty-text="暂无模型连接">
+    <main class="console-main">
+      <section class="ui-panel" aria-label="模型连接">
+        <div class="ui-toolbar"><ElButton type="primary" @click="open(null)">新增连接</ElButton><ElButton :loading="loading || allLoading" :disabled="testing !== null" @click="load">刷新</ElButton></div>
+        <div v-loading="loading" class="ui-table-wrap">
+          <ElTable v-if="loaded" :data="connections" class="ui-table" empty-text="暂无模型连接">
             <ElTableColumn label="连接名称" min-width="170"><template #default="{ row }"><strong>{{ row.name }}</strong><ElTag v-if="row.is_default" size="small" class="ai-default-tag">主模型</ElTag><ElTag v-if="row.is_backup" size="small" type="info" class="ai-default-tag">备用模型</ElTag></template></ElTableColumn>
-            <ElTableColumn label="协议 / 模型" min-width="190"><template #default="{ row }">{{ row.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容' }}<div class="host-secondary">{{ row.model }}</div></template></ElTableColumn>
+            <ElTableColumn label="协议 / 模型" min-width="190"><template #default="{ row }">{{ row.protocol === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容' }}<div class="ui-item-secondary">{{ row.model }}</div></template></ElTableColumn>
             <ElTableColumn label="服务地址" min-width="240"><template #default="{ row }"><span class="ai-address">{{ row.base_url }}</span></template></ElTableColumn>
             <ElTableColumn label="密钥" width="90"><template #default="{ row }">{{ row.has_api_key ? '已配置' : '无密钥' }}</template></ElTableColumn>
             <ElTableColumn label="测试状态" width="100" align="center"><template #default="{ row }"><TestStatus :status="testStatus(row as ModelConnection)" :description="testDescription(row as ModelConnection)" /></template></ElTableColumn>
             <ElTableColumn label="操作" width="248" fixed="right"><template #default="{ row }"><ElButton link type="primary" :loading="operating === row.id" :disabled="operating !== null" @click="test(row as ModelConnection)">测试</ElButton><ElButton link type="primary" :disabled="operating !== null" @click="open(row as ModelConnection)">编辑</ElButton><ElButton link type="primary" :disabled="operating !== null" @click="copy(row as ModelConnection)">复制</ElButton><ElButton link type="danger" :disabled="operating !== null || !featureModels || featureModels.chat_connection_id === row.id || featureModels.inspection_report_connection_id === row.id" :title="!featureModels ? '功能配置未加载' : featureModels.chat_connection_id === row.id || featureModels.inspection_report_connection_id === row.id ? '已被独立功能引用，请先修改功能配置' : '删除连接'" @click="remove(row as ModelConnection)">删除</ElButton></template></ElTableColumn>
           </ElTable>
-          <p v-else-if="!loading" class="inspection-retry">连接列表未加载。<ElButton @click="load">重试</ElButton></p>
+          <p v-else-if="!loading" class="ui-load-retry">连接列表未加载。<ElButton @click="load">重试</ElButton></p>
         </div>
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="loaded && !loading" :disabled="loading || !loaded || operating !== null" />
       </section>

@@ -115,7 +115,7 @@ defineExpose({ validate, normalized })
 </script>
 
 <template>
-  <div ref="formRoot" class="inspection-config asset-form">
+  <div ref="formRoot" class="inspection-config ui-form">
     <div class="form-section-title">资源阈值（%）</div>
     <div class="inspection-thresholds">
       <div v-for="field in thresholdFields" :key="field.label" class="inspection-threshold-row">
@@ -137,7 +137,7 @@ defineExpose({ validate, normalized })
         <ElCheckbox v-model="service.required" class="inspection-required">必需</ElCheckbox>
         <ElButton type="danger" link :aria-label="`删除服务 ${service.name || index + 1}`" @click="removeService(index)">删除</ElButton>
       </div>
-      <p v-if="!config.services.length" class="inspection-muted">不检查服务</p>
+      <p v-if="!config.services.length" class="ui-text-muted">不检查服务</p>
     </div>
     <div class="form-section-title">错误日志</div>
     <div class="field-grid">

@@ -54,13 +54,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <main class="assets-main">
-      <div class="assets-heading inspection-section-heading">
+    <main class="console-main">
+      <div class="console-page-heading inspection-section-heading">
         <ElButton @click="router.push({ path: '/inspections/records', query: { task: route.params.taskId } })">返回巡检记录</ElButton>
       </div>
-      <section v-loading="loading" class="host-section inspection-record-detail" aria-label="服务器巡检记录">
+      <section v-loading="loading" class="ui-panel inspection-record-detail" aria-label="服务器巡检记录">
         <InspectionTaskDetail v-if="loaded && task" :task="task" />
-        <p v-else-if="!loading" class="inspection-retry">详情未加载。<ElButton @click="load()">重试</ElButton></p>
+        <p v-else-if="!loading" class="ui-load-retry">详情未加载。<ElButton @click="load()">重试</ElButton></p>
       </section>
     </main>
 </template>

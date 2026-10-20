@@ -3,7 +3,7 @@ import InspectionTaskList from '@/components/InspectionTaskList.vue'
 </script>
 
 <template>
-    <main class="assets-main">
+    <main class="console-main">
       <InspectionTaskList records />
     </main>
 </template>

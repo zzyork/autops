@@ -221,7 +221,7 @@
 | `frontend/package-lock.json` | npm 依赖版本锁定文件。 |
 | `frontend/tsconfig.json` | TypeScript 编译与类型检查配置。 |
 | `frontend/vite.config.ts` | Vite 开发与构建配置。 |
-| `frontend/src/App.vue` | 应用根组件，创建工作区状态并承载唯一控制台布局与页面标签。最后同步：2026-10-13。 |
+| `frontend/src/App.vue` | 应用根组件，创建工作区状态并通过 ConsoleLayout 承载唯一控制台布局与页面标签。最后同步：2026-10-20。 |
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
 | `frontend/src/api/http.ts` | 通用 HTTP、二进制下载、SSE 分帧及连接/空闲超时，兼容 AI token/done 协议与取消分类。最后同步：2026-10-16。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。最后同步：2026-10-10。 |
@@ -248,7 +248,8 @@
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单，本地逐字段校验、提示与渲染后聚焦。最后同步：2026-10-20。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交；字段错误和选择组错误定位。最后同步：2026-10-20。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机概览、可折叠检查结果与风险、报告导出展示；详情不展示配置。最后同步：2026-10-12。 |
-| `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论和时间的前端显示映射。最后同步：2026-10-12。 |
+| `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论、指标和结果表的前端显示映射。最后同步：2026-10-20。 |
+| `frontend/src/components/timeDisplay.ts` | 对话和巡检共用的日期时间展示，保留原有中文格式和空值文案。最后同步：2026-10-20。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用请求错误和导航阻断消息；请求错误置顶偏移、时长、取消忽略与同时去重。最后同步：2026-10-20。 |
 | `frontend/src/components/FieldError.vue` | 共用字段级错误图标和文字，按消息显示带 ID 的告警提示，复用紧凑错误样式。最后同步：2026-10-20。 |
@@ -256,15 +257,17 @@
 | `frontend/src/components/ListPagination.vue` | 共用列表分页控件，紧凑页码 28 与可换行布局，双向绑定页码/页长及 10、20、50、100 条选项。最后同步：2026-10-20。 |
 | `frontend/src/components/pagination.ts` | 共用分页数量配置与本地数组分页逻辑，维护当前页、数量切换重置及数据减少后的页码校正。最后同步：2026-10-13。 |
 | `frontend/src/components/serverPagination.ts` | 六类管理列表共用后端分页状态与请求，处理请求失效、页长重置及末页校正。最后同步：2026-10-14。 |
-| `frontend/src/components/AssetsLayout.vue` | AI、资产、巡检及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽。最后同步：2026-10-20。 |
+| `frontend/src/components/ConsoleLayout.vue` | AI、资产、巡检及配置管理共用控制台外壳，提供唯一顶栏、侧栏与内容插槽，加载控制台专属样式。最后同步：2026-10-20。 |
 | `frontend/src/components/WorkspaceTabs.vue` | 工作区标签栏与页面面板，传递激活状态并复用 Element Plus 键盘与溢出导航。最后同步：2026-10-16。 |
 | `frontend/src/components/WorkspacePage.vue` | 独立路由快照容器及页面可见状态注入，隔离后台页面路由与订阅。最后同步：2026-10-16。 |
 | `frontend/src/components/workspace.ts` | 工作区状态与可见性注入契约，管理标签、巡检详情标题、导航、滚动恢复及弹窗切页限制。最后同步：2026-10-16。 |
 | `frontend/src/env.d.ts` | 补充 Vite 环境变量的 TypeScript 类型声明。 |
-| `frontend/src/main.ts` | Vue 应用启动入口。 |
+| `frontend/src/main.ts` | Vue 应用启动入口，统一加载基础变量、组件库覆盖和公共 UI 样式。最后同步：2026-10-20。 |
 | `frontend/src/router/index.ts` | 对话、配置、资产和巡检页面路由。最后同步：2026-10-20。 |
 | `frontend/src/styles/main.css` | 紧凑排版、尺寸、间距和颜色变量及 Element Plus 映射，统一按钮、输入、表格、浮层、焦点和减少动态效果。最后同步：2026-10-20。 |
-| `frontend/src/styles/assets.css` | 控制台顶栏/侧栏/标签栏及资产列表、工具栏、表单与宽表的紧凑布局。最后同步：2026-10-20。 |
+| `frontend/src/styles/console.css` | 控制台顶栏、侧栏、工作区标签和页面容器样式，由 ConsoleLayout 加载。最后同步：2026-10-20。 |
+| `frontend/src/styles/ui.css` | 各业务共用的面板、工具栏、表格、表单、字段说明和加载重试区域，由应用入口统一加载。最后同步：2026-10-20。 |
+| `frontend/src/styles/assets.css` | 资产分组、主机统计和 SSH 密钥业务样式，由资产页面显式加载。最后同步：2026-10-20。 |
 | `frontend/src/styles/inspections.css` | 巡检选择/配置、任务详情与证据列表的紧凑间距、错误态和长内容布局。最后同步：2026-10-20。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
 | `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |

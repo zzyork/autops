@@ -1,11 +1,10 @@
 .inspection-name { white-space: normal; text-align: left; height: auto; overflow-wrap: anywhere; }
 .inspection-rules-actions { display: flex; align-items: center; gap: var(--ui-space-2); }
-.host-section:has(> .inspection-rules-form) { display: flex; flex-direction: column; }
+.ui-panel:has(> .inspection-rules-form) { display: flex; flex-direction: column; }
 .inspection-rules-form { min-height: 0; overflow-y: auto; }
 .inspection-pagination { display: flex; justify-content: flex-end; padding-top: var(--ui-space-4); }
 .inspection-detail-wrap { margin-top: var(--ui-space-4); min-height: 100px; }
 .inspection-record-detail { margin-bottom: var(--ui-space-4); min-height: 100px; }
-.inspection-retry { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-panel-padding); color: var(--ui-text-secondary); }
 .inspection-create { min-height: 110px; }
 .inspection-create .form-section-title em { font-style: normal; color: var(--ui-danger); }
 .inspection-selection-head, .inspection-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-4); }
@@ -19,7 +18,6 @@
 .inspection-check-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-1) var(--ui-space-4); padding: var(--ui-space-2); border: 1px solid var(--ui-border); }
 .inspection-check-picker .el-checkbox { min-height: var(--ui-inline-control-height); height: auto; margin: 0; align-items: flex-start; }
 .inspection-check-picker .el-checkbox__label { display: grid; white-space: normal; line-height: var(--ui-line-height-base); }
-.inspection-muted { color: var(--ui-text-secondary); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); overflow-wrap: anywhere; }
 .inspection-config { padding-bottom: 0; }
 .inspection-config .form-section-title:first-child { border-top: 1px solid var(--ui-border); padding-top: var(--ui-space-6); }
 .inspection-thresholds { display: grid; gap: var(--ui-space-2); }

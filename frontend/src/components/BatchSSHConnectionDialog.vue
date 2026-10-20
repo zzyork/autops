@@ -160,7 +160,7 @@ onUnmounted(reset)
     <p class="batch-summary">共 {{ rows.length }} 台，已完成 {{ completed }} 台{{ running ? '，测试进行中' : '' }}。</p>
     <p v-if="stopped || confirmedCount" class="batch-summary">{{ stopped ? '后续提交已停止' : '身份已确认' }}，请重新开始测试。</p>
     <ElTable :data="rows" max-height="420">
-      <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="host-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div></template></ElTableColumn>
+      <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="ui-item-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div></template></ElTableColumn>
       <ElTableColumn label="状态" min-width="140"><template #default="{ row }"><span class="batch-test-status"><TestStatus :status="rowDisplay(row as Row).status" :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`" />{{ rowDisplay(row as Row).label }}</span></template></ElTableColumn>
     </ElTable>
     <p class="batch-summary">关闭弹窗会停止提交后续主机，正在测试的主机仍会完成。</p>

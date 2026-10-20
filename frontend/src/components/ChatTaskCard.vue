@@ -114,17 +114,17 @@ onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout
   <section class="ai-task" :aria-label="`巡检任务 ${task?.name ?? taskId}`">
     <template v-if="loaded && task">
       <div class="ai-card-heading"><strong>{{ task.name }}</strong><ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></div>
-      <p class="inspection-muted">已完成 {{ task.completed_hosts }} / {{ task.host_count }} 台主机巡检，执行失败 {{ task.failed_hosts }} 台。</p>
-      <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="inspection-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
-      <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status"><p class="inspection-muted" role="status">AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。</p><ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton></div>
-      <p v-else-if="analysisLoading" class="inspection-muted">正在读取 AI 报告状态...</p>
-      <p v-else class="inspection-retry">AI 报告状态未加载。<ElButton @click="loadAnalysis">重试</ElButton></p>
+      <p class="ui-text-muted">已完成 {{ task.completed_hosts }} / {{ task.host_count }} 台主机巡检，执行失败 {{ task.failed_hosts }} 台。</p>
+      <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="ui-text-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
+      <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status"><p class="ui-text-muted" role="status">AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。</p><ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton></div>
+      <p v-else-if="analysisLoading" class="ui-text-muted">正在读取 AI 报告状态...</p>
+      <p v-else class="ui-load-retry">AI 报告状态未加载。<ElButton @click="loadAnalysis">重试</ElButton></p>
       <div class="ai-task-actions">
         <ElButton type="primary" :disabled="!reportAvailable" @click="router.push({ name: 'inspection-records', query: { task: task.id } })">查看 AI 报告</ElButton>
         <ElButton @click="router.push({ name: 'inspection-record-detail', params: { taskId: task.id } })">查看巡检记录</ElButton>
       </div>
     </template>
-    <p v-else-if="loading" class="inspection-muted">正在读取任务...</p>
-    <p v-else class="inspection-retry">任务未加载。<ElButton @click="load">重试</ElButton></p>
+    <p v-else-if="loading" class="ui-text-muted">正在读取任务...</p>
+    <p v-else class="ui-load-retry">任务未加载。<ElButton @click="load">重试</ElButton></p>
   </section>
 </template>

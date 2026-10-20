@@ -32,7 +32,7 @@ watch(() => props.selectedIds, resetPage)
     </div>
     <div v-for="entry in pageItems" :key="entry.key" class="analysis-evidence-item">
       <strong>{{ entry.item.id }} · {{ entry.item.host_name }} ({{ entry.item.address }})</strong>
-      <p class="inspection-muted">{{ entry.item.source }}<template v-if="entry.item.source_table_index != null"> · 来源表 {{ entry.item.source_table_index }}</template><template v-if="entry.row != null"> · 结果行 {{ entry.row }}</template></p>
+      <p class="ui-text-muted">{{ entry.item.source }}<template v-if="entry.item.source_table_index != null"> · 来源表 {{ entry.item.source_table_index }}</template><template v-if="entry.row != null"> · 结果行 {{ entry.row }}</template></p>
       <p>{{ entry.line }}</p>
     </div>
     <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />

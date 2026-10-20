@@ -375,8 +375,8 @@ function dateLabel(value: string) {
 </script>
 
 <template>
-    <main class="assets-main">
-      <ElAlert v-if="!groupsLoading && !groupsLoadFailed && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="assets-alert" />
+    <main class="console-main">
+      <ElAlert v-if="!groupsLoading && !groupsLoadFailed && !groups.length" title="暂无分组，请前往分组管理新增分组。" type="info" :closable="false" show-icon class="ui-page-alert" />
       <div class="assets-layout">
         <aside class="group-sidebar" aria-label="主机分组">
           <div class="section-header"><h2>分组筛选</h2><RouterLink to="/assets/groups">管理分组</RouterLink></div>
@@ -387,25 +387,25 @@ function dateLabel(value: string) {
             </div>
           </div>
         </aside>
-        <section class="host-section" aria-labelledby="host-title">
+        <section class="ui-panel" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span v-if="!hostsLoading && !hostsLoadFailed" class="host-total">{{ total }} 台</span></div></div>
-          <div class="host-toolbar">
-            <div class="host-toolbar-left">
+          <div class="ui-toolbar">
+            <div class="ui-toolbar-left">
               <ElButton :disabled="hostsLoading || hostsLoadFailed || !hosts.length" :aria-label="allHostsSelected ? '取消全选当前页主机' : '全选当前页主机'" @click="toggleAllHosts">{{ allHostsSelected ? '取消全选' : '全选' }}</ElButton>
             </div>
-            <div class="host-toolbar-right">
-              <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" />
+            <div class="ui-toolbar-right">
+              <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="ui-search" />
               <ElButton type="primary" @click="openNewHost">新增主机</ElButton>
               <ElButton v-if="selectedHosts.length >= MIN_BATCH_HOSTS" :disabled="hostsLoading || hostsLoadFailed || batchDialog" @click="startBatchTest">批量测试连接（{{ selectedHosts.length }}）</ElButton>
               <ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton>
             </div>
           </div>
-          <div class="host-table-wrap">
-            <ElTable ref="hostTable" v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="host-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
+          <div class="ui-table-wrap">
+            <ElTable ref="hostTable" v-loading="hostsLoading || openingHost" :data="hosts" row-key="id" class="ui-table" :empty-text="hostsLoadFailed ? '' : hostsLoading ? '加载中' : '暂无主机'" @selection-change="selectedHosts = $event">
               <ElTableColumn type="selection" width="44" />
-              <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="host-name">{{ row.name }}</div><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
+              <ElTableColumn label="主机" min-width="190"><template #default="{ row }"><div class="ui-item-title">{{ row.name }}</div><div class="ui-item-secondary">{{ row.address }}</div></template></ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
-              <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="host-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
+              <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="ui-item-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
@@ -419,7 +419,7 @@ function dateLabel(value: string) {
               </ElTableColumn>
             </ElTable>
           </div>
-          <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
+          <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="ui-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>
           <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="!hostsLoading && !hostsLoadFailed" :disabled="hostsLoading || hostsLoadFailed" />
         </section>
       </div>
@@ -428,7 +428,7 @@ function dateLabel(value: string) {
     <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
      <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-       <div ref="formRoot" class="asset-form host-form">
+       <div ref="formRoot" class="ui-form host-form">
          <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
          <div class="form-section-title">基本信息</div>
          <div class="field-grid">

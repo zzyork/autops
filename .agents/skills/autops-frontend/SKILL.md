@@ -13,7 +13,7 @@ description: autops 项目前端开发流程。修改或设计 Vue、TypeScript�
 
 1. 加载 `vue` 技能，按任务读取其 `references/` 中相关文件；直接读文件时从 `.agents/skills/vue/SKILL.md` 开始。先阅读 `docs/AI-编程接入指南.md` 的已知差异，按项目依赖版本核对 API。
 2. 阅读 `frontend/package.json`、目标页面、相邻实现和实际调用链。接口经过 `frontend/src/api/` 与 `frontend/src/api/http.ts`，类型位于 `frontend/src/types/`；不要在页面照搬外部示例中的直接请求。
-3. 检索可复用组件、组合式函数与样式；涉及反馈、测试状态、分页、展开详情或布局时，优先检查 `feedback.ts`、`TestStatus.vue`、`ListPagination.vue`、`DisclosurePanel.vue`、`AssetsLayout.vue` 及其调用方。
+3. 检索可复用组件、组合式函数与样式；涉及反馈、测试状态、分页、展开详情或布局时，优先检查 `feedback.ts`、`TestStatus.vue`、`ListPagination.vue`、`DisclosurePanel.vue`、`ConsoleLayout.vue` 及其调用方。
 4. 说明目标、涉及文件、数据与状态归属、复用点、用户可见变化和风险；有跨端字段或状态变化时，同时加载 `autops-backend`，检查 Schema、实际响应、前端 API 与类型及全部已知消费者。
 
 ## 实施边界

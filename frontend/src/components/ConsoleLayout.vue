@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useWorkspace } from './workspace'
-import '@/styles/assets.css'
+import '@/styles/console.css'
 
-withDefaults(defineProps<{ title: string; section?: string }>(), { section: '资产管理' })
 const route = useRoute()
 const { menuCollapsed, assetsExpanded, inspectionsExpanded, settingsExpanded } = useWorkspace()
 </script>
 
 <template>
-  <div class="workspace assets-page" :class="{ 'menu-collapsed': menuCollapsed }">
+  <div class="workspace console-page" :class="{ 'menu-collapsed': menuCollapsed }">
     <header class="topbar console-topbar">
       <RouterLink to="/ai/chat" class="brand" aria-label="autops AI 对话"><span class="brand-mark">a.</span>autops</RouterLink>
       <span class="console-version">v0.1</span>

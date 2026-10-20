@@ -146,7 +146,7 @@ async function submit() {
 
 <template>
   <ElDialog :model-value="modelValue" align-center title="创建巡检任务" width="min(var(--ui-dialog-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="emit('update:modelValue', $event)">
-    <div ref="formRoot" v-loading="loading" class="inspection-create asset-form">
+    <div ref="formRoot" v-loading="loading" class="inspection-create ui-form">
       <template v-if="loaded && catalog">
         <label class="field" :class="{ 'is-error': invalidField === 'name' }"><span>任务名称 <em>*</em></span><ElInput v-model="name" maxlength="100" :aria-invalid="invalidField === 'name'" :aria-describedby="invalidField === 'name' ? `${errorId}-name` : undefined" placeholder="输入任务名称" /></label>
         <FieldError v-if="invalidField === 'name'" :id="`${errorId}-name`" :message="formError" />
@@ -158,21 +158,21 @@ async function submit() {
               <template #header><ElCheckbox :model-value="allVisibleHostsSelected" :indeterminate="hostsIndeterminate" :disabled="visibleHosts.length === 0" aria-label="全选当前筛选的全部主机（含其他页）" @change="toggleAllHosts">全选</ElCheckbox></template>
               <template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${row.name}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template>
             </ElTableColumn>
-            <ElTableColumn label="主机" min-width="180"><template #default="{ row }"><strong>{{ row.name }}</strong><div class="host-address">{{ row.address }}</div></template></ElTableColumn>
+            <ElTableColumn label="主机" min-width="180"><template #default="{ row }"><strong>{{ row.name }}</strong><div class="ui-item-secondary">{{ row.address }}</div></template></ElTableColumn>
             <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName((row as Host).group_id) }}</template></ElTableColumn>
           </ElTable>
         </div>
         <FieldError v-if="invalidField === 'hosts'" :id="`${errorId}-hosts`" :message="formError" />
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :disabled="loading || saving || !loaded" />
-        <p class="inspection-muted">翻页保留已选主机；全选作用于当前筛选的全部主机（含其他页）。</p>
+        <p class="ui-text-muted">翻页保留已选主机；全选作用于当前筛选的全部主机（含其他页）。</p>
         <div class="form-section-title">检查项 <em>*</em></div>
         <ElCheckboxGroup v-model="selectedChecks" class="inspection-check-picker" :class="{ 'is-error': invalidField === 'checks' }" aria-label="检查项" :tabindex="invalidField === 'checks' ? 0 : undefined" :aria-invalid="invalidField === 'checks'" :aria-describedby="invalidField === 'checks' ? `${errorId}-checks` : undefined">
-          <ElCheckbox v-for="check in catalog.checks" :key="check.id" :value="check.id"><span>{{ check.title }}</span><span class="inspection-muted">{{ check.description }}</span></ElCheckbox>
+          <ElCheckbox v-for="check in catalog.checks" :key="check.id" :value="check.id"><span>{{ check.title }}</span><span class="ui-text-muted">{{ check.description }}</span></ElCheckbox>
         </ElCheckboxGroup>
         <FieldError v-if="invalidField === 'checks'" :id="`${errorId}-checks`" :message="formError" />
-        <p class="inspection-muted">本次巡检使用统一默认规则。阈值、服务配置及执行时限可在“巡检规则”页面查看。</p>
+        <p class="ui-text-muted">本次巡检使用统一默认规则。阈值、服务配置及执行时限可在“巡检规则”页面查看。</p>
       </template>
-      <div v-else-if="!loading" class="inspection-retry"><ElButton @click="loadOptions">重试加载</ElButton></div>
+      <div v-else-if="!loading" class="ui-load-retry"><ElButton @click="loadOptions">重试加载</ElButton></div>
     </div>
     <template #footer><ElButton :disabled="saving" @click="emit('update:modelValue', false)">取消</ElButton><ElButton type="primary" :loading="saving" :disabled="!loaded" @click="submit">创建任务</ElButton></template>
   </ElDialog>

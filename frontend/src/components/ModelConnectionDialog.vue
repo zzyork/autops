@@ -68,7 +68,7 @@ async function save() {
 
 <template>
   <ElDialog :model-value="modelValue" :title="connection ? '编辑模型连接' : '新增模型连接'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @update:model-value="emit('update:modelValue', $event)">
-    <div ref="formRoot" class="asset-form ai-model-form">
+    <div ref="formRoot" class="ui-form ai-model-form">
       <label class="field" :class="{ 'is-error': invalidField === 'name' }"><span>名称 <em>*</em></span><ElInput v-model="form.name" maxlength="100" placeholder="连接名称" :aria-invalid="invalidField === 'name'" :aria-describedby="invalidField === 'name' ? `${errorId}-name` : undefined" @input="error = ''; invalidField = null" /></label>
       <FieldError v-if="invalidField === 'name'" :id="`${errorId}-name`" :message="error" />
       <label class="field"><span>协议 <em>*</em></span><ElSelect v-model="form.protocol"><ElOption label="OpenAI 兼容" value="openai_compatible" /><ElOption label="Anthropic" value="anthropic" /></ElSelect></label>
@@ -77,7 +77,7 @@ async function save() {
       <label class="field" :class="{ 'is-error': invalidField === 'model' }"><span>模型 ID <em>*</em></span><ElInput v-model="form.model" placeholder="模型标识" :aria-invalid="invalidField === 'model'" :aria-describedby="invalidField === 'model' ? `${errorId}-model` : undefined" @input="error = ''; invalidField = null" /></label>
       <FieldError v-if="invalidField === 'model'" :id="`${errorId}-model`" :message="error" />
       <label class="field"><span>API Key</span><ElInput v-model="form.api_key" type="password" show-password autocomplete="new-password" :placeholder="connection?.has_api_key ? '留空保留已保存的密钥' : '本地服务可留空'" /></label>
-      <p v-if="!connection && copySource?.has_api_key" class="host-secondary">已保存的 API Key 无法复制，请重新填写。</p>
+      <p v-if="!connection && copySource?.has_api_key" class="ui-item-secondary">已保存的 API Key 无法复制，请重新填写。</p>
       <label class="ai-default-field">设为主模型 <ElSwitch v-model="form.is_default" @change="form.is_default && (form.is_backup = false)" /></label>
       <label class="ai-default-field">设为备用模型 <ElSwitch v-model="form.is_backup" @change="form.is_backup && (form.is_default = false)" /></label>
     </div>
