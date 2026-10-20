@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElInputNumber, ElLoading, ElMessage, ElMessageBox,
   ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn,
@@ -38,7 +38,7 @@ const { items: hosts, page, pageSize, total, loading: hostsLoading, loadFailed: 
   refresh: loadHosts, resetPage, invalidate } = useServerPagination<Host>(
   (currentPage, size) => listHostsPage(search.value.trim(), selectedGroup.value, currentPage, size),
 )
-const hostTable = ref<{ clearSelection: () => void } | null>(null)
+const hostTable = ref<{ clearSelection: () => void; toggleAllSelection: () => void } | null>(null)
 const selectedGroup = ref<number | null>(null)
 const search = ref('')
 const groupsLoading = ref(false)
@@ -54,6 +54,12 @@ const hostDialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
 const selectedHosts = ref<Host[]>([])
+const allHostsSelected = computed(() => hosts.value.length > 0 && selectedHosts.value.length === hosts.value.length)
+const MIN_BATCH_HOSTS = 2
+function toggleAllHosts() {
+  if (hostsLoading.value || hostsLoadFailed.value || !hosts.value.length) return
+  hostTable.value?.toggleAllSelection()
+}
 function clearSelectedHosts() {
   selectedHosts.value = []
   hostTable.value?.clearSelection()
@@ -62,7 +68,7 @@ watch([page, pageSize], clearSelectedHosts, { flush: 'sync' })
 const batchHosts = ref<Host[]>([])
 const batchDialog = ref(false)
 function startBatchTest() {
-  if (hostsLoading.value || hostsLoadFailed.value || !selectedHosts.value.length) return
+  if (hostsLoading.value || hostsLoadFailed.value || selectedHosts.value.length < MIN_BATCH_HOSTS || batchDialog.value) return
   batchHosts.value = [...selectedHosts.value]
   batchDialog.value = true
 }
@@ -361,10 +367,13 @@ function dateLabel(value: string) {
         <section class="host-section" aria-labelledby="host-title">
           <div class="section-header"><div class="host-title-row"><h2 id="host-title">资产列表</h2><span v-if="!hostsLoading && !hostsLoadFailed" class="host-total">{{ total }} 台</span></div></div>
           <div class="host-toolbar">
-            <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" />
+            <div class="host-toolbar-left">
+              <ElButton :disabled="hostsLoading || hostsLoadFailed || !hosts.length" :aria-label="allHostsSelected ? '取消全选当前页主机' : '全选当前页主机'" @click="toggleAllHosts">{{ allHostsSelected ? '取消全选' : '全选' }}</ElButton>
+            </div>
             <div class="host-toolbar-right">
+              <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="host-search" />
               <ElButton type="primary" @click="openNewHost">新增主机</ElButton>
-              <ElButton :disabled="hostsLoading || hostsLoadFailed || !selectedHosts.length || batchDialog" @click="startBatchTest">批量测试连接{{ selectedHosts.length ? `（${selectedHosts.length}）` : '' }}</ElButton>
+              <ElButton v-if="selectedHosts.length >= MIN_BATCH_HOSTS" :disabled="hostsLoading || hostsLoadFailed || batchDialog" @click="startBatchTest">批量测试连接（{{ selectedHosts.length }}）</ElButton>
               <ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton>
             </div>
           </div>
@@ -377,7 +386,14 @@ function dateLabel(value: string) {
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
-              <ElTableColumn label="操作" width="220" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton><ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton><ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton></template></ElTableColumn>
+              <ElTableColumn label="操作" width="300" fixed="right">
+                <template #default="{ row }">
+                  <ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton>
+                  <ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton>
+                  <ElButton link disabled>更多操作</ElButton>
+                  <ElButton link type="danger" @click="removeHost(row.id, row.name)">删除</ElButton>
+                </template>
+              </ElTableColumn>
             </ElTable>
           </div>
           <ElEmpty v-if="!hostsLoading && !hostsLoadFailed && !hosts.length" :description="search || selectedGroup !== null ? '暂无符合条件的主机' : '暂无主机，请新增主机'" class="host-empty"><ElButton v-if="!search && selectedGroup === null" type="primary" plain @click="openNewHost">新增主机</ElButton></ElEmpty>

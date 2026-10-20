@@ -267,11 +267,11 @@
 | `frontend/src/main.ts` | Vue 应用启动入口。 |
 | `frontend/src/router/index.ts` | 对话、SSH 执行、配置、资产和巡检页面路由。最后同步：2026-10-20。 |
 | `frontend/src/styles/main.css` | 全局基础样式与 Element Plus 组件主题，统一维护字体和公共交互状态。最后同步：2026-10-10。 |
-| `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含导航选中态和分组表格样式。最后同步：2026-10-16。 |
+| `frontend/src/styles/assets.css` | 主机、分组管理的共用布局与业务样式，包含主机选择工具栏、导航选中态和分组表格样式。最后同步：2026-10-20。 |
 | `frontend/src/styles/inspections.css` | 巡检创建、任务详情与结果列表样式。最后同步：2026-10-12。 |
 | `frontend/src/types/api.ts` | 资产及 SSH 连接测试接口 TypeScript 类型定义。最后同步：2026-10-12。 |
 | `frontend/src/types/inspections.ts` | 巡检请求、配置、执行状态、检查结果及报告 TypeScript 类型。最后同步：2026-10-12。 |
-| `frontend/src/views/HostsView.vue` | 主机管理、跳板机关联选择及单台/批量连接测试。最后同步：2026-10-16。 |
+| `frontend/src/views/HostsView.vue` | 主机管理、当前页全选、跳板机关联选择及单台/批量连接测试，批量入口仅在多选后显示。最后同步：2026-10-20。 |
 | `frontend/src/views/HostGroupsView.vue` | 独立分组管理页面，含分组列表、主机计数和分组增删改。最后同步：2026-10-10。 |
 | `frontend/src/views/JumpHostsView.vue` | 独立跳板机管理页面及 SSH 连接测试入口。最后同步：2026-10-12。 |
 | `frontend/src/views/SSHKeysView.vue` | 独立 SSH 密钥管理页面。 |
