@@ -209,7 +209,6 @@ onUnmounted(() => {
 
 <template>
     <main class="assets-main ai-main">
-      <div class="assets-heading"><h1>AI 对话</h1></div>
       <div class="ai-workspace">
         <aside class="ai-sessions" aria-label="会话列表">
           <div class="ai-pane-heading"><strong>会话</strong><ElButton type="primary" :disabled="!!operation" @click="newChat">新建对话</ElButton></div>
