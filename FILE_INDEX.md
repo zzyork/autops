@@ -85,10 +85,6 @@
 | `docs/AI-项目初始化清单.md` | 项目接入前的核查清单。 |
 | `docs/AI-接入流程.md` | 开发规范包接入流程。 |
 | `docs/AI-编程工程实践参考.md` | AI 编程工程实践与来源参考。 |
-| `docs/SSH命令执行.md` | SSH 命令执行工具库的调用契约。 |
-| `docs/AI对话中止.md` | AI 会话与关联任务的中止契约。 |
-| `docs/巡检错误日志.md` | 巡检错误日志的采集、展示与分析规则。 |
-| `docs/主机管理.md` | 主机字段、表单、接口与旧数据兼容契约。 |
 | `docs/templates/需求说明模板.md` | 需求说明模板。 |
 | `docs/templates/开发任务模板.md` | 开发任务模板。 |
 | `docs/templates/架构决策记录模板.md` | 架构决策记录模板。 |
@@ -244,7 +240,7 @@
 | `frontend/src/views/ChatView.vue` | AI 会话管理与流式对话页面。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理与能力测试页面。 |
 | `frontend/src/styles/ai.css` | AI 对话与模型配置样式。 |
-| `frontend/src/components/SSHConnectionDialog.vue` | 单台 SSH 连接测试弹窗。 |
+| `frontend/src/components/sshConnectionTest.ts` | 单台 SSH 连接测试流程与行内状态管理。 |
 | `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量 SSH 连接测试弹窗。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机 SSH 连接状态展示。 |
 | `frontend/src/components/HostForm.vue` | 主机连接信息、基本信息与备注表单展示。 |
