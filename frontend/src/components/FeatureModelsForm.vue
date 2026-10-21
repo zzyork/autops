@@ -80,7 +80,6 @@ onUnmounted(() => { active = false; sequence++ })
             <ElOption v-for="item in connections" :key="item.id" :label="connectionLabel(item)" :value="item.id" />
             <ElOption v-if="missing(draft.chat_connection_id)" :label="`连接 #${draft.chat_connection_id} 已不存在`" :value="draft.chat_connection_id!" disabled />
           </ElSelect>
-          <span class="ui-field-hint">影响新会话；已存在会话仍使用原连接。指定连接无效时不会沿用主模型。</span>
         </div>
         <div class="field">
           <label for="feature-report-model">巡检 AI 报告 <em>*</em></label>
@@ -89,7 +88,6 @@ onUnmounted(() => { active = false; sequence++ })
             <ElOption v-for="item in connections" :key="item.id" :label="connectionLabel(item)" :value="item.id" />
             <ElOption v-if="missing(draft.inspection_report_connection_id)" :label="`连接 #${draft.inspection_report_connection_id} 已不存在`" :value="draft.inspection_report_connection_id!" disabled />
           </ElSelect>
-          <span class="ui-field-hint">影响新生成的报告批次；需通过对话测试，指定连接无效时不会沿用主模型。</span>
         </div>
       </div>
       <p v-if="!connectionsLoaded" class="ui-text-muted">连接列表未加载，暂不能修改或保存功能配置。</p>

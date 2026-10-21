@@ -129,7 +129,6 @@ onUnmounted(() => { active = false; allSequence++ })
         <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="loaded && !loading" :disabled="loading || !loaded || operating !== null" />
       </section>
       <FeatureModelsForm :connections="allConnections" :connections-loaded="allLoaded" :connections-loading="allLoading" @configured="featureModels = $event" />
-      <p class="ai-data-notice">模型服务会收到用户对话，以及完成请求所需的资产信息和巡检结果。请确认服务地址和数据处理范围后再使用。</p>
     </main>
     <ModelConnectionDialog v-model="dialog" :connection="editing" :copy-source="copying" @saved="saved" />
 </template>

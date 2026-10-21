@@ -283,7 +283,6 @@ onUnmounted(() => {
               :aria-label="`${allTasksSelected ? '取消全选' : '全选'}当前页可删除的${taskLabel}`"
               @click="toggleAllTasks"
             >{{ allTasksSelected ? '取消全选' : '全选' }}</ElButton>
-            <span v-if="!records" class="ui-text-muted">仅可选择已结束的任务</span>
           </div>
           <div class="ui-toolbar-right">
             <ElButton v-if="!records" type="primary" :disabled="deleting" @click="creating = true">创建巡检</ElButton>
