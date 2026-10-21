@@ -101,6 +101,7 @@ def analyze(client: httpx.Client, snapshot: ModelSnapshot, api_key: str | None,
         raise ProviderError("分析已中断")
     logs = [item for item in data.evidence if item.kind == "log"]
     findings = [item for item in data.evidence if item.kind == "finding" and item.severity in ("warning", "critical")]
+    limitations = [item for item in data.evidence if item.kind == "check" and item.limited]
     records = diagnostic_records(logs, cancel)
     issues: list[AnalysisIssue] = []
     if records:
@@ -145,7 +146,7 @@ def analyze(client: httpx.Client, snapshot: ModelSnapshot, api_key: str | None,
                                     recommendation="", evidence_ids=[item.id]))
     return AnalysisReport(task_name=data.task_name, task_status=data.task_status,
                           inspection_started_at=data.started_at, inspection_finished_at=data.finished_at,
-                          check_ids=data.check_ids, summary="", issues=issues, evidence=logs + findings,
+                          check_ids=data.check_ids, summary="", issues=issues, evidence=logs + findings + limitations,
                           host_count=data.host_count, finding_count=data.finding_count, log_count=data.log_count,
                           incomplete_count=data.incomplete_count, unassessed_count=data.unassessed_count,
                            generated_at=utc_now(), model_name=snapshot.name, model_version=snapshot.version)

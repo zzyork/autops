@@ -10,6 +10,8 @@ CheckId = Literal["server_info", "system_resources", "service_status", "network_
 RunStatus = Literal["queued", "running", "completed", "partial", "failed", "interrupted"]
 CheckStatus = Literal["queued", "running", "completed", "failed", "skipped", "interrupted"]
 Conclusion = Literal["normal", "warning", "critical", "not_applicable", "unknown"]
+MAX_LOG_QUERY_DAYS = 30
+UNASSESSED_LOG_TIME_METRIC = "时间未判定的错误日志行数"
 
 
 class InputModel(BaseModel):
@@ -69,7 +71,8 @@ def default_log_paths() -> list[str]:
 
 
 class LogRules(InputModel):
-    days: int = Field(default=30, ge=1, le=365, strict=True)
+    # 保留历史任务快照的读取范围；新规则保存及实际查询另限最多 30 天。
+    days: int = Field(default=MAX_LOG_QUERY_DAYS, ge=1, le=365, strict=True)
     lines: int = Field(default=200, ge=1, le=200, strict=True)
     paths: list[str] = Field(default_factory=default_log_paths, max_length=12)
 
@@ -102,7 +105,13 @@ class InspectionConfig(InputModel):
         return self
 
 
+class LogRulesSave(LogRules):
+    days: int = Field(default=MAX_LOG_QUERY_DAYS, ge=1, le=MAX_LOG_QUERY_DAYS, strict=True)
+
+
 class InspectionConfigSave(InspectionConfig):
+    logs: LogRulesSave = Field(default_factory=LogRulesSave)
+
     @model_validator(mode="before")
     @classmethod
     def complete_rules(cls, value: object) -> object:

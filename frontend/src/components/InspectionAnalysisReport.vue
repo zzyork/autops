@@ -134,9 +134,11 @@ function exportText() {
     '巡检 AI 汇报', `任务：${value.task_name}（${runLabel(value.task_status)}）`,
     `采集开始：${timeLabel(value.inspection_started_at)}；结束：${timeLabel(value.inspection_finished_at)}`,
     `生成时间：${timeLabel(value.generated_at)}`, `模型：${value.model_name} (v${value.model_version})`,
-    `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志，${value.incomplete_count} 项未完成，${value.unassessed_count} 项不适用或结论未知`,
+    `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志，${value.incomplete_count} 项未完成，${value.unassessed_count} 项存在判定范围限制`,
     '', '非错误日志问题', ...otherProblems.value.map((item) =>
       `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
+    '', '判定范围限制', ...value.evidence.filter((item) => item.limited).map((item) =>
+      `${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
     '', '错误日志分析', ...(legacyLogs.value ? ['此汇报为旧版汇总，可重新生成诊断组分析。'] : []),
     ...issueLines(logIssues.value), '日志证据',
     ...value.evidence.filter((item) => item.kind === 'log').flatMap((item) => [
@@ -232,8 +234,8 @@ onUnmounted(() => {
         </section>
         <section v-if="report.unassessed_count" class="inspection-analysis-section">
           <h3>判定范围限制</h3>
-          <p>本次有 {{ report.unassessed_count }} 项检查不适用或结论未知，不能作为健康依据。</p>
-          <p v-for="item in report.evidence.filter((evidence) => evidence.limited)" :key="item.id" class="ui-text-muted">{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：不适用或结论未知。</p>
+          <p>本次有 {{ report.unassessed_count }} 项检查存在不适用、结论未知或部分日志时间未判定，不能作为完整健康依据。</p>
+          <p v-for="item in report.evidence.filter((evidence) => evidence.limited)" :key="item.id" class="ui-text-muted">{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：{{ item.content }}</p>
         </section>
         <p v-if="!report.issues.length" class="ui-text-muted">没有可分析的匹配错误日志或巡检风险；正常检查不进行 AI 分析。</p>
         <section v-if="problemTotal" class="inspection-analysis-section">

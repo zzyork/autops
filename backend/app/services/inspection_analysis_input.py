@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from ..inspection_models import InspectionTask
 from ..schemas.inspection_analysis import AnalysisEvidence
-from ..schemas.inspections import CheckPayload
+from ..schemas.inspections import UNASSESSED_LOG_TIME_METRIC, CheckPayload
 
 MAX_BATCH_CHARACTERS = 24_000
 MAX_BATCH_RECORDS = 40
@@ -92,7 +92,15 @@ def build_input(task: InspectionTask) -> AnalysisInput:
             payload = CheckPayload.model_validate(check.payload)
             incomplete_count += check.status != "completed"
             limited = check.status == "completed" and check.conclusion in ("not_applicable", "unknown")
-            unassessed_count += limited
+            unassessed_logs = check.status == "completed" and check.check_id == "log_error" and any(
+                metric.name == UNASSESSED_LOG_TIME_METRIC and isinstance(metric.value, (int, float)) and metric.value > 0
+                for metric in payload.metrics
+            )
+            unassessed_count += limited or unassessed_logs
+            if unassessed_logs:
+                add(host, "check", check.title, "日志时间范围",
+                    "部分关键词匹配日志的时间或年份无法确认，未纳入本次时间窗口，不能作为无错误依据。",
+                    limited=True)
             if check.check_id == "log_error":
                 log_count += sum(1 for table in payload.tables for row in table.rows
                                  if len(row) >= 2 and row[0] == "匹配")

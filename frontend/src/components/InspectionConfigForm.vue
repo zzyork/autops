@@ -90,7 +90,7 @@ function validate(): boolean {
     }
   }
   const { days, lines, paths } = current.logs
-  if (!Number.isInteger(days) || days < 1 || days > 365) invalid.log_days = '日志范围须为 1-365 天。'
+  if (!Number.isInteger(days) || days < 1 || days > 30) invalid.log_days = '日志范围须为 1-30 天。'
   if (!Number.isInteger(lines) || lines < 1 || lines > 200) invalid.log_lines = '每来源行数须为 1-200。'
   if (paths.length > 12 || new Set(paths).size !== paths.length || paths.some((path) => path.length > 240 || !LOG_PATH.test(path) || path.slice('/var/log/'.length).split('/').some((part) => !part || part === '.' || part === '..'))) {
     invalid.log_paths = '日志路径最多 12 条，须为 /var/log/ 下不重复的规范路径（每行一条、每条不超过 240 字符）。'
@@ -141,9 +141,10 @@ defineExpose({ validate, normalized })
     </div>
     <div class="form-section-title">错误日志</div>
     <div class="field-grid">
-      <div class="field" :class="{ 'is-error': !!fieldErrors.log_days }"><label :id="`${fieldId('log_days')}-label`" :for="fieldId('log_days')">最近天数</label><ElInputNumber :id="fieldId('log_days')" v-model="config.logs.days" v-native-field-aria :min="1" :max="365" :controls="false" class="full-width" role="group" :aria-labelledby="`${fieldId('log_days')}-label`" :aria-invalid="!!fieldErrors.log_days" :aria-describedby="fieldErrors.log_days ? `${fieldId('log_days')}-error` : undefined" @update:model-value="clearField('log_days')" /><FieldError :id="`${fieldId('log_days')}-error`" :message="fieldErrors.log_days || ''" /></div>
+      <div class="field" :class="{ 'is-error': !!fieldErrors.log_days }"><label :id="`${fieldId('log_days')}-label`" :for="fieldId('log_days')">最近天数（最多 30 天）</label><ElInputNumber :id="fieldId('log_days')" v-model="config.logs.days" v-native-field-aria :min="1" :max="30" :controls="false" class="full-width" role="group" :aria-labelledby="`${fieldId('log_days')}-label`" :aria-invalid="!!fieldErrors.log_days" :aria-describedby="fieldErrors.log_days ? `${fieldId('log_days')}-error` : undefined" @update:model-value="clearField('log_days')" /><FieldError :id="`${fieldId('log_days')}-error`" :message="fieldErrors.log_days || ''" /></div>
       <div class="field" :class="{ 'is-error': !!fieldErrors.log_lines }"><label :id="`${fieldId('log_lines')}-label`" :for="fieldId('log_lines')">每来源最多行数</label><ElInputNumber :id="fieldId('log_lines')" v-model="config.logs.lines" v-native-field-aria :min="1" :max="200" :controls="false" class="full-width" role="group" :aria-labelledby="`${fieldId('log_lines')}-label`" :aria-invalid="!!fieldErrors.log_lines" :aria-describedby="fieldErrors.log_lines ? `${fieldId('log_lines')}-error` : undefined" @update:model-value="clearField('log_lines')" /><FieldError :id="`${fieldId('log_lines')}-error`" :message="fieldErrors.log_lines || ''" /></div>
     </div>
+    <p class="ui-field-hint">所有来源先按时间过滤，再保留每来源最多行数；无年份或无法确认时间的记录不纳入，并标记为时间未判定。</p>
     <div class="field" :class="{ 'is-error': !!fieldErrors.log_paths }"><label :for="fieldId('log_paths')">/var/log/ 下日志路径（每行一条，最多 12 条）</label><ElInput :id="fieldId('log_paths')" type="textarea" :rows="6" :model-value="config.logs.paths.join('\n')" :aria-invalid="!!fieldErrors.log_paths" :aria-describedby="fieldErrors.log_paths ? `${fieldId('log_paths')}-error` : undefined" @update:model-value="updatePaths" /><FieldError :id="`${fieldId('log_paths')}-error`" :message="fieldErrors.log_paths || ''" /></div>
   </div>
 </template>
