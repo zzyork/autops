@@ -30,7 +30,17 @@ const summary = computed(() => summarizeChecks(props.task.hosts.flatMap((host) =
           {{ hostProgressLabel(task) }}
         </dd>
       </div>
-      <div><dt>风险统计</dt><dd class="inspection-record-risks"><ElTag :type="summary.critical ? 'danger' : 'info'" size="small">重要 {{ summary.critical }}</ElTag><ElTag :type="summary.warning ? 'warning' : 'info'" size="small">警告 {{ summary.warning }}</ElTag></dd></div>
+      <div v-if="summary.critical > 0 || summary.warning > 0">
+        <dt>风险统计</dt>
+        <dd class="inspection-record-risks">
+          <ElTag v-if="summary.critical > 0" type="danger" size="small">
+            紧急 {{ summary.critical }}
+          </ElTag>
+          <ElTag v-if="summary.warning > 0" class="inspection-risk-tag" type="warning" size="small">
+            警告 {{ summary.warning }}
+          </ElTag>
+        </dd>
+      </div>
       <div><dt>巡检开始</dt><dd>{{ timeLabel(task.started_at) }}</dd></div>
       <div><dt>巡检结束</dt><dd>{{ timeLabel(task.finished_at) }}</dd></div>
     </dl>

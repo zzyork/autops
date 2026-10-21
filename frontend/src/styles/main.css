@@ -26,6 +26,8 @@
   --ui-warning-soft: #FBF3DF;
   --ui-danger: #B13737;
   --ui-danger-soft: #FAECEC;
+  --ui-risk-warning-fg: #C2410C;
+  --ui-risk-warning-bg: #FFF7ED;
 
   --ui-status-not-started-fg: var(--ui-text-secondary);
   --ui-status-not-started-bg: var(--ui-surface-muted);

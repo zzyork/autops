@@ -65,7 +65,15 @@
   border-bottom: 0;
 }
 .inspection-finding { display: flex; align-items: flex-start; gap: var(--ui-space-2); padding: var(--ui-space-2); overflow-wrap: anywhere; }
-.inspection-finding-warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
+.el-tag.inspection-risk-tag.el-tag--warning {
+  --el-tag-bg-color: var(--ui-risk-warning-bg);
+  --el-tag-text-color: var(--ui-risk-warning-fg);
+  --el-tag-border-color: var(--ui-risk-warning-fg);
+}
+.inspection-finding-warning {
+  background: var(--ui-risk-warning-bg);
+  color: var(--ui-risk-warning-fg);
+}
 .inspection-finding-critical { background: var(--ui-danger-soft); color: var(--ui-danger); }
 .inspection-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ui-space-4); margin: 0; overflow-wrap: anywhere; }
 .inspection-metric { padding-left: var(--ui-space-3); border-left: 2px solid var(--ui-border); min-width: 0; }

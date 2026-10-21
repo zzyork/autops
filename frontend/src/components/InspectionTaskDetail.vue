@@ -139,8 +139,12 @@ async function exportReport() {
         </div>
         <div class="inspection-host-summary" aria-label="主机检查概览">
           <span>检查完成 <strong>{{ hostSummary.completed }} / {{ selectedHost.checks.length }}</strong></span>
-          <ElTag :type="hostSummary.critical ? 'danger' : 'info'" size="small">重要 {{ hostSummary.critical }}</ElTag>
-          <ElTag :type="hostSummary.warning ? 'warning' : 'info'" size="small">警告 {{ hostSummary.warning }}</ElTag>
+          <ElTag v-if="hostSummary.critical > 0" type="danger" size="small">
+            紧急 {{ hostSummary.critical }}
+          </ElTag>
+          <ElTag v-if="hostSummary.warning > 0" class="inspection-risk-tag" type="warning" size="small">
+            警告 {{ hostSummary.warning }}
+          </ElTag>
           <div v-if="expandableCheckIds.length" class="inspection-collapse-actions">
             <ElButton native-type="button" @click="expandedChecks = [...expandableCheckIds]">全部展开</ElButton>
             <ElButton native-type="button" @click="expandedChecks = []">全部收起</ElButton>
@@ -177,7 +181,9 @@ async function exportReport() {
               </template>
               <section class="inspection-check-result" :aria-label="check.title">
                 <p v-for="(finding, index) in check.payload.findings" :key="index" class="inspection-finding" :class="`inspection-finding-${finding.severity}`">
-                  <ElTag :type="finding.severity === 'critical' ? 'danger' : 'warning'" size="small">{{ finding.severity === 'critical' ? '严重' : '警告' }}</ElTag>
+                  <ElTag class="inspection-risk-tag" :type="finding.severity === 'critical' ? 'danger' : 'warning'" size="small">
+                    {{ finding.severity === 'critical' ? '紧急' : '警告' }}
+                  </ElTag>
                   {{ findingLabel(finding.message) }}
                 </p>
                 <template v-if="check.status === 'completed'">
