@@ -186,6 +186,7 @@
 | `backend/app/services/__init__.py` | 声明业务服务包。 |
 | `backend/app/services/ssh_assets.py` | SSH 资产连接配置与凭据解析。 |
 | `backend/app/services/ssh_connections.py` | SSH 连接测试与状态更新。 |
+| `backend/app/services/host_basic_info.py` | 主机基础信息采集与连接快照复核。 |
 | `backend/app/services/inspection_tasks.py` | 后台主机巡检任务执行与取消管理。 |
 | `backend/app/services/inspection_rules.py` | 巡检规则配置读取与保存。 |
 | `backend/app/services/inspection_reports.py` | 巡检 Markdown 报告生成与归档导出。 |
@@ -208,6 +209,7 @@
 | `backend/app/schemas/pagination.py` | 共用分页参数与响应数据模型。 |
 | `backend/app/schemas/health.py` | 定义健康检查响应模型。 |
 | `backend/app/schemas/assets.py` | 资产管理接口数据模型。 |
+| `backend/app/schemas/host_basic_info.py` | 主机基础信息采集与定向更新接口数据模型。 |
 | `backend/app/schemas/jump_hosts.py` | 跳板机接口数据模型。 |
 | `backend/app/schemas/ssh_keys.py` | SSH 密钥与引用接口数据模型。 |
 | `backend/app/schemas/ssh_connections.py` | SSH 连接测试请求与响应数据模型。 |
@@ -227,6 +229,7 @@
 | `frontend/src/api/health.ts` | 健康检查接口调用。 |
 | `frontend/src/api/http.ts` | 共用 HTTP 请求、下载与 SSE 客户端。 |
 | `frontend/src/api/assets.ts` | 资产管理接口调用。 |
+| `frontend/src/api/host_basic_info.ts` | 主机基础信息采集与保存接口调用。 |
 | `frontend/src/api/jump_hosts.ts` | 跳板机管理接口调用。 |
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/api/ssh_connections.ts` | SSH 连接测试接口调用。 |
@@ -245,6 +248,7 @@
 | `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量 SSH 连接测试弹窗。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机 SSH 连接状态展示。 |
 | `frontend/src/components/HostForm.vue` | 主机连接信息、基本信息与备注表单展示。 |
+| `frontend/src/components/HostBasicInfoDialog.vue` | 主机基础信息采集预览、地址选择与保存弹窗。 |
 | `frontend/src/components/hostDisplay.ts` | 主机名称与连接地址的显示标识。 |
 | `frontend/src/components/TestStatus.vue` | 共用测试状态图标、可选图文标签及状态说明。 |
 | `frontend/src/components/sshTestDisplay.ts` | SSH 测试状态与提示文案映射。 |
@@ -277,6 +281,7 @@
 | `frontend/src/styles/assets.css` | 资产管理业务样式。 |
 | `frontend/src/styles/inspections.css` | 巡检配置、详情与分析报告样式。 |
 | `frontend/src/types/api.ts` | 资产与 SSH 连接测试接口类型定义。 |
+| `frontend/src/types/hostBasicInfo.ts` | 主机基础信息采集与保存接口类型定义。 |
 | `frontend/src/types/inspections.ts` | 巡检配置、任务、结果与报告类型定义。 |
 | `frontend/src/views/HostsView.vue` | 主机管理与 SSH 连接测试页面。 |
 | `frontend/src/views/HostGroupsView.vue` | 主机分组管理页面。 |

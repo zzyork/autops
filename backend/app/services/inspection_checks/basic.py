@@ -23,12 +23,21 @@ def addresses(output: str, family: int) -> list[list[str]]:
     return rows
 
 
-def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
+def collect_identity(runner: Runner) -> tuple[str, list[list[str]], list[list[str]]]:
     hostname = query(runner, "hostname").strip()
+    if not hostname:
+        raise InspectionCheckError("invalid_output")
+    ipv4 = addresses(query(runner, "ip -o -4 addr show"), 4)
+    ipv6 = addresses(query(runner, "ip -o -6 addr show"), 6)
+    return hostname, ipv4, ipv6
+
+
+def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
+    hostname, ipv4, ipv6 = collect_identity(runner)
     release = query(runner, "cat /etc/os-release")
     kernel = query(runner, "uname -r").strip()
     uptime = query(runner, "cat /proc/uptime").split()
-    if not hostname or not kernel or not uptime:
+    if not kernel or not uptime:
         raise InspectionCheckError("invalid_output")
     try:
         seconds = float(uptime[0])
@@ -48,8 +57,6 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
             pretty_name = fields[0]
     if pretty_name is None or not re.fullmatch(r"[^\r\n]+", pretty_name):
         raise InspectionCheckError("invalid_output")
-    ipv4 = addresses(query(runner, "ip -o -4 addr show"), 4)
-    ipv6 = addresses(query(runner, "ip -o -6 addr show"), 6)
     return CheckPayload(
         metrics=[Metric(name="主机名", value=hostname), Metric(name="操作系统", value=pretty_name),
                  Metric(name="内核", value=kernel), Metric(name="运行时长", value=round(seconds), unit="秒")],

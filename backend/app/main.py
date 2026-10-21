@@ -15,6 +15,7 @@ from .services.ssh_connections import ConnectionTestManager
 from .services.inspection_tasks import InspectionManager
 from .services.ai_chat import ChatManager
 from .services.inspection_analysis import InspectionAnalysisManager
+from .services.host_basic_info import HostBasicInfoManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,9 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         inspections = None
         ai = None
         analysis = None
+        host_basic_info = None
         try:
             manager = await run_in_threadpool(ConnectionTestManager, sessions, cipher)
             application.state.connection_tests = manager
+            host_basic_info = HostBasicInfoManager(sessions, cipher)
+            application.state.host_basic_info = host_basic_info
             analysis = await run_in_threadpool(InspectionAnalysisManager, sessions, cipher, settings.data_dir)
             application.state.inspection_analysis = analysis
             inspections = await run_in_threadpool(InspectionManager, sessions, cipher, analysis.automatic)
@@ -55,8 +59,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             if analysis is not None:
                                 await run_in_threadpool(analysis.close)
                 finally:
-                    if manager is not None:
-                        await run_in_threadpool(manager.close)
+                    try:
+                        if host_basic_info is not None:
+                            await run_in_threadpool(host_basic_info.close)
+                    finally:
+                        if manager is not None:
+                            await run_in_threadpool(manager.close)
             finally:
                 await run_in_threadpool(engine.dispose)
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  ElAlert, ElButton, ElDialog, ElEmpty, ElInput, ElLoading, ElMessage, ElMessageBox,
+  ElAlert, ElButton, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElInput,
+  ElLoading, ElMessage, ElMessageBox,
   ElTable, ElTableColumn,
 } from 'element-plus'
 import { createHost, deleteHost, getHost, listGroups, listHostsPage, updateHost } from '@/api/assets'
@@ -12,6 +13,7 @@ import HostSSHStatus from '@/components/HostSSHStatus.vue'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import HostForm, { type HostFormData } from '@/components/HostForm.vue'
+import HostBasicInfoDialog from '@/components/HostBasicInfoDialog.vue'
 import { focusFormFeedback } from '@/components/formFeedback'
 import { hostDisplayName } from '@/components/hostDisplay'
 import { useServerPagination } from '@/components/serverPagination'
@@ -43,6 +45,8 @@ const openingHost = ref(false)
 const hostDialog = ref(false)
 const testDialog = ref(false)
 const testTarget = ref<ConnectionTestTarget | null>(null)
+const basicInfoHost = ref<Host | null>(null)
+const basicInfoDialog = ref(false)
 const selectedHosts = ref<Host[]>([])
 const allHostsSelected = computed(() => hosts.value.length > 0 && selectedHosts.value.length === hosts.value.length)
 const MIN_BATCH_HOSTS = 2
@@ -362,6 +366,11 @@ function openConnectionTest(host: Host) {
   testDialog.value = true
 }
 
+function openBasicInfo(host: Host) {
+  basicInfoHost.value = host
+  basicInfoDialog.value = true
+}
+
 function jumpHostName(id: number | null) {
   if (id === null) return '未关联'
   const jumpHost = jumpHosts.value.find((item) => item.id === id)
@@ -415,10 +424,19 @@ function dateLabel(value: string) {
               <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
               <ElTableColumn label="操作" width="344" fixed="right">
                 <template #default="{ row }">
-                  <ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton>
-                  <ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton>
-                  <ElButton link disabled>更多操作</ElButton>
-                  <ElButton link type="danger" @click="removeHost(row.id, hostDisplayName(row as Host))">删除</ElButton>
+                  <div class="host-row-actions">
+                    <ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton>
+                    <ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton>
+                    <ElDropdown trigger="click" @command="openBasicInfo(row as Host)">
+                      <ElButton link type="primary">更多操作</ElButton>
+                      <template #dropdown>
+                        <ElDropdownMenu>
+                          <ElDropdownItem command="collect-basic-info">获取基础信息</ElDropdownItem>
+                        </ElDropdownMenu>
+                      </template>
+                    </ElDropdown>
+                    <ElButton link type="danger" @click="removeHost(row.id, hostDisplayName(row as Host))">删除</ElButton>
+                  </div>
                 </template>
               </ElTableColumn>
             </ElTable>
@@ -431,6 +449,7 @@ function dateLabel(value: string) {
 
     <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
     <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
+    <HostBasicInfoDialog v-model="basicInfoDialog" :host="basicInfoHost" @saved="loadHosts" />
      <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
        <div ref="formRoot" class="ui-form host-form">
          <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />
@@ -451,3 +470,15 @@ function dateLabel(value: string) {
       <template #footer><ElButton :disabled="saving" @click="hostDialog = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="saveHost">保存</ElButton></template>
     </ElDialog>
 </template>
+
+<style scoped>
+.host-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  white-space: nowrap;
+}
+.host-row-actions > :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+</style>

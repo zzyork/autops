@@ -7,6 +7,7 @@ from ....models import Host, JumpHost
 from ....repositories import assets as repository
 from ....repositories.ssh_connections import set_host_status
 from ....schemas.assets import HostInput, HostResponse, HostUpdate
+from ....schemas.host_basic_info import HostBasicInfoCollect, HostBasicInfoResponse, HostBasicInfoUpdate
 from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from .credentials import apply_connection
 
@@ -79,3 +80,22 @@ def delete_host(host_id: int, session: Database) -> Response:
     session.delete(find_host(session, host_id))
     commit(session)
     return Response(status_code=204)
+
+
+@router.post("/hosts/{host_id}/basic-info/collect", response_model=HostBasicInfoResponse)
+def collect_basic_info(host_id: int, data: HostBasicInfoCollect, request: Request) -> HostBasicInfoResponse:
+    return request.app.state.host_basic_info.collect(host_id, data.version)
+
+
+@router.patch("/hosts/{host_id}/basic-info", response_model=HostResponse)
+def update_basic_info(host_id: int, data: HostBasicInfoUpdate, session: Database) -> Host:
+    session.execute(text("BEGIN IMMEDIATE"))
+    host = find_host(session, host_id)
+    if host.version != data.version:
+        raise HTTPException(409, "主机已被修改，请重新获取基础信息")
+    host.name = data.name
+    host.lan_ip = data.lan_ip
+    with session.no_autoflush:
+        set_host_status(session, host.id, host.created_at, host.version, "interrupted", expected_status="running")
+    commit(session)
+    return host
