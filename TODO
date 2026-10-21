@@ -1,0 +1,9 @@
+1、用户体系、权限控制
+2、操作记录系统
+3、AI对话系统新增限制提示词
+4、http://127.0.0.1:5173/inspections/records?task=8a1481eb-dbc6-4bba-95a8-c58de824eba3主机进度6/6，但是提示“1 失败”
+5、[后端] Inspection AI report 8a1481eb-dbc6-4bba-95a8-c58de824eba3 generation 1188537a-03cf-4c45-ae3e-460229b77754 failed: ProviderError: 全量错误日志分析（746 个诊断组）：模型响应未完成（达到输出 token 限额）
+6、
+7、
+8、
+9、
