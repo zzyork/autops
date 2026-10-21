@@ -39,7 +39,7 @@ def percentage(value: float) -> float:
 
 
 CHECK_DEFINITIONS = [
-    CheckDefinition(id="server_info", title="系统基础信息", description="主机、系统版本、运行时长与地址"),
+    CheckDefinition(id="server_info", title="基础信息", description="主机、系统版本、运行时长与地址"),
     CheckDefinition(id="system_resources", title="系统资源", description="CPU、内存、磁盘与进程资源"),
     CheckDefinition(id="service_status", title="服务状态", description="配置服务的安装与运行状态"),
     CheckDefinition(id="network_info", title="网络信息", description="网卡地址及本机监听套接字"),

@@ -5,7 +5,7 @@ import { ElButton, ElTag } from 'element-plus'
 import { getInspectionAnalysis, getInspectionTask } from '@/api/inspections'
 import { showRequestError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
+import { hostProgressLabel, isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
 import { analysisStatusLabel } from '@/components/inspectionAnalysisDisplay'
 import type { AnalysisResponse, TaskDetail } from '@/types/inspections'
 import '@/styles/inspections.css'
@@ -120,7 +120,7 @@ onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout
   <section class="ai-task" :aria-label="`巡检任务 ${task?.name ?? taskId}`">
     <template v-if="loaded && task">
       <div class="ai-card-heading"><strong>{{ task.name }}</strong><ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></div>
-      <p class="ui-text-muted">已完成 {{ task.completed_hosts }} / {{ task.host_count }} 台主机巡检，执行失败 {{ task.failed_hosts }} 台。</p>
+      <p class="ui-text-muted">主机巡检：{{ hostProgressLabel(task) }}。</p>
       <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="ui-text-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
       <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status"><p class="ui-text-muted" role="status">AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。</p><ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton></div>
       <p v-else-if="analysisLoading" class="ui-text-muted">正在读取 AI 报告状态...</p>

@@ -9,6 +9,7 @@ from ....schemas.inspections import InspectionCatalog, InspectionConfig, Inspect
 from ....schemas.inspection_analysis import AnalysisResponse
 from ....schemas.pagination import DEFAULT_PAGE_SIZE
 from ....services.inspection_checks import CHECK_DEFINITIONS
+from ....services.inspection_log_display import display_task_logs
 from ....services.inspection_reports import render_report, render_report_archive
 from ....services.inspection_rules import load_rules, save_rules
 
@@ -40,13 +41,17 @@ def list_tasks(request: Request, session: Database, limit: Annotated[int, Query(
     return TaskPage(items=[TaskSummary.model_validate(item) for item in items], total=total)
 
 
-@router.get("/tasks/{task_id}", response_model=TaskDetail)
-def read_task(task_id: UUID, request: Request, session: Database) -> TaskDetail:
+def _read_task_detail(task_id: UUID, request: Request, session: Database) -> TaskDetail:
     request.app.state.inspections.ensure_available()
     task = repository.get_task(session, str(task_id))
     if task is None:
         raise HTTPException(404, "巡检任务不存在")
     return TaskDetail.model_validate(task)
+
+
+@router.get("/tasks/{task_id}", response_model=TaskDetail)
+def read_task(task_id: UUID, request: Request, session: Database) -> TaskDetail:
+    return display_task_logs(_read_task_detail(task_id, request, session))
 
 
 @router.delete("/tasks/{task_id}", status_code=204)
@@ -63,7 +68,7 @@ def delete_task(task_id: UUID, request: Request, session: Database) -> Response:
 
 @router.get("/tasks/{task_id}/report", response_model=ReportResponse)
 def report(task_id: UUID, request: Request, session: Database) -> ReportResponse:
-    detail = read_task(task_id, request, session)
+    detail = _read_task_detail(task_id, request, session)
     if detail.status in ("queued", "running"):
         raise HTTPException(409, "巡检尚未结束")
     return ReportResponse(filename=f"inspection-{detail.id}.md", content=render_report(detail))
@@ -72,7 +77,7 @@ def report(task_id: UUID, request: Request, session: Database) -> ReportResponse
 @router.get("/tasks/{task_id}/reports/archive", response_class=Response,
             responses={200: {"content": {"application/zip": {}}}})
 def report_archive(task_id: UUID, request: Request, session: Database) -> Response:
-    detail = read_task(task_id, request, session)
+    detail = _read_task_detail(task_id, request, session)
     if detail.status in ("queued", "running"):
         raise HTTPException(409, "巡检尚未结束")
     try:

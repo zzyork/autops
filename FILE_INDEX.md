@@ -90,7 +90,7 @@
 | `docs/TODO` | 现有项目待办，列出用户权限和操作记录等尚未完成方向，不作为已实现能力。最后同步：2026-10-19。 |
 | `docs/SSH命令执行.md` | SSH 工具库调用、步骤与实时事件、退出结果、时限/取消、输出过滤、连接所有权及旧管理功能撤下边界。最后同步：2026-10-20。 |
 | `docs/AI对话中止.md` | 当前会话停止按钮、活动与停止 API、巡检及自动报告取消交接、失败与远程执行边界。最后同步：2026-10-21。 |
-| `docs/巡检错误日志.md` | 巡检日志最长 30 天的绝对时间窗口、先过滤后限行、无年份记录未判定、旧配置/任务兼容及失败边界。最后同步：2026-10-21。 |
+| `docs/巡检错误日志.md` | 巡检日志最长 30 天的绝对时间窗口、先过滤后限行、无年份记录未判定、详情接口复用后端既有分组及原始导出边界、旧配置/任务兼容与失败处理。最后同步：2026-10-21。 |
 | `docs/templates/需求说明模板.md` | 需求场景、范围、契约、边界及可观察验收条件模板。最后同步：2026-10-19。 |
 | `docs/templates/开发任务模板.md` | 复用方案、现有授权、实施步骤、验证和交付记录模板。最后同步：2026-10-19。 |
 | `docs/templates/架构决策记录模板.md` | 长期架构决定、候选方案、成本、维护、恢复和复审模板。最后同步：2026-10-19。 |
@@ -161,7 +161,7 @@
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
 | `backend/app/api/v1/router.py` | v1 API 路由汇总，注册资产、SSH 连接测试、身份确认、巡检和 AI 接口。最后同步：2026-10-20。 |
 | `backend/app/api/v1/endpoints/ssh_connections.py` | 同步 SSH 连接测试接口，仅返回本次结果，不提供历史查询。最后同步：2026-10-15。 |
-| `backend/app/api/v1/endpoints/inspections.py` | 巡检规则、任务创建/历史分页/详情/删除、原始 Markdown 报告、逐主机报告 ZIP 下载及 AI 报告读取/生成接口。最后同步：2026-10-13。 |
+| `backend/app/api/v1/endpoints/inspections.py` | 巡检规则、任务创建/历史分页/详情/删除、原始 Markdown 报告、逐主机报告 ZIP 下载及 AI 报告读取/生成接口；详情返回后端合并日志，原始详情共用读取用于导出。最后同步：2026-10-21。 |
 | `backend/app/api/v1/endpoints/__init__.py` | 声明接口端点包。 |
 | `backend/app/api/v1/endpoints/health.py` | 提供 v1 健康检查接口。 |
 | `backend/app/api/v1/endpoints/hosts.py` | 主机管理及跳板机关联接口。最后同步：2026-10-10。 |
@@ -194,11 +194,12 @@
 | `backend/app/schemas/inspection_analysis.py` | AI 报告状态、进度、原始日志证据及位置、诊断组与来源观察统计、问题和响应模型，兼容历史报告。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、批次进度、按任务取消及沿用巡检取消信号的自动生成。最后同步：2026-10-21。 |
-| `backend/app/services/inspection_analysis_input.py` | 提取日志与巡检风险，按主机、来源表及忽略行首时间戳的正文精确合并，保留全部原文、表位置、结果序号、次数与时间，并统计日志时间未判定的检查。最后同步：2026-10-21。 |
+| `backend/app/services/inspection_analysis_input.py` | 从 ORM 任务或详情模型提取日志与巡检风险，按主机、来源表及忽略行首时间戳的正文精确合并，保留全部原文、表位置、结果序号、次数与时间，并统计日志时间未判定的检查。最后同步：2026-10-21。 |
 | `backend/app/services/inspection_analysis_groups.py` | 任务内 Drain3 模板提取、显式非诊断标识归一化、精确保护键和来源边界，构建紧凑模型输入与全部证据映射。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_log_display.py` | 详情接口日志表适配，按单个主机和来源表直接复用原有证据构建与诊断分组，返回首条示例、次数和时间；保持原始数据与状态行。最后同步：2026-10-21。 |
 | `backend/app/services/inspection_analysis_engine.py` | 单次请求由 AI 合并诊断组并分析，使用 provider 的有界输出 token 上限并记录预算，校验每个组编号恰好被覆盖一次，关联全部模板、原始证据与判定范围限制；非日志问题保留巡检事实。最后同步：2026-10-21。 |
 | `backend/app/services/inspection_checks/__init__.py` | 检查目录、结果表限制、公共校验与四类检查分发。最后同步：2026-10-12。 |
-| `backend/app/services/inspection_checks/basic.py` | 系统基础信息与 IP 地址解析。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_checks/basic.py` | 基础信息与 IP 地址解析。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/resources.py` | CPU、负载、内存、Swap、磁盘和进程指标采集及阈值判定。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/services.py` | systemd 候选服务状态采集、未安装服务结果隐藏与必需服务告警。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_checks/network.py` | 网卡地址、本机 TCP/UDP 监听信息采集与回环监听过滤。最后同步：2026-10-12。 |
@@ -250,8 +251,8 @@
 | `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。最后同步：2026-10-13。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检阈值、时限及服务配置表单，日志范围限制 1–30 天并说明未判定边界，本地逐字段校验、提示与渲染后聚焦。最后同步：2026-10-21。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗，加载目录与资产、选择主机/检查并提交；字段错误和选择组错误定位。最后同步：2026-10-20。 |
-| `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机概览、可折叠检查结果与风险、报告导出展示；详情不展示配置。最后同步：2026-10-12。 |
-| `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、结论、指标和结果表的前端显示映射。最后同步：2026-10-20。 |
+| `frontend/src/components/InspectionTaskDetail.vue` | 巡检主机概览、检查项状态常显与按需折叠结果、报告导出展示；主机信息与状态去重，详情不展示配置。最后同步：2026-10-21。 |
+| `frontend/src/components/inspectionDisplay.ts` | 巡检执行状态、主机结束进度与未完整完成统计、结论、指标和结果表的前端显示映射；日志表直接展示后端分组结果。最后同步：2026-10-21。 |
 | `frontend/src/components/timeDisplay.ts` | 对话和巡检共用的日期时间展示，保留原有中文格式和空值文案。最后同步：2026-10-20。 |
 | `frontend/src/components/ServiceStatus.vue` | 后端连接状态展示组件。 |
 | `frontend/src/components/feedback.ts` | 共用请求错误和导航阻断消息；请求错误置顶偏移、时长、取消忽略与同时去重。最后同步：2026-10-20。 |

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from ..inspection_models import InspectionTask
 from ..schemas.inspection_analysis import AnalysisEvidence
-from ..schemas.inspections import UNASSESSED_LOG_TIME_METRIC, CheckPayload
+from ..schemas.inspections import UNASSESSED_LOG_TIME_METRIC, CheckPayload, TaskDetail
 
 MAX_BATCH_CHARACTERS = 24_000
 MAX_BATCH_RECORDS = 40
@@ -66,7 +66,7 @@ def log_message(value: str) -> tuple[str, tuple[datetime, str, str] | None]:
     return value[match.end():], (parsed, stamp, "iso" if match.group("iso") else "syslog")
 
 
-def build_input(task: InspectionTask) -> AnalysisInput:
+def build_input(task: InspectionTask | TaskDetail) -> AnalysisInput:
     evidence: list[AnalysisEvidence] = []
     finding_count = log_count = incomplete_count = unassessed_count = 0
 

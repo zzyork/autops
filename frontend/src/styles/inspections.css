@@ -51,6 +51,15 @@
 .inspection-check-result p { margin: 0; }
 .inspection-check-header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2) var(--ui-space-4); }
 .inspection-check-header h4 { margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); font-weight: 600; }
+.inspection-check-static {
+  min-height: var(--ui-menu-item-height);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-muted);
+}
+.inspection-check-static:last-child {
+  border-bottom: 0;
+}
 .inspection-finding { display: flex; align-items: flex-start; gap: var(--ui-space-2); padding: var(--ui-space-2); overflow-wrap: anywhere; }
 .inspection-finding-warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .inspection-finding-critical { background: var(--ui-danger-soft); color: var(--ui-danger); }

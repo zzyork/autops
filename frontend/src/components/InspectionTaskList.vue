@@ -8,7 +8,7 @@ import InspectionRecordSummary from '@/components/InspectionRecordSummary.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
-import { isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
+import { hostProgressLabel, isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import type { TaskDetail, TaskSummary } from '@/types/inspections'
 import '@/styles/inspections.css'
@@ -319,7 +319,11 @@ onUnmounted(() => {
                </template>
              </ElTableColumn>
             <ElTableColumn label="执行状态" width="115"><template #default="{ row }"><ElTag :type="runType(row.status)" size="small">{{ runLabel(row.status) }}</ElTag></template></ElTableColumn>
-            <ElTableColumn label="主机进度" width="160"><template #default="{ row }">{{ row.completed_hosts }} / {{ row.host_count }} 完成 · {{ row.failed_hosts }} 失败</template></ElTableColumn>
+            <ElTableColumn label="主机进度" width="160">
+              <template #default="{ row }">
+                {{ hostProgressLabel(row as TaskSummary) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn label="创建时间" min-width="180"><template #default="{ row }">{{ timeLabel(row.created_at) }}</template></ElTableColumn>
             <ElTableColumn label="结束时间" min-width="180"><template #default="{ row }">{{ timeLabel(row.finished_at) }}</template></ElTableColumn>
              <ElTableColumn label="操作" :width="records ? 110 : 180" fixed="right">

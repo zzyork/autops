@@ -1,4 +1,4 @@
-import type { CheckResponse, CheckStatus, Conclusion, Metric, ResultTable, RunStatus } from '@/types/inspections'
+import type { CheckResponse, CheckStatus, Conclusion, Metric, ResultTable, RunStatus, TaskSummary } from '@/types/inspections'
 
 // 运行时长是秒数而非日期，年、月按固定天数拆分。
 const DURATION_UNITS = [
@@ -111,6 +111,11 @@ export function displayChecks(checks: CheckResponse[]): CheckResponse[] {
 }
 
 export const isActiveRun = (status: RunStatus) => status === 'queued' || status === 'running'
+
+export function hostProgressLabel(task: TaskSummary): string {
+  // 接口的完成数包含所有终态，失败数包含部分完成、失败和中断。
+  return `${task.completed_hosts} / ${task.host_count} 已结束 · ${task.failed_hosts} 未完整完成`
+}
 
 export function summarizeChecks(checks: CheckResponse[]) {
   const findings = checks.flatMap((check) => check.payload.findings)
