@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
-import { isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
+import { isActiveRun, runLabel } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import ListPagination from '@/components/ListPagination.vue'
 import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
@@ -210,22 +210,6 @@ onUnmounted(() => {
         <div v-if="response.started_at"><dt>生成开始</dt><dd>{{ timeLabel(response.started_at) }}</dd></div>
         <div v-if="response.finished_at"><dt>生成结束</dt><dd>{{ timeLabel(response.finished_at) }}</dd></div>
       </dl>
-      <p v-if="response.status === 'unavailable'" class="ui-text-muted">{{ response.can_generate ? '上次生成时主模型不可用，现在可以重新生成。' : '主模型未配置或未通过测试，暂不可生成汇报。' }}</p>
-      <p
-        v-else-if="response.status === 'not_generated' && isActiveRun(taskStatus)"
-        class="ui-execution-status ui-execution-notice"
-        :data-execution-state="runState(taskStatus)"
-      >巡检尚未结束，结束后将检查自动生成条件。</p>
-      <p v-else-if="response.status === 'not_generated'" class="ui-text-muted">尚无 AI 汇报。</p>
-      <p v-else-if="response.status === 'queued'" class="ui-execution-status ui-execution-notice" data-execution-state="not-started">本轮汇报排队中。</p>
-      <p v-else-if="response.status === 'running'" class="ui-execution-status ui-execution-notice" data-execution-state="in-progress" role="status">
-        <template v-if="response.progress">{{ response.progress.current_step }}，本阶段开始 {{ timeLabel(response.progress.step_started_at) }}。</template>
-        <template v-else>正在生成本轮汇报。</template>
-      </p>
-      <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete">
-        本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。
-      </p>
-      <p v-if="!response.can_generate && !isActiveRun(taskStatus) && response.status !== 'queued' && response.status !== 'running' && response.status !== 'unavailable'" class="ui-text-muted">当前无法发起生成，请检查主模型及生成服务状态。</p>
       <template v-if="report">
         <section class="inspection-analysis-saved" aria-label="已保存汇报摘要">
           <div class="inspection-analysis-saved-heading"><strong>{{ response.status === 'completed' ? '已保存汇报' : '上次成功汇报' }}</strong><span class="ui-text-muted">生成于 {{ timeLabel(report.generated_at) }}</span></div>
