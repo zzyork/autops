@@ -39,5 +39,8 @@ withDefaults(defineProps<{ status: TestStatus; description: string; focusable?: 
 .test-status.is-passed { color: var(--ui-success); }
 .test-status.is-failed { color: var(--ui-danger); }
 .test-status.is-warning { color: var(--ui-warning); }
-.test-status:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.test-status:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
 </style>

@@ -21,7 +21,10 @@
 .ssh-file-input::file-selector-button { margin-right: var(--ui-space-3); min-height: var(--ui-inline-control-height); padding: var(--ui-space-1) var(--ui-space-3); border: 1px solid var(--ui-control-border); border-radius: var(--ui-control-radius); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
 .ssh-file-input::file-selector-button:hover { background: var(--ui-surface-muted); }
 .ssh-file-input[aria-invalid="true"] { border-color: var(--ui-danger); }
-.ssh-file-input:focus-visible { outline: 2px solid var(--ui-primary) !important; outline-offset: 2px !important; }
+.ssh-file-input:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
 .ssh-field-error { color: var(--ui-danger); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); }
 .ssh-references { display: grid; gap: var(--ui-space-2); min-height: 60px; }
 .ssh-references h2:not(:first-child) { margin-top: var(--ui-space-3); }

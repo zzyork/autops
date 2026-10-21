@@ -48,6 +48,8 @@
   --ui-inline-control-height: 28px;
   --ui-control-radius: 4px;
   --ui-panel-radius: 8px;
+  --ui-focus-width: 2px;
+  --ui-focus-offset: -3px;
   --ui-icon-size: 16px;
   --ui-icon-action-size: 20px;
   --ui-icon-control-size: 32px;
@@ -171,8 +173,33 @@ body { margin: 0; min-width: 320px; background: var(--ui-canvas); color: var(--u
 button, input, textarea { font: inherit; }
 a { color: var(--ui-primary); text-decoration: none; }
 a:hover { color: var(--ui-primary-hover); }
-:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.el-button:focus-visible, .el-input__wrapper:has(input:focus-visible), .el-select__wrapper:has(input:focus-visible) { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: 0;
+}
+
+/* 控件内收轮廓并保留原边框；行内链接保留字框外的轮廓，避免盖住文字。 */
+:focus-visible:not(a),
+.el-button:focus-visible,
+.el-input__wrapper:has(input:focus-visible),
+.el-select__wrapper:has(input:focus-visible) {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
+
+/* 原生输入保留键盘入口，焦点轮廓由对应的可见外壳呈现。 */
+.el-input__inner:focus-visible,
+.el-select__input:focus-visible,
+.el-checkbox__original:focus-visible,
+.el-radio__original:focus-visible,
+.el-radio-button__original-radio:focus-visible,
+.el-switch__input:focus-visible {
+  outline: none;
+}
+
+.el-button:is(.el-button--primary, .el-button--danger):not(.is-plain):not(.is-text):not(.is-link):focus-visible {
+  outline-color: var(--ui-on-primary);
+}
 h1 { margin: 0; font-size: var(--ui-font-size-title); line-height: var(--ui-line-height-title); font-weight: 600; }
 h2 { margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); font-weight: 600; }
 h3, h4, h5 { font-size: var(--ui-font-size-base); line-height: var(--ui-line-height-base); }
@@ -205,7 +232,12 @@ p { margin: 0; line-height: inherit; }
 .ui-collapse .el-collapse-item__header { height: auto; min-height: var(--ui-menu-item-height); padding: var(--ui-space-2) var(--ui-space-3); gap: var(--ui-space-2); background: var(--ui-surface-muted); color: var(--ui-text); line-height: var(--ui-line-height-base); font-size: var(--ui-font-size-base); font-weight: 600; }
 .ui-collapse .el-collapse-item__header:hover { background: var(--ui-row-hover); }
 .ui-collapse .el-collapse-item__header:active { background: var(--ui-surface-muted); }
-.ui-collapse .el-collapse-item__header:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; position: relative; z-index: 1; }
+.ui-collapse .el-collapse-item__header:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+  position: relative;
+  z-index: 1;
+}
 .ui-collapse .el-collapse-item__title { min-width: 0; }
 .ui-collapse-arrow { order: -1; width: var(--ui-icon-size); height: var(--ui-icon-size); flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .ui-collapse-arrow.is-expanded { transform: rotate(90deg); }
@@ -234,12 +266,37 @@ p { margin: 0; line-height: inherit; }
 .el-form-item.is-error .el-select__wrapper, .el-form-item.is-error .el-textarea__inner { box-shadow: inset 0 0 0 1px var(--ui-danger); }
 .el-switch.is-disabled, .el-radio.is-disabled, .el-radio-button.is-disabled { opacity: 1; }
 .el-radio-button__inner { min-height: var(--ui-control-height); height: auto; padding: var(--ui-space-1) var(--ui-space-3); border: 1px solid var(--ui-control-border); font-size: var(--ui-font-size-base); line-height: var(--ui-line-height-base); box-shadow: none; }
-.el-radio-button .el-radio-button__original-radio:focus-visible + .el-radio-button__inner { position: relative; z-index: 2; outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.el-radio-button .el-radio-button__original-radio:focus-visible + .el-radio-button__inner {
+  position: relative;
+  z-index: 2;
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.el-radio-button.is-active .el-radio-button__original-radio:focus-visible + .el-radio-button__inner {
+  outline-color: var(--ui-on-primary);
+}
 .el-radio-button + .el-radio-button { margin-left: -1px; }
 .el-radio-button.is-disabled .el-radio-button__inner { background: var(--ui-disabled-bg); border-color: var(--ui-control-border); color: var(--ui-disabled-text); }
 .el-checkbox { --el-checkbox-input-width: var(--ui-icon-size); --el-checkbox-input-height: var(--ui-icon-size); --el-checkbox-input-border: 1px solid var(--ui-control-border); --el-checkbox-height: var(--ui-inline-control-height); --el-checkbox-border-radius: var(--ui-control-radius); }
 .el-checkbox__label, .el-radio__label { padding-left: var(--ui-space-2); font-size: var(--ui-font-size-base); line-height: var(--ui-line-height-base); }
-.el-checkbox__input.is-focus .el-checkbox__inner, .el-radio__input.is-focus .el-radio__inner { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.el-checkbox .el-checkbox__original:focus-visible + .el-checkbox__inner,
+.el-radio .el-radio__original:focus-visible + .el-radio__inner,
+.el-switch .el-switch__input:focus-visible ~ .el-switch__core {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
+
+/* 16px 方框的轮廓贴边内收，为勾号和半选横线保留空间。 */
+.el-checkbox .el-checkbox__original:focus-visible + .el-checkbox__inner {
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.el-checkbox__input:is(.is-checked, .is-indeterminate) .el-checkbox__original:focus-visible + .el-checkbox__inner,
+.el-radio__input.is-checked .el-radio__original:focus-visible + .el-radio__inner,
+.el-switch.is-checked .el-switch__input:focus-visible ~ .el-switch__core {
+  outline-color: var(--ui-on-primary);
+}
 .el-radio { --el-radio-input-height: var(--ui-icon-size); --el-radio-input-width: var(--ui-icon-size); --el-radio-input-border: 1px solid var(--ui-control-border); min-height: var(--ui-inline-control-height); }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-primary); }
 .el-switch { --el-switch-height: 22px; --el-switch-width: 44px; --el-switch-button-size: 18px; min-height: var(--ui-control-height); }

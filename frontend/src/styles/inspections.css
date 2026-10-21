@@ -11,7 +11,11 @@
 .inspection-selection-head .field { min-width: 210px; }
 .inspection-group-select { width: 210px; }
 .inspection-host-picker { max-height: 220px; overflow: auto; border: 1px solid var(--ui-border); }
-.inspection-host-picker:focus-visible, .inspection-check-picker:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.inspection-host-picker:focus-visible,
+.inspection-check-picker:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-primary);
+  outline-offset: var(--ui-focus-offset);
+}
 .inspection-create > .field-error { margin-top: calc(var(--ui-space-2) - var(--ui-field-gap)); }
 .inspection-host-picker.is-error, .inspection-check-picker.is-error { border-color: var(--ui-danger); }
 .inspection-host-picker .el-table { min-width: 500px; }
