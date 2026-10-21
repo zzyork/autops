@@ -287,7 +287,7 @@
 | `frontend/src/components/InspectionAnalysisIssue.vue` | 问题等级、主机与原因建议展示，紧凑折叠分页呈现报错及时间次数。最后同步：2026-10-20。 |
 | `frontend/src/components/inspectionAnalysisDisplay.ts` | 报告与问题组件共用的严重程度映射、诊断信息读取及新旧分段日志证据的具体报错详情转换。最后同步：2026-10-13。 |
 | `frontend/src/views/InspectionRulesView.vue` | 独立巡检规则页面，展示检查项、当前阈值、时限与服务判定，并编辑保存规则。最后同步：2026-10-12。 |
-| `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表；历史页默认终态分页列表，点击后仅显示记录概览与 AI 汇报，支持返回列表、删除和活跃执行轮询。最后同步：2026-10-13。 |
+| `frontend/src/components/InspectionTaskList.vue` | 任务与记录共用分页列表，支持当前页多选/全选、单条与批量删除、部分删除结果提示及活跃执行轮询；历史页点击后显示记录概览与 AI 汇报并可返回列表。最后同步：2026-10-21。 |
 
 ## 独立 SSH 身份确认
 
