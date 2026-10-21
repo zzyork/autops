@@ -6,13 +6,14 @@ import {
 } from 'element-plus'
 import { createJumpHost, deleteJumpHost, getJumpHost, listJumpHostsPage, updateJumpHost } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
-import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
+import TestStatus from '@/components/TestStatus.vue'
+import { useSSHConnectionTest } from '@/components/sshConnectionTest'
 import ListPagination from '@/components/ListPagination.vue'
 import FieldError from '@/components/FieldError.vue'
 import { focusFormFeedback, vNativeFieldAria } from '@/components/formFeedback'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
-import type { AuthType, ConnectionTestTarget, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
+import type { AuthType, JumpHost, JumpHostInput, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
 interface JumpHostForm {
@@ -29,6 +30,7 @@ interface JumpHostForm {
 const vLoading = ElLoading.directive
 const { items: jumpHosts, page, pageSize, total, loading, loadFailed, refresh: load, resetPage, invalidate } =
   useServerPagination<JumpHost>((currentPage, size) => listJumpHostsPage(search.value.trim(), currentPage, size))
+const { testing, testConnection, isTestTarget, connectionTestDisplay, clearConnectionTest } = useSSHConnectionTest()
 const sshKeys = ref<SSHKey[]>([])
 const sshKeysLoading = ref(false)
 const sshKeysLoaded = ref(false)
@@ -40,8 +42,6 @@ const dialogError = ref('')
 const formRoot = ref<HTMLElement | null>(null)
 const formId = useId()
 const dialog = ref(false)
-const testDialog = ref(false)
-const testTarget = ref<ConnectionTestTarget | null>(null)
 const editing = ref<JumpHost | null>(null)
 const authChanged = ref(false)
 const invalidFields = ref<Set<keyof JumpHostForm>>(new Set())
@@ -95,6 +95,7 @@ async function refreshSSHKeys() {
 }
 function refresh() {
   clearTimeout(searchTimer)
+  clearConnectionTest()
   return load()
 }
 
@@ -226,9 +227,8 @@ function dateLabel(value: string) {
   return new Date(value).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function openConnectionTest(item: JumpHost) {
-  testTarget.value = { target_type: 'jump_host', target_id: item.id, version: item.version, name: item.name }
-  testDialog.value = true
+function startJumpHostConnectionTest(item: JumpHost) {
+  void testConnection({ target_type: 'jump_host', target_id: item.id, version: item.version, name: item.name })
 }
 </script>
 
@@ -244,7 +244,28 @@ function openConnectionTest(item: JumpHost) {
             <ElTableColumn prop="host_count" label="关联主机" width="100" />
             <ElTableColumn label="备注" min-width="180"><template #default="{ row }"><div class="ui-text-pre-wrap">{{ row.remark }}</div></template></ElTableColumn>
             <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-            <ElTableColumn label="操作" width="248" fixed="right"><template #default="{ row }"><ElButton link type="primary" @click="openConnectionTest(row as JumpHost)">连接测试</ElButton><ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton><span class="wrapped-action" :title="row.host_count ? '请先解除关联主机' : undefined"><ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton></span></template></ElTableColumn>
+            <ElTableColumn label="本次测试" width="100" align="center">
+              <template #default="{ row }">
+                <TestStatus
+                  :status="connectionTestDisplay(row as JumpHost).status"
+                  :description="connectionTestDisplay(row as JumpHost).description"
+                />
+              </template>
+            </ElTableColumn>
+            <ElTableColumn label="操作" width="248" fixed="right">
+              <template #default="{ row }">
+                <ElButton
+                  link type="primary"
+                  :loading="testing && isTestTarget(row as JumpHost)"
+                  :disabled="testing"
+                  @click="startJumpHostConnectionTest(row as JumpHost)"
+                >连接测试</ElButton>
+                <ElButton link type="primary" @click="openEdit(row.id)">编辑</ElButton>
+                <span class="wrapped-action" :title="row.host_count ? '请先解除关联主机' : undefined">
+                  <ElButton link type="danger" :disabled="row.host_count > 0" @click="remove(row as JumpHost)">删除</ElButton>
+                </span>
+              </template>
+            </ElTableColumn>
           </ElTable>
         </div>
         <ElEmpty v-if="!loading && !loadFailed && !jumpHosts.length" :description="search ? '暂无符合条件的跳板机' : '暂无跳板机，请新增跳板机'" class="ui-empty"><ElButton v-if="!search" type="primary" plain @click="openNew">新增跳板机</ElButton></ElEmpty>
@@ -252,7 +273,6 @@ function openConnectionTest(item: JumpHost) {
       </section>
     </main>
 
-    <SSHConnectionDialog v-model="testDialog" :target="testTarget" />
     <ElDialog v-model="dialog" align-center :title="editing ? '编辑跳板机' : '新增跳板机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <div ref="formRoot" class="ui-form">
         <ElAlert v-if="dialogError" :title="dialogError" type="error" :closable="false" show-icon data-form-error tabindex="-1" />

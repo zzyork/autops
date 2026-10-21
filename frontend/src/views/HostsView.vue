@@ -8,8 +8,8 @@ import {
 import { createHost, deleteHost, getHost, listGroups, listHostsPage, updateHost } from '@/api/assets'
 import { listJumpHosts } from '@/api/jump_hosts'
 import { listSSHKeys } from '@/api/ssh_keys'
-import SSHConnectionDialog from '@/components/SSHConnectionDialog.vue'
 import HostSSHStatus from '@/components/HostSSHStatus.vue'
+import { useSSHConnectionTest } from '@/components/sshConnectionTest'
 import BatchSSHConnectionDialog from '@/components/BatchSSHConnectionDialog.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import HostForm, { type HostFormData } from '@/components/HostForm.vue'
@@ -18,7 +18,7 @@ import { focusFormFeedback } from '@/components/formFeedback'
 import { hostDisplayName } from '@/components/hostDisplay'
 import { useServerPagination } from '@/components/serverPagination'
 import { showSystemError } from '@/components/feedback'
-import type { ConnectionTestTarget, Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
+import type { Host, HostGroup, HostInput, JumpHost, SSHKey } from '@/types/api'
 import '@/styles/assets.css'
 
 const groups = ref<HostGroup[]>([])
@@ -29,6 +29,7 @@ const { items: hosts, page, pageSize, total, loading: hostsLoading, loadFailed: 
   refresh: loadHosts, resetPage, invalidate } = useServerPagination<Host>(
   (currentPage, size) => listHostsPage(search.value.trim(), selectedGroup.value, currentPage, size),
 )
+const { testing, testConnection, isTestTarget, connectionTestDisplay, clearConnectionTest } = useSSHConnectionTest(loadHosts)
 const hostTable = ref<{ clearSelection: () => void; toggleAllSelection: () => void } | null>(null)
 const selectedGroup = ref<number | null>(null)
 const search = ref('')
@@ -43,8 +44,6 @@ const formRoot = ref<HTMLElement | null>(null)
 const saving = ref(false)
 const openingHost = ref(false)
 const hostDialog = ref(false)
-const testDialog = ref(false)
-const testTarget = ref<ConnectionTestTarget | null>(null)
 const basicInfoHost = ref<Host | null>(null)
 const basicInfoDialog = ref(false)
 const selectedHosts = ref<Host[]>([])
@@ -62,7 +61,8 @@ watch([page, pageSize], clearSelectedHosts, { flush: 'sync' })
 const batchHosts = ref<Host[]>([])
 const batchDialog = ref(false)
 function startBatchTest() {
-  if (hostsLoading.value || hostsLoadFailed.value || selectedHosts.value.length < MIN_BATCH_HOSTS || batchDialog.value) return
+  if (hostsLoading.value || hostsLoadFailed.value || selectedHosts.value.length < MIN_BATCH_HOSTS || batchDialog.value || testing.value) return
+  clearConnectionTest()
   batchHosts.value = [...selectedHosts.value]
   batchDialog.value = true
 }
@@ -167,6 +167,7 @@ async function refreshJumpHosts() {
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 function refreshHosts() {
   clearTimeout(searchTimer)
+  clearConnectionTest()
   clearSelectedHosts()
   return loadHosts()
 }
@@ -361,9 +362,8 @@ function groupName(id: number) {
   return groups.value.find((group) => group.id === id)?.name
 }
 
-function openConnectionTest(host: Host) {
-  testTarget.value = { target_type: 'host', target_id: host.id, version: host.version, name: hostDisplayName(host) }
-  testDialog.value = true
+function startHostConnectionTest(host: Host) {
+  void testConnection({ target_type: 'host', target_id: host.id, version: host.version, name: hostDisplayName(host) })
 }
 
 function openBasicInfo(host: Host) {
@@ -404,7 +404,7 @@ function dateLabel(value: string) {
             <div class="ui-toolbar-right">
               <ElInput v-model="search" clearable placeholder="搜索名称或地址" aria-label="搜索主机名称或地址" class="ui-search" />
               <ElButton type="primary" @click="openNewHost">新增主机</ElButton>
-              <ElButton v-if="selectedHosts.length >= MIN_BATCH_HOSTS" :disabled="hostsLoading || hostsLoadFailed || batchDialog" @click="startBatchTest">批量测试连接（{{ selectedHosts.length }}）</ElButton>
+              <ElButton v-if="selectedHosts.length >= MIN_BATCH_HOSTS" :disabled="hostsLoading || hostsLoadFailed || batchDialog || testing" @click="startBatchTest">批量测试连接（{{ selectedHosts.length }}）</ElButton>
               <ElButton :loading="hostsLoading || groupsLoading || jumpHostsLoading" @click="refreshGroups(); refreshJumpHosts(); refreshHosts()">刷新</ElButton>
             </div>
           </div>
@@ -421,11 +421,23 @@ function dateLabel(value: string) {
               <ElTableColumn label="登录" min-width="150"><template #default="{ row }"><div>{{ row.username }} · {{ row.port }}</div><div class="ui-item-secondary">{{ row.auth_type === 'key' ? '密钥认证' : '密码认证' }}</div></template></ElTableColumn>
               <ElTableColumn label="跳板机" min-width="190"><template #default="{ row }">{{ row.jump_host_id !== null && !jumpHostsLoaded ? jumpHostsLoading ? '加载中' : '' : jumpHostName(row.jump_host_id) }}</template></ElTableColumn>
               <ElTableColumn label="更新时间" min-width="160"><template #default="{ row }">{{ dateLabel(row.updated_at) }}</template></ElTableColumn>
-              <ElTableColumn label="连接状态" width="100" align="center"><template #default="{ row }"><HostSSHStatus :host="row as Host" /></template></ElTableColumn>
+              <ElTableColumn label="连接状态" width="100" align="center">
+                <template #default="{ row }">
+                  <HostSSHStatus
+                    :host="row as Host"
+                    :display="connectionTestDisplay(row as Host, row.connection_status)"
+                  />
+                </template>
+              </ElTableColumn>
               <ElTableColumn label="操作" width="344" fixed="right">
                 <template #default="{ row }">
                   <div class="host-row-actions">
-                    <ElButton link type="primary" @click="openConnectionTest(row as Host)">连接测试</ElButton>
+                    <ElButton
+                      link type="primary"
+                      :loading="testing && isTestTarget(row as Host)"
+                      :disabled="testing"
+                      @click="startHostConnectionTest(row as Host)"
+                    >连接测试</ElButton>
                     <ElButton link type="primary" @click="openEditHost(row.id)">编辑</ElButton>
                     <ElDropdown trigger="click" @command="openBasicInfo(row as Host)">
                       <ElButton link type="primary">更多操作</ElButton>
@@ -448,7 +460,6 @@ function dateLabel(value: string) {
     </main>
 
     <BatchSSHConnectionDialog v-model="batchDialog" :hosts="batchHosts" @status-changed="loadHosts" />
-    <SSHConnectionDialog v-model="testDialog" :target="testTarget" @status-changed="loadHosts" />
     <HostBasicInfoDialog v-model="basicInfoDialog" :host="basicInfoHost" @saved="loadHosts" />
      <ElDialog v-model="hostDialog" align-center :title="editingHost ? '编辑主机' : '新增主机'" width="min(var(--ui-dialog-width), calc(100vw - 32px))" class="host-dialog" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
        <div ref="formRoot" class="ui-form host-form">

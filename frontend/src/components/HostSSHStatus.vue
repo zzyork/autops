@@ -4,8 +4,8 @@ import { sshTestDisplay } from '@/components/sshTestDisplay'
 import TestStatus from '@/components/TestStatus.vue'
 import type { Host } from '@/types/api'
 
-const props = defineProps<{ host: Host }>()
-const appearance = computed(() => sshTestDisplay(props.host.connection_status))
+const props = defineProps<{ host: Host; display?: ReturnType<typeof sshTestDisplay> }>()
+const appearance = computed(() => props.display ?? sshTestDisplay(props.host.connection_status))
 </script>
 
 <template>
