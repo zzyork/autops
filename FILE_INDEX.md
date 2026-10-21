@@ -89,6 +89,7 @@
 | `docs/AI-编程工程实践参考.md` | 上游官方 AI 编程项目和安全资料的历史核对范围、采用位置与参考限制。最后同步：2026-10-19。 |
 | `docs/TODO` | 现有项目待办，列出用户权限和操作记录等尚未完成方向，不作为已实现能力。最后同步：2026-10-19。 |
 | `docs/SSH命令执行.md` | SSH 工具库调用、步骤与实时事件、退出结果、时限/取消、输出过滤、连接所有权及旧管理功能撤下边界。最后同步：2026-10-20。 |
+| `docs/AI对话中止.md` | 当前会话停止按钮、活动与停止 API、巡检及自动报告取消交接、失败与远程执行边界。最后同步：2026-10-21。 |
 | `docs/templates/需求说明模板.md` | 需求场景、范围、契约、边界及可观察验收条件模板。最后同步：2026-10-19。 |
 | `docs/templates/开发任务模板.md` | 复用方案、现有授权、实施步骤、验证和交付记录模板。最后同步：2026-10-19。 |
 | `docs/templates/架构决策记录模板.md` | 长期架构决定、候选方案、成本、维护、恢复和复审模板。最后同步：2026-10-19。 |
@@ -104,7 +105,7 @@
 | --- | --- |
 | `profiles/Vue3前端技术栈规范.md` | 已启用的 Vue、TypeScript、Vite、Element Plus 类型、状态、生命周期、请求和验证约束。 |
 | `profiles/FastAPI技术栈规范.md` | 已启用的 FastAPI 路由、模型、依赖、事务、I/O、资源和契约约束。 |
-| `profiles/UI规范样板.md` | 已采用的桌面紧凑 UI 数值、变量、状态、现有组件及页面组合的唯一权威登记；未填写候选仍未启用。最后同步：2026-10-20。 |
+| `profiles/UI规范样板.md` | 已采用的桌面紧凑 UI 数值、变量、状态、现有组件及页面组合的唯一权威登记，含当前会话圆形红色停止按钮；未填写候选仍未启用。最后同步：2026-10-21。 |
 
 ## AI 编程技能与入口
 
@@ -148,12 +149,12 @@
 | `backend/app/models.py` | 主机、分组、跳板机与 SSH 密钥数据库模型。最后同步：2026-10-10。 |
 | `backend/app/ai_models.py` | 模型连接、会话、消息、批次工具历史与待确认巡检计划模型。最后同步：2026-10-12。 |
 | `backend/app/core/migrations/ai.py` | AI 表及批次历史、执行中状态的幂等迁移。最后同步：2026-10-12。 |
-| `backend/app/schemas/ai.py` | 模型配置、会话消息、计划与决策接口校验。最后同步：2026-10-12。 |
-| `backend/app/repositories/ai.py` | 模型连接、会话、消息、工具历史、计划持久化与中断标记。最后同步：2026-10-12。 |
+| `backend/app/schemas/ai.py` | 模型配置、会话消息、计划、决策、可取消操作登记及会话执行器活动接口校验。最后同步：2026-10-21。 |
+| `backend/app/repositories/ai.py` | 模型连接、会话、消息、工具历史、计划持久化、中断标记及会话关联任务标识查询。最后同步：2026-10-21。 |
 | `backend/app/services/ai_provider.py` | OpenAI 兼容及 Anthropic 流式协议适配、可校验输出限额和正常终止验证。最后同步：2026-10-13。 |
-| `backend/app/services/ai_chat.py` | LangGraph 对话编排、能力验证、资产与巡检工具、会话互斥。最后同步：2026-10-12。 |
+| `backend/app/services/ai_chat.py` | LangGraph 对话编排、能力验证、资产与巡检工具、会话互斥、有界操作登记与按会话取消信号。最后同步：2026-10-21。 |
 | `backend/app/services/ai_feature_models.py` | AI 对话与巡检汇报独立模型配置读取、连接校验、原子保存及选模；未指定时沿用主模型。最后同步：2026-10-14。 |
-| `backend/app/api/v1/endpoints/ai.py` | 模型连接、会话、SSE 回复及巡检计划确认接口。最后同步：2026-10-12。 |
+| `backend/app/api/v1/endpoints/ai.py` | 模型连接、会话、SSE 回复、巡检计划确认、操作登记及当前会话活动查询和幂等停止接口。最后同步：2026-10-21。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 共用数据库会话依赖、事务提交与分组查询。最后同步：2026-10-10。 |
 | `backend/app/api/v1/__init__.py` | 声明第一版 API 包。 |
@@ -186,12 +187,12 @@
 | `backend/app/services/__init__.py` | 声明业务服务包。最后同步：2026-10-12。 |
 | `backend/app/services/ssh_assets.py` | SSH 连接配置解析、凭据解密及资产版本快照。最后同步：2026-10-12。 |
 | `backend/app/services/ssh_connections.py` | 有界同步严格身份连接测试，将本次状态写入主机字段，并复核配置变更和资产身份。最后同步：2026-10-15。 |
-| `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行与失败/关闭处理。最后同步：2026-10-12。 |
+| `backend/app/services/inspection_tasks.py` | 有界后台主机巡检、SSH 会话、逐项执行、按任务取消及自动报告取消信号交接。最后同步：2026-10-21。 |
 | `backend/app/services/inspection_rules.py` | 从数据目录读取巡检规则，并以临时文件和原子替换保存生效配置。最后同步：2026-10-12。 |
 | `backend/app/services/inspection_reports.py` | 从巡检详情生成 Markdown 报告并转义动态内容，按原项目 IP_hostname.md 命名和分组/月目录打包逐主机报告；缺少远端 hostname 时使用资产名称。最后同步：2026-10-13。 |
 | `backend/app/schemas/inspection_analysis.py` | AI 报告状态、进度、原始日志证据及位置、诊断组与来源观察统计、问题和响应模型，兼容历史报告。最后同步：2026-10-13。 |
 | `backend/app/repositories/inspection_analysis.py` | AI 报告事务认领、批次状态更新、成功报告保留及重启中断标记。最后同步：2026-10-13。 |
-| `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、当前生成批次进度与耗时日志和按任务取消。最后同步：2026-10-13。 |
+| `backend/app/services/inspection_analysis.py` | 有界 AI 报告执行器，主模型事务资格检查、配置快照、自动/手动生成、批次进度、按任务取消及沿用巡检取消信号的自动生成。最后同步：2026-10-21。 |
 | `backend/app/services/inspection_analysis_input.py` | 提取日志与巡检风险，按主机、来源表及忽略行首时间戳的正文精确合并，保留全部原文、表位置、结果序号、次数与时间。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_groups.py` | 任务内 Drain3 模板提取、显式非诊断标识归一化、精确保护键和来源边界，构建紧凑模型输入与全部证据映射。最后同步：2026-10-13。 |
 | `backend/app/services/inspection_analysis_engine.py` | 单次请求由 AI 合并诊断组并分析，使用 provider 的有界输出 token 上限并记录预算，校验每个组编号恰好被覆盖一次，关联全部模板与原始证据；非日志问题保留巡检事实。最后同步：2026-10-20。 |
@@ -229,16 +230,16 @@
 | `frontend/src/api/ssh_keys.ts` | SSH 密钥管理接口调用。 |
 | `frontend/src/api/ssh_connections.ts` | 同步 SSH 连接测试调用，复用独立身份确认及专用请求时限。最后同步：2026-10-15。 |
 | `frontend/src/api/inspections.ts` | 巡检规则、任务创建/历史分页/详情/删除、原始报告及 AI 汇报读取/生成接口调用。最后同步：2026-10-13。 |
-| `frontend/src/api/ai.ts` | AI 配置、会话、流事件校验和计划决策接口调用。最后同步：2026-10-12。 |
-| `frontend/src/types/ai.ts` | 模型能力、会话消息状态及巡检计划类型。最后同步：2026-10-12。 |
+| `frontend/src/api/ai.ts` | AI 配置、会话、流事件、可取消计划决策、执行前操作登记及会话活动/停止接口调用和响应校验。最后同步：2026-10-21。 |
+| `frontend/src/types/ai.ts` | 模型能力、会话消息状态、巡检计划及会话执行器活动类型。最后同步：2026-10-21。 |
 | `frontend/src/components/ChatProposalCard.vue` | 待确认时显示计划执行范围并发出确认或拒绝事件，决策后仅保留名称和状态。最后同步：2026-10-14。 |
-| `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检任务与 AI 报告状态，展示执行摘要及本次报告、巡检记录的工作区跳转入口。最后同步：2026-10-14。 |
+| `frontend/src/components/ChatTaskCard.vue` | 轮询关联巡检与 AI 报告状态，发出活动变化事件供停止入口同步，展示摘要与报告/记录工作区入口。最后同步：2026-10-21。 |
 | `frontend/src/components/DisclosurePanel.vue` | 单项详情共用展开入口，支持键盘与焦点回退，紧凑箭头和入口间距；唯一内容关联、按需挂载。最后同步：2026-10-20。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增编辑表单及密钥输入，复用字段错误提示和无效字段定位。最后同步：2026-10-20。 |
 | `frontend/src/components/FeatureModelsForm.vue` | 独立功能模型表单，接收连接列表及加载状态，读取和保存对话、巡检汇报模型并发出配置状态事件。最后同步：2026-10-14。 |
-| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、流式输入输出和计划决策；输入错误复用字段提示与定位。最后同步：2026-10-20。 |
+| `frontend/src/views/ChatView.vue` | 对话首页，会话历史、流式输入输出、可取消计划决策及按可见会话同步的发送/停止入口；输入错误复用字段提示与定位。最后同步：2026-10-21。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理及能力测试独立页面。最后同步：2026-10-12。 |
-| `frontend/src/styles/ai.css` | 紧凑对话会话区、模型配置字段错误和任务卡片样式，复用控制台变量。最后同步：2026-10-20。 |
+| `frontend/src/styles/ai.css` | 紧凑对话会话区、圆形红色停止按钮、模型字段错误与任务卡片样式，复用控制台变量。最后同步：2026-10-21。 |
 | `frontend/src/components/SSHConnectionDialog.vue` | 单台连接测试，紧凑弹窗内仅展示本次结果，身份阻断接入独立确认并发出状态变更事件。最后同步：2026-10-20。 |
 | `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量范围、逐身份显式确认、有界同步测试及停止后续提交；输入所选主机，在紧凑弹窗展示本次结果。最后同步：2026-10-20。 |
 | `frontend/src/components/HostSSHStatus.vue` | 纯展示主机记录中的连接状态，复用统一测试图标，无额外请求及轮询。最后同步：2026-10-15。 |

@@ -20,6 +20,22 @@
 .ai-composer { flex: none; padding: var(--ui-space-3) var(--ui-panel-padding); border-top: 1px solid var(--ui-border); display: grid; gap: var(--ui-space-2); }
 .ai-composer > label { font-weight: 600; }
 .ai-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); min-height: var(--ui-control-height); }
+.ai-composer-stop.el-button.is-circle {
+  width: var(--ui-icon-control-size);
+  height: var(--ui-icon-control-size);
+  border-radius: 50%;
+}
+
+.ai-composer-stop[aria-disabled="true"] {
+  cursor: wait;
+}
+
+.ai-stop-icon {
+  width: var(--ui-icon-action-size);
+  height: var(--ui-icon-action-size);
+  fill: currentColor;
+}
+
 .ai-proposal, .ai-task { min-width: 0; border: 1px solid var(--ui-border); border-radius: var(--ui-panel-radius); background: var(--ui-surface); padding: var(--ui-space-3); display: grid; gap: var(--ui-space-3); overflow-wrap: anywhere; }
 .ai-proposal { width: 100%; }
 .ai-card-heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); }

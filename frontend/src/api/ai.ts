@@ -1,6 +1,6 @@
-import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnectionInput, SessionSummary } from '@/types/ai'
+import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
 import { get, HttpError, request, streamRequest } from './http'
-import { rememberSSHOperation, withSSHIdentities } from './sshIdentity'
+import { assertSSHRequestCurrent, rememberSSHOperation, withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
 import type { PageResponse } from '@/types/api'
 
@@ -33,6 +33,14 @@ function isChatSession(value: unknown): value is ChatSession {
       && (proposal.task_id === null || typeof proposal.task_id === 'string'))
 }
 
+function sessionActivity(value: unknown): SessionActivity {
+  if (!isRecord(value) || typeof value.running !== 'boolean' || typeof value.stopping !== 'boolean'
+    || value.stopping && !value.running) {
+    throw new HttpError()
+  }
+  return { running: value.running, stopping: value.stopping }
+}
+
 export const listConnections = () => get<ModelConnection[]>('/ai/connections')
 export const listConnectionsPage = (page: number, pageSize: number) => get<PageResponse<ModelConnection>>(`/ai/connections?page=${page}&page_size=${pageSize}`)
 export const getFeatureModels = async () => featureModelsConfig(await get<unknown>('/ai/feature-models'))
@@ -45,11 +53,32 @@ export const listSessions = () => get<SessionSummary[]>('/ai/sessions')
 export const listSessionsPage = (page: number, pageSize: number) => get<PageResponse<SessionSummary>>(`/ai/sessions?page=${page}&page_size=${pageSize}`)
 export const createSession = () => request<SessionSummary>('/ai/sessions', { method: 'POST' })
 export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
+export const getSessionActivity = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/activity`, { signal }))
+export const stopSession = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/stop`, { method: 'POST', signal }))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })
-export async function decideProposal(sessionId: string, proposalId: string, approve: boolean, options: SSHIdentityOptions = {}) {
-  const execute = () => request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, { method: 'POST', body: { approve }, timeoutMs: 120000, signal: options.signal })
+export async function registerOperation(id: string, signal?: AbortSignal): Promise<string> {
+  const result = await request<unknown>(`${sessionPath(id)}/operations`, { method: 'POST', signal })
+  if (!isRecord(result) || typeof result.operation_id !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.operation_id)) {
+    throw new HttpError()
+  }
+  return result.operation_id
+}
+export async function decideProposal(sessionId: string, proposalId: string, approve: boolean, options: SSHIdentityOptions & {
+  onRegister?: (pending: Promise<string>) => void
+} = {}) {
+  const execute = async () => {
+    assertSSHRequestCurrent(options)
+    const pending = registerOperation(sessionId, options.signal)
+    options.onRegister?.(pending)
+    const operationId = await pending
+    assertSSHRequestCurrent(options)
+    return request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, {
+      method: 'POST', body: { approve, operation_id: operationId }, timeoutMs: 120000, signal: options.signal,
+    })
+  }
   if (!approve) return execute()
-  const session = await getSession(sessionId)
+  const session = await request<ChatSession>(sessionPath(sessionId), { signal: options.signal })
   const proposal = session.proposals.find((item) => item.id === proposalId)
   if (!proposal) throw new HttpError()
   const result = await withSSHIdentities(proposal.hosts.map((host) => ({ target_type: 'host', target_id: host.id, version: host.version })), execute, options)
@@ -57,4 +86,4 @@ export async function decideProposal(sessionId: string, proposalId: string, appr
   if (taskId) rememberSSHOperation(taskId)
   return result
 }
-export const sendMessage = (id: string, content: string, signal: AbortSignal, onToken: (text: string) => void) => streamRequest<ChatSession>(`${sessionPath(id)}/messages`, { body: { content }, signal, timeoutMs: 300000, onToken, validateResult: isChatSession })
+export const sendMessage = (id: string, content: string, signal: AbortSignal, onToken: (text: string) => void, operationId?: string) => streamRequest<ChatSession>(`${sessionPath(id)}/messages`, { body: { content, operation_id: operationId }, signal, timeoutMs: 300000, onToken, validateResult: isChatSession })

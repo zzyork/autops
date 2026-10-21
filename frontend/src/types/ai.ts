@@ -48,3 +48,8 @@ export interface ChatSession extends SessionSummary {
   messages: ChatMessage[]
   proposals: InspectionProposal[]
 }
+
+export interface SessionActivity {
+  running: boolean
+  stopping: boolean
+}

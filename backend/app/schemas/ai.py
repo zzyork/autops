@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -71,6 +72,7 @@ class ConnectionResponse(BaseModel):
 
 class MessageInput(Input):
     content: str = Field(min_length=1, max_length=8000)
+    operation_id: UUID | None = None
 
     @field_validator("content")
     @classmethod
@@ -82,6 +84,16 @@ class MessageInput(Input):
 
 class DecisionInput(Input):
     approve: bool
+    operation_id: UUID | None = None
+
+
+class OperationRegistration(BaseModel):
+    operation_id: UUID
+
+
+class SessionActivity(BaseModel):
+    running: bool
+    stopping: bool
 
 
 class Summary(BaseModel):

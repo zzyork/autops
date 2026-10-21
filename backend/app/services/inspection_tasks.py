@@ -25,13 +25,14 @@ MAX_PENDING_HOSTS = 64
 
 class InspectionManager:
     def __init__(self, sessions: sessionmaker[Session], cipher: Fernet,
-                 on_completed: Callable[[str], None] | None = None):
+                 on_completed: Callable[[str, threading.Event], None] | None = None):
         self.sessions = sessions
         self.cipher = cipher
         self.on_completed = on_completed
         self.lock = threading.Lock()
         self.stopping = threading.Event()
         self.active: set[int] = set()
+        self.tasks: dict[str, tuple[threading.Event, int]] = {}
         self.persistence_failed = threading.Event()
         with sessions() as session:
             repository.interrupt_unfinished(session)
@@ -52,6 +53,7 @@ class InspectionManager:
                               "group_name": repository.get_group_name(session, asset.group_id),
                               "asset_snapshot": plan.snapshot})
         host_ids = {item.id for item in data.hosts}
+        notify_completed = False
         with self.lock:
             if self.stopping.is_set() or self.persistence_failed.is_set() or len(self.active) + len(host_ids) > MAX_PENDING_HOSTS:
                 raise HTTPException(503, "巡检队列不可用")
@@ -59,37 +61,75 @@ class InspectionManager:
                 raise HTTPException(409, "所选主机已有巡检正在执行")
             task = repository.create_task(session, data, snapshots, config, before_commit)
             self.active.update(host_ids)
+            cancel = threading.Event()
+            # 调度本身占一个计数，直到完成回调交接后才释放，避免活动状态出现空档。
+            self.tasks[task.id] = (cancel, len(task.hosts) + 1)
             for index, host in enumerate(task.hosts):
                 try:
-                    self.executor.submit(self._run_host, task.id, host.id, host.host_id)
+                    self.executor.submit(self._run_host, task.id, host.id, host.host_id, cancel)
                 except Exception as exc:
                     logger.error("Inspection task %s dispatch failed: %s", task.id, type(exc).__name__)
                     unsubmitted = task.hosts[index:]
                     task_id = task.id
                     run_ids = [item.id for item in unsubmitted]
                     self.active.difference_update(item.host_id for item in unsubmitted)
+                    remaining = self.tasks[task_id][1] - len(unsubmitted)
+                    self.tasks[task_id] = (cancel, remaining)
                     session.rollback()
                     with self.sessions() as update_session:
                         try:
                             repository.interrupt_unsubmitted(update_session, task_id, run_ids)
                         except Exception:
                             self.persistence_failed.set()
+                            self.tasks[task_id] = (cancel, remaining - 1)
+                            if remaining == 1:
+                                self.tasks.pop(task_id, None)
                             raise
                     session.expire_all()
                     recovered = repository.get_task(session, task_id)
-                    if recovered.status in repository.TERMINAL and self.on_completed is not None:
-                        self.on_completed(task_id)
-                    return recovered
-        return task
+                    notify_completed = recovered.status in repository.TERMINAL
+                    task = recovered
+                    break
+        try:
+            if notify_completed and self.on_completed is not None and not cancel.is_set():
+                self.on_completed(task.id, cancel)
+            return task
+        finally:
+            self._release_task(task.id)
+
+    def _release_task(self, task_id: str, host_id: int | None = None) -> None:
+        with self.lock:
+            if host_id is not None:
+                self.active.discard(host_id)
+            state = self.tasks.get(task_id)
+            if state is not None:
+                cancel, remaining = state
+                if remaining == 1:
+                    self.tasks.pop(task_id, None)
+                else:
+                    self.tasks[task_id] = (cancel, remaining - 1)
+
+    def cancel(self, task_id: str) -> None:
+        with self.lock:
+            state = self.tasks.get(task_id)
+            if state is not None:
+                state[0].set()
+
+    def activity(self, task_ids: list[str]) -> tuple[bool, bool]:
+        with self.lock:
+            events = [self.tasks[task_id][0] for task_id in task_ids if task_id in self.tasks]
+            return bool(events), any(event.is_set() for event in events)
 
     def close(self) -> None:
         with self.lock:
             self.stopping.set()
+            for event, _ in self.tasks.values():
+                event.set()
         self.executor.shutdown(wait=True, cancel_futures=True)
         with self.sessions() as session:
             repository.interrupt_unfinished(session)
 
-    def _run_host(self, task_id: str, run_id: str, host_id: int) -> None:
+    def _run_host(self, task_id: str, run_id: str, host_id: int, cancel: threading.Event) -> None:
         def save(session: Session) -> None:
             try:
                 session.commit()
@@ -103,50 +143,60 @@ class InspectionManager:
                 task = repository.get_task(session, task_id)
                 if host is None or task is None:
                     raise ValueError("巡检记录不存在")
-                host.status = "running"
-                host.started_at = utc_now()
-                save(session)
-                repository.summarize_task(session, task_id)
                 config = InspectionConfig.model_validate(task.config)
                 deadline = time.monotonic() + config.host_timeout_seconds
-                failure_code = None
-                interrupted = False
+                interrupted = cancel.is_set() or self.stopping.is_set()
+                failure_code = "interrupted" if interrupted else None
+                if not interrupted:
+                    host.status = "running"
+                    host.started_at = utc_now()
+                    save(session)
+                    repository.summarize_task(session, task_id)
                 try:
-                    plan = resolve_plan(session, self.cipher, "host", host_id)
-                    if plan.snapshot != host.asset_snapshot:
-                        raise HTTPException(409, "资产已变更")
-                    session.rollback()
-                    with open_ssh_connection(plan.target, plan.jump, timeout_seconds=config.host_timeout_seconds) as client:
-                        for check in host.checks:
-                            if self.stopping.is_set() or self.persistence_failed.is_set():
-                                failure_code, interrupted = "interrupted", True
-                                break
-                            if time.monotonic() >= deadline:
-                                failure_code = "timeout"
-                                break
-                            check.status = "running"
-                            check.started_at = utc_now()
-                            save(session)
-                            try:
-                                runner = lambda command: run_command(client, command, config.command_timeout_seconds, deadline)
-                                payload = collect(check.check_id, runner, config)
-                                check.payload = payload.model_dump(mode="json")
-                                check.conclusion = payload.conclusion
-                                check.status = "completed"
-                            except CommandExecutionError as exc:
-                                check.status, check.error_code = "failed", exc.code
-                                if not exc.connected:
-                                    failure_code = "connection"
-                            except InspectionCheckError as exc:
-                                check.status, check.error_code = "failed", exc.code
-                            except Exception as exc:
-                                check.status, check.error_code = "failed", "internal"
-                                logger.error("Inspection check %s/%s failed: %s", run_id, check.check_id, type(exc).__name__)
-                            check.finished_at = utc_now()
-                            save(session)
-                            # 不对断开的会话自动重连，剩余检查明确标记为未执行。
-                            if failure_code is not None:
-                                break
+                    if not interrupted and not cancel.is_set():
+                        plan = resolve_plan(session, self.cipher, "host", host_id)
+                        if plan.snapshot != host.asset_snapshot:
+                            raise HTTPException(409, "资产已变更")
+                        session.rollback()
+                        if cancel.is_set() or self.stopping.is_set():
+                            failure_code, interrupted = "interrupted", True
+                        else:
+                            with open_ssh_connection(plan.target, plan.jump, timeout_seconds=config.host_timeout_seconds) as client:
+                                for check in host.checks:
+                                    if cancel.is_set() or self.stopping.is_set() or self.persistence_failed.is_set():
+                                        failure_code, interrupted = "interrupted", True
+                                        break
+                                    if time.monotonic() >= deadline:
+                                        failure_code = "timeout"
+                                        break
+                                    check.status = "running"
+                                    check.started_at = utc_now()
+                                    save(session)
+                                    try:
+                                        runner = lambda command: run_command(
+                                            client, command, config.command_timeout_seconds, deadline, cancel=cancel)
+                                        payload = collect(check.check_id, runner, config)
+                                        check.payload = payload.model_dump(mode="json")
+                                        check.conclusion = payload.conclusion
+                                        check.status = "completed"
+                                    except CommandExecutionError as exc:
+                                        if exc.code == "interrupted":
+                                            check.status, check.error_code = "interrupted", "interrupted"
+                                            failure_code, interrupted = "interrupted", True
+                                        else:
+                                            check.status, check.error_code = "failed", exc.code
+                                            if not exc.connected:
+                                                failure_code = "connection"
+                                    except InspectionCheckError as exc:
+                                        check.status, check.error_code = "failed", exc.code
+                                    except Exception as exc:
+                                        check.status, check.error_code = "failed", "internal"
+                                        logger.error("Inspection check %s/%s failed: %s", run_id, check.check_id, type(exc).__name__)
+                                    check.finished_at = utc_now()
+                                    save(session)
+                                    # 不对断开的会话自动重连，剩余检查明确标记为未执行。
+                                    if failure_code is not None:
+                                        break
                 except HostKeyRequired:
                     failure_code = "host_key_required"
                 except SSHConnectionError as exc:
@@ -158,6 +208,8 @@ class InspectionManager:
                         raise
                     failure_code = "internal"
                     logger.error("Inspection host %s failed: %s", run_id, type(exc).__name__)
+                if cancel.is_set() or self.stopping.is_set():
+                    failure_code, interrupted = "interrupted", True
                 for check in host.checks:
                     if check.status in ("queued", "running"):
                         check.status = "interrupted" if interrupted else "skipped"
@@ -171,14 +223,15 @@ class InspectionManager:
                 save(session)
                 completed = repository.summarize_task(session, task_id)
             if completed and self.on_completed is not None:
-                self.on_completed(task_id)
+                if not cancel.is_set():
+                    # 将同一取消信号交给报告执行器，回调不得在巡检全局锁内写数据库。
+                    self.on_completed(task_id, cancel)
         except Exception as exc:
             # 落库失败后不继续接受任务或展示陈旧状态；恢复数据库并重启后标记未完成项中断。
             self.persistence_failed.set()
             logger.error("Inspection host %s persistence failed: %s", run_id, type(exc).__name__)
         finally:
-            with self.lock:
-                self.active.discard(host_id)
+            self._release_task(task_id, host_id)
 
     def ensure_available(self) -> None:
         if self.persistence_failed.is_set():

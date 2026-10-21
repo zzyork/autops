@@ -63,9 +63,9 @@ class InspectionAnalysisManager:
                                 finished_at=row.finished_at, error_code=row.error_code,
                                 report=row.report, can_generate=can_generate, progress=progress)
 
-    def automatic(self, task_id: str) -> None:
+    def automatic(self, task_id: str, cancel: threading.Event | None = None) -> None:
         try:
-            self.start(task_id, automatic=True)
+            self.start(task_id, automatic=True, cancel=cancel)
         except HTTPException as exc:
             # 自动提交的业务拒绝已有明确状态或任务已删除，不影响巡检状态。
             logger.info("Inspection AI report %s not submitted: HTTP %s", task_id, exc.status_code)
@@ -73,9 +73,9 @@ class InspectionAnalysisManager:
             self.persistence_failed.set()
             logger.error("Inspection AI report %s submission failed: %s", task_id, type(exc).__name__)
 
-    def start(self, task_id: str, automatic: bool = False) -> None:
+    def start(self, task_id: str, automatic: bool = False, cancel: threading.Event | None = None) -> None:
         try:
-            self._start(task_id, automatic)
+            self._start(task_id, automatic, cancel)
         except HTTPException:
             raise
         except Exception as exc:
@@ -83,10 +83,12 @@ class InspectionAnalysisManager:
             logger.error("Inspection AI report %s claim failed: %s", task_id, type(exc).__name__)
             raise HTTPException(503, "AI汇报持久化不可用") from None
 
-    def _start(self, task_id: str, automatic: bool) -> None:
+    def _start(self, task_id: str, automatic: bool, cancel: threading.Event | None = None) -> None:
         self.ensure_available()
         generation_id = str(uuid4())
         with self.guard:
+            if cancel is not None and cancel.is_set():
+                return
             if self.stopping.is_set():
                 raise HTTPException(503, "AI汇报服务已停止")
             with self.sessions() as session:
@@ -100,6 +102,9 @@ class InspectionAnalysisManager:
                 full = self.pending >= MAX_PENDING_ANALYSES
                 if full and snapshot is not None:
                     status = "failed"
+                if cancel is not None and cancel.is_set():
+                    session.rollback()
+                    return
                 result = repository.claim(session, task_id, generation_id,
                                           snapshot.name if snapshot else None,
                                           snapshot.version if snapshot else None, status, automatic, transaction_started=True)
@@ -121,7 +126,8 @@ class InspectionAnalysisManager:
                     session.commit()
                     raise HTTPException(503, "AI汇报队列已满")
                 self.pending += 1
-                cancel = threading.Event()
+                # 自动汇报沿用巡检取消信号，覆盖巡检结束与报告认领同时发生的停止。
+                cancel = cancel if cancel is not None else threading.Event()
                 self.cancellations[task_id] = cancel
                 try:
                     self.executor.submit(self._run, task_id, generation_id, snapshot, cancel)
@@ -144,12 +150,22 @@ class InspectionAnalysisManager:
 
         try:
             with self.sessions() as session:
+                if cancel.is_set():
+                    repository.finish(session, task_id, generation_id, "interrupted", "interrupted")
+                    return
                 if not repository.running(session, task_id, generation_id):
+                    return
+                if cancel.is_set():
+                    repository.finish(session, task_id, generation_id, "interrupted", "interrupted")
                     return
                 task = inspections.get_task(session, task_id)
                 if task is None:
                     return
                 data = build_input(task)
+            if cancel.is_set():
+                with self.sessions() as session:
+                    repository.finish(session, task_id, generation_id, "interrupted", "interrupted")
+                return
             key = self.cipher.decrypt(snapshot.encrypted_key.encode()).decode() if snapshot.encrypted_key else None
             report = analyze(self.client, snapshot, key, data, cancel, on_progress=update_progress)
             with self.sessions() as session:
@@ -186,6 +202,11 @@ class InspectionAnalysisManager:
             event = self.cancellations.get(task_id)
             if event is not None:
                 event.set()
+
+    def activity(self, task_ids: list[str]) -> tuple[bool, bool]:
+        with self.guard:
+            events = [self.cancellations[task_id] for task_id in task_ids if task_id in self.cancellations]
+            return bool(events), any(event.is_set() for event in events)
 
     def stop_accepting(self) -> None:
         with self.guard:

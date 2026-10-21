@@ -2,6 +2,7 @@ import json
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TypedDict
 from uuid import uuid4
 
@@ -40,6 +41,15 @@ SYSTEM = ("你是运维助手。只能从工具查询到的资产准备巡检计
           "巡检计划必须由用户在独立按钮确认，不能声称已执行。不要索取或展示凭据。")
 MAX_ROUNDS = 4
 CAPABILITY_TEST_SECONDS = 60
+MAX_CHAT_OPERATIONS = 128
+
+
+@dataclass
+class ChatOperation:
+    cancel: threading.Event
+    operation_id: str | None = None
+    started: bool = True
+    expires_at: float | None = None
 
 
 class GraphState(TypedDict):
@@ -58,22 +68,72 @@ class ChatManager:
         self.client = httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False,
                                    limits=httpx.Limits(max_connections=8), trust_env=False)
         self.guard = threading.Lock()
-        self.busy: set[str] = set()
+        self.busy: dict[str, ChatOperation] = {}
         with sessions() as session:
             repository.interrupt_unfinished(session)
 
     def close(self) -> None:
+        with self.guard:
+            for operation in self.busy.values():
+                operation.cancel.set()
         self.client.close()
 
-    def acquire(self, session_id: str) -> None:
+    def _expire_reservations(self) -> None:
+        now = time.monotonic()
+        for session_id, operation in list(self.busy.items()):
+            if not operation.started and operation.expires_at is not None and operation.expires_at <= now:
+                operation.cancel.set()
+                self.busy.pop(session_id)
+
+    def _ensure_idle(self, session_id: str) -> None:
+        if session_id in self.busy:
+            raise HTTPException(409, "会话正在处理请求")
+        if len(self.busy) >= MAX_CHAT_OPERATIONS:
+            raise HTTPException(503, "会话执行器容量已满")
+
+    def reserve(self, session_id: str) -> str:
         with self.guard:
-            if session_id in self.busy:
-                raise HTTPException(409, "会话正在处理请求")
-            self.busy.add(session_id)
+            self._expire_reservations()
+            self._ensure_idle(session_id)
+            # 登记先于实际提交；停止移除登记后，晚到提交不能重新启动执行。
+            operation_id = uuid4().hex
+            self.busy[session_id] = ChatOperation(threading.Event(), operation_id, started=False,
+                                                 expires_at=time.monotonic() + MAX_TOTAL_SECONDS)
+            return operation_id
+
+    def acquire(self, session_id: str, operation_id: str | None = None) -> threading.Event:
+        with self.guard:
+            self._expire_reservations()
+            if operation_id is not None:
+                operation = self.busy.get(session_id)
+                if operation is None or operation.operation_id != operation_id or operation.started or operation.cancel.is_set():
+                    raise HTTPException(409, "请求已取消、已执行或登记已过期")
+                operation.started = True
+                operation.expires_at = None
+                return operation.cancel
+            self._ensure_idle(session_id)
+            operation = ChatOperation(threading.Event())
+            self.busy[session_id] = operation
+            return operation.cancel
 
     def release(self, session_id: str) -> None:
         with self.guard:
-            self.busy.discard(session_id)
+            self.busy.pop(session_id, None)
+
+    def cancel(self, session_id: str) -> None:
+        with self.guard:
+            current = self.busy.get(session_id)
+            if current is not None:
+                current.cancel.set()
+                # 尚未执行的登记立即失效；晚到提交必须匹配登记，不能重新取得执行资格。
+                if not current.started:
+                    self.busy.pop(session_id)
+
+    def activity(self, session_id: str) -> tuple[bool, bool]:
+        with self.guard:
+            self._expire_reservations()
+            current = self.busy.get(session_id)
+            return current is not None, current.cancel.is_set() if current is not None else False
 
     def provider(self, record: AIConnection, messages: list[dict], tools: list[dict],
                  on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
@@ -239,12 +299,16 @@ class ChatManager:
                 {"id": call["id"], "type": "function", "function": {"name": call["name"],
                  "arguments": json.dumps(call["arguments"])} } for call in reply.calls]})
             for index, call in enumerate(reply.calls):
+                if cancel and cancel.is_set():
+                    raise ProviderError("请求已取消")
                 with self.sessions() as session:
                     current = repository.connection(session, record.id)
                     if current is None or current.config_version != record.config_version:
                         raise ProviderError("模型连接已修改，请新建会话")
                     if current.chat_status != "passed" or current.tool_status != "passed":
                         raise ProviderError("模型测试未通过，不能调用运维工具")
+                if cancel and cancel.is_set():
+                    raise ProviderError("请求已取消")
                 result = self.execute_tool(session_id, call["name"], call["arguments"], state["ledger"], state["pending"])
                 state["calls"].append({"call_id": call["id"], "name": call["name"],
                                         "arguments": call["arguments"], "result": result,

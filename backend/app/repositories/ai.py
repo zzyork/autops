@@ -82,6 +82,11 @@ def proposals(session: Session, session_id: str) -> list[AIProposal]:
                                 .order_by(AIProposal.id)))
 
 
+def linked_task_ids(session: Session, session_id: str) -> list[str]:
+    return list(session.scalars(select(AIProposal.task_id).where(
+        AIProposal.session_id == session_id, AIProposal.task_id.is_not(None)).distinct()))
+
+
 def add_user(session: Session, conversation: AISession, content: str) -> AIMessage:
     message = AIMessage(session_id=conversation.id, role="user", content=content, status="failed", in_flight=True)
     session.add(message)

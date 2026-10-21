@@ -19,7 +19,7 @@ from ...dependencies import Database, commit
 from ....ai_models import AIConnection, AIProposal, AISession
 from ....repositories import ai as repository
 from ....schemas.ai import (ConnectionInput, ConnectionResponse, DecisionInput, Detail,
-                             FeatureModels, MessageInput, Summary)
+                             FeatureModels, MessageInput, OperationRegistration, SessionActivity, Summary)
 from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from ....services.ai_feature_models import (config_guard, feature_connection, load_feature_models,
                                            save_feature_models)
@@ -141,6 +141,43 @@ def read_session(session_id: UUID, session: Database) -> AISession:
     return require_session(session, session_id)
 
 
+def session_activity(session_id: UUID, request: Request, session: Database) -> SessionActivity:
+    session.rollback()
+    # 先观察决策执行器，再读取关联，避免决策刚提交任务并释放锁时漏报活动。
+    chat_running, chat_stopping = request.app.state.ai.activity(str(session_id))
+    task_ids = repository.linked_task_ids(session, str(session_id))
+    session.rollback()
+    inspection_running, inspection_stopping = request.app.state.inspections.activity(task_ids)
+    report_running, report_stopping = request.app.state.inspection_analysis.activity(task_ids)
+    return SessionActivity(running=chat_running or inspection_running or report_running,
+                           stopping=chat_stopping or inspection_stopping or report_stopping)
+
+
+@router.get("/sessions/{session_id}/activity", response_model=SessionActivity)
+def read_session_activity(session_id: UUID, request: Request, session: Database) -> SessionActivity:
+    require_session(session, session_id)
+    return session_activity(session_id, request, session)
+
+
+@router.post("/sessions/{session_id}/stop", response_model=SessionActivity)
+def stop_session(session_id: UUID, request: Request, session: Database) -> SessionActivity:
+    require_session(session, session_id)
+    request.app.state.ai.cancel(str(session_id))
+    task_ids = repository.linked_task_ids(session, str(session_id))
+    session.rollback()
+    for task_id in task_ids:
+        request.app.state.inspections.cancel(task_id)
+    for task_id in task_ids:
+        request.app.state.inspection_analysis.cancel(task_id)
+    return session_activity(session_id, request, session)
+
+
+@router.post("/sessions/{session_id}/operations", response_model=OperationRegistration, status_code=201)
+def register_operation(session_id: UUID, request: Request, session: Database) -> OperationRegistration:
+    require_session(session, session_id)
+    return OperationRegistration(operation_id=request.app.state.ai.reserve(str(session_id)))
+
+
 @router.delete("/sessions/{session_id}", status_code=204)
 def delete_session(session_id: UUID, request: Request, session: Database) -> Response:
     ai = request.app.state.ai
@@ -161,17 +198,21 @@ def event(name: str, data: dict) -> str:
 @router.post("/sessions/{session_id}/messages", response_class=StreamingResponse)
 def send_message(session_id: UUID, data: MessageInput, request: Request, session: Database) -> StreamingResponse:
     ai = request.app.state.ai
-    conversation = require_session(session, session_id)
-    record = require_connection(session, conversation.connection_id)
-    if conversation.connection_version != record.config_version:
-        raise HTTPException(409, "模型连接已修改，请新建会话")
-    ai.acquire(str(session_id))
-    session.rollback()
+    cancelled = ai.acquire(str(session_id), data.operation_id.hex if data.operation_id is not None else None)
+    try:
+        conversation = require_session(session, session_id)
+        record = require_connection(session, conversation.connection_id)
+        if conversation.connection_version != record.config_version:
+            raise HTTPException(409, "模型连接已修改，请新建会话")
+        session.rollback()
+    except Exception:
+        ai.release(str(session_id))
+        raise
     deadline = time.monotonic() + MAX_TOTAL_SECONDS
     release_guard = threading.Lock()
     released = False
-    cancelled = threading.Event()
     output: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=16)
+    stream_started = threading.Event()
 
     def release_once() -> None:
         nonlocal released
@@ -201,9 +242,12 @@ def send_message(session_id: UUID, data: MessageInput, request: Request, session
                 enqueue("error", None)
             except RuntimeError:
                 pass
+        finally:
+            release_once()
 
     async def stream():
         producer = asyncio.create_task(run_in_threadpool(work))
+        stream_started.set()
         try:
             while True:
                 try:
@@ -229,13 +273,13 @@ def send_message(session_id: UUID, data: MessageInput, request: Request, session
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                             background=BackgroundTask(release_once))
+                             background=BackgroundTask(lambda: release_once() if not stream_started.is_set() else None))
 
 
 @router.post("/sessions/{session_id}/proposals/{proposal_id}/decision", response_model=Detail)
 def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Request, session: Database) -> AISession:
     ai = request.app.state.ai
-    ai.acquire(str(session_id))
+    cancelled = ai.acquire(str(session_id), data.operation_id.hex if data.operation_id is not None else None)
     try:
         session.rollback()
         session.execute(text("BEGIN IMMEDIATE"))
@@ -247,6 +291,8 @@ def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Re
             return conversation
         if proposal.status != "pending":
             raise HTTPException(409, "巡检计划已处理")
+        if cancelled.is_set():
+            raise HTTPException(409, "请求已取消")
         if not data.approve:
             proposal.status = "cancelled"
             commit(session)
@@ -260,12 +306,20 @@ def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Re
                                    hosts=[{"id": item["id"], "version": item["version"]} for item in proposal.hosts],
                                    checks=proposal.checks)
         config = load_rules(request.app.state.data_dir)
+        if cancelled.is_set():
+            raise HTTPException(409, "请求已取消")
 
         def link(task):
+            if cancelled.is_set():
+                raise HTTPException(409, "请求已取消")
             proposal.status = "confirmed"
             proposal.task_id = task.id
 
-        request.app.state.inspections.start(session, selected, config, before_commit=link)
+        task = request.app.state.inspections.start(session, selected, config, before_commit=link)
+        if cancelled.is_set():
+            request.app.state.inspections.cancel(task.id)
+            request.app.state.inspection_analysis.cancel(task.id)
+            raise HTTPException(409, "请求已取消")
         return conversation
     except Exception:
         session.rollback()

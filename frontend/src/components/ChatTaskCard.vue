@@ -11,6 +11,7 @@ import type { AnalysisResponse, TaskDetail } from '@/types/inspections'
 import '@/styles/inspections.css'
 
 const props = defineProps<{ taskId: string }>()
+const emit = defineEmits<{ activity: [] }>()
 const router = useRouter()
 const task = ref<TaskDetail | null>(null)
 const loaded = ref(false)
@@ -105,6 +106,11 @@ watch(() => props.taskId, () => {
   observedRunning = false
   promptedHosts.clear()
   void load()
+})
+watch([() => task.value?.status, () => analysis.value?.status], ([taskStatus, reportStatus]) => {
+  if (taskStatus === 'queued' || taskStatus === 'running' || reportStatus === 'queued' || reportStatus === 'running') {
+    emit('activity')
+  }
 })
 onMounted(() => { void load() })
 onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout(timer); clearTimeout(analysisTimer) })
