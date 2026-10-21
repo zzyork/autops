@@ -80,8 +80,8 @@ watch(() => props.task, (task) => {
     })
   }
 }, { immediate: true })
-watch(hostId, () => {
-  expandedChecks.value = selectedHost.value?.checks.map((check) => check.check_id) ?? []
+watch([() => props.task.id, hostId], () => {
+  expandedChecks.value = []
 }, { immediate: true })
 
 async function exportReport() {
@@ -148,7 +148,7 @@ async function exportReport() {
         </template>
         <p v-else-if="selectedHost.failure_code && !selectedHost.checks.length" class="ui-text-muted">该主机未完成巡检，无法判定风险。</p>
         <p v-else-if="!selectedHost.checks.length" class="ui-text-muted">检查项尚未开始。</p>
-        <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="left" class="inspection-checks ui-collapse">
+        <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="right" class="inspection-checks ui-collapse">
           <template v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`">
             <ElCollapseItem v-if="check.expandable" :name="check.check_id">
               <template #title>

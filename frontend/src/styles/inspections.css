@@ -46,6 +46,10 @@
 .inspection-collapse-actions { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); margin-left: auto; }
 .inspection-collapse-actions .el-button + .el-button { margin-left: 0; }
 .inspection-checks { border: 1px solid var(--ui-border); }
+.inspection-checks .ui-collapse-arrow {
+  order: 0;
+  margin-left: auto;
+}
 .inspection-checks .el-collapse-item__content { padding-bottom: 0; }
 .inspection-check-result { display: grid; gap: var(--ui-space-4); padding: var(--ui-panel-padding); min-width: 0; }
 .inspection-check-result p { margin: 0; }
