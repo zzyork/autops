@@ -4,9 +4,9 @@ import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTa
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { checkLabel, conclusionLabel, conclusionType, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runType, summarizeChecks } from '@/components/inspectionDisplay'
+import { displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runType, summarizeChecks } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
-import type { CheckResponse, TaskDetail } from '@/types/inspections'
+import type { TaskDetail } from '@/types/inspections'
 
 const props = defineProps<{ task: TaskDetail }>()
 const hostId = ref<string | null>(null)
@@ -55,12 +55,6 @@ watch(() => props.task, (task) => {
 watch(hostId, () => {
   expandedChecks.value = selectedHost.value?.checks.map((check) => check.check_id) ?? []
 }, { immediate: true })
-
-function checkType(check: CheckResponse): 'info' | 'success' | 'warning' | 'danger' {
-  if (check.status === 'failed' || check.status === 'interrupted') return 'danger'
-  if (check.status === 'completed') return 'success'
-  return 'info'
-}
 
 async function exportReport() {
   if (isActiveRun(props.task.status) || exporting.value) return
@@ -113,7 +107,14 @@ async function exportReport() {
         <p v-if="!selectedHost.checks.length" class="ui-text-muted">检查项尚未开始。</p>
         <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="left" class="inspection-checks ui-collapse">
         <ElCollapseItem v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`" :name="check.check_id">
-          <template #title="{ isActive }"><div class="inspection-check-header"><h4>{{ check.title }}</h4><span>执行 <ElTag :type="checkType(check)" size="small">{{ checkLabel(check.status) }}</ElTag></span><span>结论 <ElTag :type="check.status === 'completed' ? conclusionType(check.conclusion) : 'info'" size="small">{{ check.status === 'completed' ? conclusionLabel(check.conclusion) : '无法判定' }}</ElTag></span><span v-if="check.payload.findings.length" class="ui-text-muted">发现 {{ check.payload.findings.length }} 个问题</span></div></template>
+          <template #title>
+            <div class="inspection-check-header">
+              <h4>{{ check.title }}</h4>
+              <span v-if="check.payload.findings.length" class="ui-text-muted">
+                发现 {{ check.payload.findings.length }} 个问题
+              </span>
+            </div>
+          </template>
           <template #icon="{ isActive }"><svg class="ui-collapse-arrow" :class="{ 'is-expanded': isActive }" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="m5 3 4 4-4 4" /></svg></template>
           <section class="inspection-check-result" :aria-label="check.title">
           <p v-if="check.status === 'failed' || check.status === 'interrupted' || check.status === 'skipped'" class="ui-text-muted">{{ check.status === 'skipped' ? '检查已跳过' : '检查未完成' }}，无法判定风险。</p>
