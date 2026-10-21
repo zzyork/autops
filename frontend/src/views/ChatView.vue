@@ -111,6 +111,17 @@ function newChat() {
   inputInvalid.value = false
   void loadConnections()
 }
+function handleInputKeydown(event: Event) {
+  if (!(event instanceof KeyboardEvent)) {
+    return
+  }
+  // 输入法确认候选词时 isComposing 可能已结束，仍需检查 229。
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) {
+    return
+  }
+  event.preventDefault()
+  void send()
+}
 async function send() {
   const content = input.value.trim()
   if (operation.value || (selectedId.value ? !detailLoaded.value : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value)) return
@@ -252,7 +263,41 @@ onUnmounted(() => {
               <p v-else class="ai-placeholder">开始对话</p>
             </template>
           </div>
-           <div ref="composer" class="ai-composer"><label :for="inputId">消息</label><ElInput :id="inputId" v-model="input" type="textarea" :rows="3" :maxlength="MAX_MESSAGE_LENGTH" show-word-limit :aria-invalid="inputInvalid" :aria-describedby="inputError ? `${inputId}-error` : undefined" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable)" placeholder="输入运维问题" @input="inputError = ''; inputInvalid = false" @keydown.ctrl.enter.prevent="send" /><FieldError v-if="inputError" :id="`${inputId}-error`" :message="inputError" /><div class="ai-composer-actions"><span class="ui-text-muted">{{ operation === 'create' ? '正在创建会话...' : operation === 'send' ? '正在接收回复...' : '' }}</span><ElButton type="primary" :loading="operation === 'create' || operation === 'send'" :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable) || !input.trim()" @click="send">发送</ElButton></div></div>
+          <div ref="composer" class="ai-composer">
+            <label :for="inputId">消息</label>
+            <ElInput
+              :id="inputId"
+              v-model="input"
+              type="textarea"
+              :rows="3"
+              :maxlength="MAX_MESSAGE_LENGTH"
+              show-word-limit
+              :aria-invalid="inputInvalid"
+              :aria-describedby="inputError ? `${inputId}-error` : undefined"
+              :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable)"
+              placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
+              @input="
+                inputError = '';
+                inputInvalid = false
+              "
+              @keydown="handleInputKeydown"
+            />
+            <FieldError v-if="inputError" :id="`${inputId}-error`" :message="inputError" />
+            <div class="ai-composer-actions">
+              <span class="ui-text-muted">
+                <template v-if="operation === 'create'">正在创建会话...</template>
+                <template v-else-if="operation === 'send'">正在接收回复...</template>
+              </span>
+              <ElButton
+                type="primary"
+                :loading="operation === 'create' || operation === 'send'"
+                :disabled="!!operation || (selectedId ? !detailLoaded : !connectionsLoaded || connectionsLoading || !newChatAvailable) || !input.trim()"
+                @click="send"
+              >
+                发送
+              </ElButton>
+            </div>
+          </div>
         </section>
       </div>
     </main>
