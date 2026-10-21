@@ -1,4 +1,5 @@
 import type { CheckResponse, CheckStatus, Conclusion, Metric, ResultTable, RunStatus, TaskSummary } from '@/types/inspections'
+import type { ExecutionState } from '@/types/executionStatus'
 
 // 运行时长是秒数而非日期，年、月按固定天数拆分。
 const DURATION_UNITS = [
@@ -119,11 +120,21 @@ export function hostProgressLabel(task: TaskSummary): string {
 
 export function summarizeChecks(checks: CheckResponse[]) {
   const findings = checks.flatMap((check) => check.payload.findings)
+  const states = checks.map((check) => checkState(check.status))
+  let incompleteState: ExecutionState | null = null
+  if (states.includes('incomplete')) {
+    incompleteState = 'incomplete'
+  } else if (states.includes('in-progress')) {
+    incompleteState = 'in-progress'
+  } else if (states.includes('not-started')) {
+    incompleteState = 'not-started'
+  }
   return {
     completed: checks.filter((check) => check.status === 'completed').length,
     critical: findings.filter((finding) => finding.severity === 'critical').length,
     warning: findings.filter((finding) => finding.severity === 'warning').length,
     incomplete: checks.filter((check) => check.status !== 'completed').length,
+    incompleteState,
   }
 }
 
@@ -136,11 +147,26 @@ export function checkLabel(status: CheckStatus): string {
 export function conclusionLabel(value: Conclusion): string {
   return { normal: '正常', warning: '警告', critical: '严重', not_applicable: '不适用', unknown: '无法判定' }[value]
 }
-export function runType(status: RunStatus): 'info' | 'success' | 'warning' | 'danger' {
-  if (status === 'completed') return 'success'
-  if (status === 'partial') return 'warning'
-  if (status === 'failed' || status === 'interrupted') return 'danger'
-  return 'info'
+export function runState(status: RunStatus): ExecutionState {
+  if (status === 'queued') {
+    return 'not-started'
+  }
+  if (status === 'running') {
+    return 'in-progress'
+  }
+  if (status === 'completed') {
+    return 'completed'
+  }
+  // 历史中断也可能来自重启或调度失败，只有未完整完成的证据。
+  return 'incomplete'
+}
+
+export function checkState(status: CheckStatus): ExecutionState {
+  if (status === 'queued' || status === 'running' || status === 'completed') {
+    return runState(status)
+  }
+  // skipped 是主机流程终结后未执行的检查，保留已跳过文案并表达不完整结果。
+  return 'incomplete'
 }
 export function conclusionType(value: Conclusion): 'info' | 'success' | 'warning' | 'danger' {
   if (value === 'normal') return 'success'

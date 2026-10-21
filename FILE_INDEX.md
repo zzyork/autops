@@ -243,9 +243,11 @@
 | `frontend/src/components/SSHConnectionDialog.vue` | 单台 SSH 连接测试弹窗。 |
 | `frontend/src/components/BatchSSHConnectionDialog.vue` | 批量 SSH 连接测试弹窗。 |
 | `frontend/src/components/HostSSHStatus.vue` | 主机 SSH 连接状态展示。 |
-| `frontend/src/components/TestStatus.vue` | 共用测试状态图标与说明。 |
+| `frontend/src/components/TestStatus.vue` | 共用测试状态图标、可选图文标签及状态说明。 |
 | `frontend/src/components/sshTestDisplay.ts` | SSH 测试状态与提示文案映射。 |
 | `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。 |
+| `frontend/src/types/executionStatus.ts` | 五类执行状态的前端展示键类型。 |
+| `frontend/src/components/ChatMessageItem.vue` | 对话消息及已确认结果与待确认状态的纯展示组件。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检规则配置表单。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 主机巡检详情、检查结果与报告导出展示。 |

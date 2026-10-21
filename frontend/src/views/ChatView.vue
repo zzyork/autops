@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
-import { ElButton, ElInput, ElMessageBox, ElTag } from 'element-plus'
+import { ElButton, ElInput, ElMessageBox } from 'element-plus'
+import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import FieldError from '@/components/FieldError.vue'
@@ -51,6 +52,7 @@ const selectedConnection = computed(() => connections.value.find((item) => item.
 const interactionBusy = computed(() => !!operation.value || stopPending.value)
 const running = computed(() => operation.value === 'send' || operation.value === 'decision' || stopPending.value || activity.value?.running === true)
 const stopping = computed(() => stopPending.value || stopRequested.value || activity.value?.stopping === true)
+const messageResultConfirmed = ref(false)
 const sendDisabled = computed(() => interactionBusy.value || running.value || (selectedId.value
   ? !detailLoaded.value || activity.value === null || activityFailed.value
   : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value))
@@ -68,6 +70,12 @@ let activitySequence = 0
 let selectInitialSession = true
 const MAX_MESSAGE_LENGTH = 8000
 const ACTIVITY_POLL_MS = 1000
+let messageResultSequence = 0
+
+function invalidateMessageResult(): void {
+  messageResultSequence++
+  messageResultConfirmed.value = false
+}
 
 async function loadActivity(reloadDetail = false): Promise<void> {
   clearTimeout(activityTimer)
@@ -77,6 +85,9 @@ async function loadActivity(reloadDetail = false): Promise<void> {
   const controller = new AbortController()
   activityController = controller
   const current = ++activitySequence
+  // failed 可能是执行中占位；确认必须来自本轮操作结束后发起的新查询。
+  const messageSequence = messageResultSequence
+  const canConfirmMessages = operation.value === null
   const isCurrent = () => active && visible.value && pageVisible.value && selectedId.value === id && current === activitySequence
   activityLoading.value = true
   try {
@@ -85,6 +96,8 @@ async function loadActivity(reloadDetail = false): Promise<void> {
     const wasRunning = activity.value?.running === true
     activity.value = result
     activityFailed.value = false
+    messageResultConfirmed.value = messageSequence === messageResultSequence
+      && canConfirmMessages && operation.value === null && !result.running
     if (result.running) {
       activityTimer = setTimeout(() => { void loadActivity() }, ACTIVITY_POLL_MS)
     } else if ((wasRunning || reloadDetail) && operation.value !== 'send') {
@@ -93,6 +106,7 @@ async function loadActivity(reloadDetail = false): Promise<void> {
   } catch (error) {
     if (!isCurrent() || controller.signal.aborted) return
     activityFailed.value = true
+    messageResultConfirmed.value = false
     showRequestError(error)
   } finally {
     if (isCurrent()) activityLoading.value = false
@@ -107,6 +121,7 @@ async function stop(): Promise<void> {
   const controller = new AbortController()
   stopController = controller
   stopPending.value = true
+  invalidateMessageResult()
   clearTimeout(activityTimer)
   activitySequence++
   activityController?.abort()
@@ -152,6 +167,7 @@ watch([selectedId, visible, pageVisible], ([id, isVisible, isPageVisible], [prev
   activityController?.abort()
   activityLoading.value = false
   if (id !== previousId) {
+    invalidateMessageResult()
     activity.value = null
     activityFailed.value = false
   }
@@ -244,6 +260,7 @@ async function send() {
   }
   inputError.value = ''
   inputInvalid.value = false
+  invalidateMessageResult()
   operation.value = selectedId.value ? 'send' : 'create'
   sendingContent.value = content
   streamingText.value = ''
@@ -290,6 +307,7 @@ async function send() {
     if (active) {
       sendingContent.value = ''
       streamingText.value = ''
+      invalidateMessageResult()
       operation.value = null
       stopRequested.value = false
     }
@@ -301,6 +319,7 @@ async function send() {
 async function decide(proposalId: string, approve: boolean) {
   const id = selectedId.value
   if (!id || interactionBusy.value || stopping.value || !detailLoaded.value) return
+  invalidateMessageResult()
   operation.value = 'decision'
   const controller = new AbortController()
   decisionController = controller
@@ -326,6 +345,7 @@ async function decide(proposalId: string, approve: boolean) {
   finally {
     const stopped = stopRequested.value || controller.signal.aborted
     if (active) {
+      invalidateMessageResult()
       operation.value = null
       stopRequested.value = false
       if (!activityFailed.value) void loadActivity(stopped)
@@ -411,7 +431,7 @@ onUnmounted(() => {
             <p v-if="selectedId && detailLoading" class="ai-placeholder">正在读取历史...</p>
             <p v-else-if="selectedId && !detailLoaded" class="ui-load-retry">历史未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
             <template v-else-if="detailLoaded && detail">
-              <div v-for="message in detail.messages" :key="message.id" class="ai-message" :class="`ai-message-${message.role}`"><span class="ai-message-role">{{ message.role === 'user' ? '你' : '助手' }} <ElTag v-if="message.status !== 'completed'" :type="message.status === 'failed' ? 'danger' : 'warning'" size="small">{{ message.status === 'failed' ? '发送失败' : '已中断' }}</ElTag></span><p>{{ message.content }}</p></div>
+              <ChatMessageItem v-for="message in detail.messages" :key="message.id" :message="message" :result-confirmed="messageResultConfirmed" />
               <div v-if="operation === 'send'" class="ai-message ai-message-user"><span class="ai-message-role">你</span><p>{{ sendingContent }}</p></div>
               <div v-if="operation === 'send' && streamingText" class="ai-message ai-message-assistant"><span class="ai-message-role">助手</span><p>{{ streamingText }}</p></div>
               <template v-for="proposal in detail.proposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="interactionBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
@@ -448,12 +468,13 @@ onUnmounted(() => {
               运行状态未确认。<ElButton :loading="activityLoading" :disabled="stopPending" @click="loadActivity(true)">刷新状态</ElButton>
             </p>
             <div class="ai-composer-actions">
-              <span class="ui-text-muted" role="status">
+              <span class="ui-text-muted ui-execution-status" role="status"
+                :data-execution-state="operation === 'create' || operation === 'send' || operation === 'decision' ? 'in-progress' : undefined">
                 <template v-if="stopping">正在中止...</template>
                 <template v-else-if="operation === 'create'">正在创建会话...</template>
                 <template v-else-if="operation === 'send'">正在接收回复...</template>
                 <template v-else-if="operation === 'decision'">正在提交巡检计划...</template>
-                <template v-else-if="activity?.running">后台任务正在运行...</template>
+                <template v-else-if="activity?.running">后台任务尚未结束...</template>
               </span>
               <ElButton
                 :type="running ? 'danger' : 'primary'"

@@ -8,7 +8,7 @@ import InspectionRecordSummary from '@/components/InspectionRecordSummary.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/components/pagination'
 import { showSystemError } from '@/components/feedback'
-import { hostProgressLabel, isActiveRun, runLabel, runType } from '@/components/inspectionDisplay'
+import { hostProgressLabel, isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import type { TaskDetail, TaskSummary } from '@/types/inspections'
 import '@/styles/inspections.css'
@@ -318,10 +318,18 @@ onUnmounted(() => {
                  <ElButton link type="primary" class="inspection-name" :disabled="deleting" @click="selectTask(row.id)">{{ row.name }}</ElButton>
                </template>
              </ElTableColumn>
-            <ElTableColumn label="执行状态" width="115"><template #default="{ row }"><ElTag :type="runType(row.status)" size="small">{{ runLabel(row.status) }}</ElTag></template></ElTableColumn>
+             <ElTableColumn label="执行状态" width="115">
+               <template #default="{ row }">
+                 <ElTag class="ui-execution-status" :data-execution-state="runState(row.status)" size="small">
+                   {{ runLabel(row.status) }}
+                 </ElTag>
+               </template>
+             </ElTableColumn>
             <ElTableColumn label="主机进度" width="160">
               <template #default="{ row }">
-                {{ hostProgressLabel(row as TaskSummary) }}
+                 <span class="ui-execution-status" :data-execution-state="row.failed_hosts ? 'incomplete' : undefined">
+                   {{ hostProgressLabel(row as TaskSummary) }}
+                 </span>
               </template>
             </ElTableColumn>
             <ElTableColumn label="创建时间" min-width="180"><template #default="{ row }">{{ timeLabel(row.created_at) }}</template></ElTableColumn>

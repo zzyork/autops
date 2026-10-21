@@ -126,9 +126,15 @@ async function loadScope() {
 function rowDisplay(row: Row) {
   if (row.state === 'unavailable') return SSH_RESULT_UNAVAILABLE
   if (row.state === 'confirmed') return SSH_RETEST_REQUIRED
-  if (!row.result) return stopped.value && row.state !== 'submitting'
-    ? { status: 'untested' as const, label: '未提交', description: 'SSH 连接测试未提交' }
-    : { status: 'pending' as const, label: row.state === 'submitting' ? '提交中' : '待提交', description: row.state === 'submitting' ? 'SSH 连接测试提交中' : 'SSH 连接测试待提交' }
+  if (!row.result) {
+    if (row.state === 'submitting') {
+      return { status: 'pending' as const, label: '提交中', description: 'SSH 连接测试提交中' }
+    }
+    if (stopped.value) {
+      return { status: 'queued' as const, label: '未提交', description: 'SSH 连接测试未提交' }
+    }
+    return { status: 'queued' as const, label: '待提交', description: 'SSH 连接测试待提交' }
+  }
   return sshTestDisplay(row.result.status)
 }
 watch(() => props.modelValue, (visible) => {
@@ -157,11 +163,25 @@ onUnmounted(reset)
       <ElButton v-else-if="!scopeLoaded" @click="loadScope">重新读取范围</ElButton>
       <ElButton v-if="!started" type="primary" :disabled="!scopeLoaded || !rows.length" @click="start">开始测试</ElButton>
     </div>
-    <p class="batch-summary">共 {{ rows.length }} 台，已完成 {{ completed }} 台{{ running ? '，测试进行中' : '' }}。</p>
-    <p v-if="stopped || confirmedCount" class="batch-summary">{{ stopped ? '后续提交已停止' : '身份已确认' }}，请重新开始测试。</p>
+    <p class="batch-summary ui-execution-status" :data-execution-state="running ? 'in-progress' : undefined">
+      共 {{ rows.length }} 台，已返回结果 {{ completed }} 台{{ running ? '，测试进行中' : '' }}。
+    </p>
+    <p
+      v-if="stopped || confirmedCount"
+      class="batch-summary ui-execution-status ui-execution-notice"
+      :data-execution-state="stopped ? 'aborted' : undefined"
+    >{{ stopped ? '后续提交已停止' : '身份已确认' }}，请重新开始测试。</p>
     <ElTable :data="rows" max-height="420">
       <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="ui-item-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div></template></ElTableColumn>
-      <ElTableColumn label="状态" min-width="140"><template #default="{ row }"><span class="batch-test-status"><TestStatus :status="rowDisplay(row as Row).status" :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`" />{{ rowDisplay(row as Row).label }}</span></template></ElTableColumn>
+      <ElTableColumn label="状态" min-width="140">
+        <template #default="{ row }">
+          <TestStatus
+            :status="rowDisplay(row as Row).status"
+            :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`"
+            :label="rowDisplay(row as Row).label"
+          />
+        </template>
+      </ElTableColumn>
     </ElTable>
     <p class="batch-summary">关闭弹窗会停止提交后续主机，正在测试的主机仍会完成。</p>
     <template #footer><ElButton @click="emit('update:modelValue', false)">关闭</ElButton></template>
@@ -169,8 +189,14 @@ onUnmounted(reset)
 </template>
 
 <style scoped>
-.batch-summary { margin: 0 0 var(--ui-space-4); color: var(--ui-text-secondary); }
-.batch-test-status { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
+.batch-summary {
+  margin: 0 0 var(--ui-space-4);
+}
+
+.batch-summary:not([data-execution-state]) {
+  color: var(--ui-text-secondary);
+}
+
 .batch-policy { display: grid; gap: var(--ui-space-2); margin-bottom: var(--ui-space-4); }
 .batch-policy .batch-summary { margin: 0; }
 .batch-policy .el-button { justify-self: start; margin-left: 0; }

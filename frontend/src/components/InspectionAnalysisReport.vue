@@ -3,11 +3,11 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElButton, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
-import { isActiveRun, runLabel } from '@/components/inspectionDisplay'
+import { isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import ListPagination from '@/components/ListPagination.vue'
 import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
-import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, analysisStatusLabel as statusLabel, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
+import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, analysisState, analysisStatusLabel as statusLabel, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
 import { useListPagination } from '@/components/pagination'
 import type { AnalysisEvidence, AnalysisIssue, AnalysisResponse, RunStatus } from '@/types/inspections'
 
@@ -38,12 +38,6 @@ function issueHost(issue: AnalysisIssue): string {
   return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
 }
 
-function statusType(status: AnalysisResponse['status']): 'info' | 'success' | 'warning' | 'danger' {
-  if (status === 'completed') return 'success'
-  if (status === 'failed' || status === 'interrupted') return 'danger'
-  if (status === 'unavailable') return 'warning'
-  return 'info'
-}
 function kindLabel(kind: AnalysisEvidence['kind']): string {
   return { host: '主机', check: '检查', finding: '风险发现', log: '日志' }[kind]
 }
@@ -201,20 +195,36 @@ onUnmounted(() => {
     <p v-else-if="!loaded" class="ui-text-muted">正在读取汇报状态…</p>
     <template v-else-if="response">
       <dl class="inspection-analysis-meta">
-        <div><dt>本轮状态</dt><dd><ElTag :type="statusType(response.status)" size="small">{{ statusLabel(response.status) }}</ElTag></dd></div>
+        <div>
+          <dt>本轮状态</dt>
+          <dd>
+            <ElTag
+              class="ui-execution-status"
+              :type="response.status === 'unavailable' ? 'warning' : 'info'"
+              :data-execution-state="analysisState(response.status)"
+              size="small"
+            >{{ statusLabel(response.status) }}</ElTag>
+          </dd>
+        </div>
         <div v-if="response.model_name"><dt>本轮模型</dt><dd>{{ response.model_name }}<template v-if="response.model_version !== null"> (v{{ response.model_version }})</template></dd></div>
         <div v-if="response.started_at"><dt>生成开始</dt><dd>{{ timeLabel(response.started_at) }}</dd></div>
         <div v-if="response.finished_at"><dt>生成结束</dt><dd>{{ timeLabel(response.finished_at) }}</dd></div>
       </dl>
       <p v-if="response.status === 'unavailable'" class="ui-text-muted">{{ response.can_generate ? '上次生成时主模型不可用，现在可以重新生成。' : '主模型未配置或未通过测试，暂不可生成汇报。' }}</p>
-      <p v-else-if="response.status === 'not_generated' && isActiveRun(taskStatus)" class="ui-text-muted">巡检进行中，结束后将检查自动生成条件。</p>
+      <p
+        v-else-if="response.status === 'not_generated' && isActiveRun(taskStatus)"
+        class="ui-execution-status ui-execution-notice"
+        :data-execution-state="runState(taskStatus)"
+      >巡检尚未结束，结束后将检查自动生成条件。</p>
       <p v-else-if="response.status === 'not_generated'" class="ui-text-muted">尚无 AI 汇报。</p>
-      <p v-else-if="response.status === 'queued'" class="ui-text-muted">本轮汇报排队中。</p>
-      <p v-else-if="response.status === 'running'" class="ui-text-muted" role="status">
+      <p v-else-if="response.status === 'queued'" class="ui-execution-status ui-execution-notice" data-execution-state="not-started">本轮汇报排队中。</p>
+      <p v-else-if="response.status === 'running'" class="ui-execution-status ui-execution-notice" data-execution-state="in-progress" role="status">
         <template v-if="response.progress">{{ response.progress.current_step }}，本阶段开始 {{ timeLabel(response.progress.step_started_at) }}。</template>
         <template v-else>正在生成本轮汇报。</template>
       </p>
-      <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="ui-text-muted">本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。</p>
+      <p v-else-if="response.status === 'failed' || response.status === 'interrupted'" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete">
+        本轮汇报{{ statusLabel(response.status) }}。已有汇报如有显示，仍为上次成功生成的版本。
+      </p>
       <p v-if="!response.can_generate && !isActiveRun(taskStatus) && response.status !== 'queued' && response.status !== 'running' && response.status !== 'unavailable'" class="ui-text-muted">当前无法发起生成，请检查主模型及生成服务状态。</p>
       <template v-if="report">
         <section class="inspection-analysis-saved" aria-label="已保存汇报摘要">
@@ -223,14 +233,29 @@ onUnmounted(() => {
             <div><dt>分析主机</dt><dd>{{ report.host_count }} <span>台</span></dd></div>
             <div><dt>巡检发现</dt><dd>{{ report.finding_count }} <span>条</span></dd></div>
             <div><dt>采集日志</dt><dd>{{ report.log_count }} <span>条</span></dd></div>
-            <div><dt>未完成检查</dt><dd>{{ report.incomplete_count }} <span>项</span></dd></div>
+            <div>
+              <dt>未完成检查</dt>
+              <dd>
+                <strong class="ui-execution-status" :data-execution-state="report.incomplete_count ? 'incomplete' : undefined">
+                  {{ report.incomplete_count }}
+                </strong>
+                <span>项</span>
+              </dd>
+            </div>
           </dl>
           <div class="inspection-analysis-provenance"><span>报告模型：{{ report.model_name }} (v{{ report.model_version }})</span><span>采集时间：{{ timeLabel(report.inspection_started_at) }} 至 {{ timeLabel(report.inspection_finished_at) }}</span></div>
         </section>
         <section v-if="report.incomplete_count" class="inspection-analysis-section">
           <h3>未完成检查</h3>
-          <p>本次有 {{ report.incomplete_count }} 项检查未完成，相关风险无法完整判定。</p>
-          <p v-for="item in report.evidence.filter((evidence) => evidence.incomplete && evidence.kind === 'check')" :key="item.id" class="ui-text-muted">{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：检查未完成，无法判定。</p>
+          <p class="ui-execution-status ui-execution-notice" data-execution-state="incomplete">
+            本次有 {{ report.incomplete_count }} 项检查未完成，相关风险无法完整判定。
+          </p>
+          <p
+            v-for="item in report.evidence.filter((evidence) => evidence.incomplete && evidence.kind === 'check')"
+            :key="item.id"
+            class="ui-text-muted ui-execution-status"
+            data-execution-state="incomplete"
+          >{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：检查未完成，无法判定。</p>
         </section>
         <section v-if="report.unassessed_count" class="inspection-analysis-section">
           <h3>判定范围限制</h3>

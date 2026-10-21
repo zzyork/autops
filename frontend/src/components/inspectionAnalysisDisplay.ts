@@ -1,7 +1,16 @@
 import type { AnalysisEvidence, AnalysisIssue, AnalysisSeverity, AnalysisStatus, DiagnosticGroup } from '@/types/inspections'
+import type { ExecutionState } from '@/types/executionStatus'
+import { runState } from '@/components/inspectionDisplay'
 
 export function analysisStatusLabel(status: AnalysisStatus): string {
   return { not_generated: '未生成', unavailable: '不可用', queued: '排队中', running: '生成中', completed: '已完成', failed: '生成失败', interrupted: '已中断' }[status]
+}
+
+export function analysisState(status: AnalysisStatus): ExecutionState | null {
+  if (status === 'not_generated' || status === 'unavailable') {
+    return null
+  }
+  return runState(status)
 }
 
 interface LogDetail {

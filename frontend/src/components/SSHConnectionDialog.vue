@@ -96,10 +96,14 @@ async function startTest() {
   <ElDialog :model-value="modelValue" align-center :title="`SSH 连接测试：${target?.name ?? ''}`" width="min(var(--ui-confirm-width), calc(100vw - 32px))" :close-on-click-modal="false" :close-on-press-escape="!submitting && !trusting" :show-close="!submitting && !trusting" @update:model-value="updateVisible">
     <div class="ssh-test-dialog">
       <ElButton type="primary" :loading="submitting" :disabled="!target || trusting" @click="startTest">开始测试</ElButton>
-      <span v-if="requestFailed" class="ssh-test-status"><TestStatus :status="SSH_RESULT_UNAVAILABLE.status" :description="SSH_RESULT_UNAVAILABLE.description" />{{ SSH_RESULT_UNAVAILABLE.label }}</span>
-      <span v-if="confirmed" class="ssh-test-status"><TestStatus :status="SSH_RETEST_REQUIRED.status" :description="SSH_RETEST_REQUIRED.description" />{{ SSH_RETEST_REQUIRED.label }}</span>
+      <TestStatus v-if="submitting" status="pending" label="测试请求处理中" description="SSH 连接测试请求处理中，结果尚未确认" />
+      <TestStatus v-if="requestFailed" :status="SSH_RESULT_UNAVAILABLE.status" :description="SSH_RESULT_UNAVAILABLE.description" :label="SSH_RESULT_UNAVAILABLE.label" />
+      <TestStatus v-if="confirmed" :status="SSH_RETEST_REQUIRED.status" :description="SSH_RETEST_REQUIRED.description" :label="SSH_RETEST_REQUIRED.label" />
       <section v-if="result && appearance" aria-label="本次测试结果" class="ssh-test-result">
-        <h2>本次测试结果 <span class="ssh-test-status"><TestStatus :status="appearance.status" :description="`${target?.name ?? ''}：${appearance.description}`" />{{ appearance.label }}</span></h2>
+        <h2>
+          本次测试结果
+          <TestStatus :status="appearance.status" :description="`${target?.name ?? ''}：${appearance.description}`" :label="appearance.label" />
+        </h2>
         <ElAlert v-if="result.status === 'awaiting_trust'" title="待确认主机密钥，请确认后重新测试。" type="warning" :closable="false" show-icon />
         <ElButton v-if="result.status === 'awaiting_trust'" :loading="trusting" :disabled="submitting" @click="confirmIdentity(session)">确认身份</ElButton>
       </section>
@@ -112,5 +116,4 @@ async function startTest() {
 .ssh-test-dialog { display: grid; justify-items: start; gap: var(--ui-space-4); min-height: 80px; }
 .ssh-test-result { display: grid; justify-items: start; gap: var(--ui-space-3); width: 100%; border-top: 1px solid var(--ui-border); padding-top: var(--ui-space-4); }
 .ssh-test-result h2 { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); margin: 0; font-size: var(--ui-font-size-section); line-height: var(--ui-line-height-section); }
-.ssh-test-status { display: inline-flex; align-items: center; gap: var(--ui-space-2); font-size: var(--ui-font-size-base); font-weight: 400; }
 </style>

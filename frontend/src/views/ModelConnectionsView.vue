@@ -41,7 +41,7 @@ function testDescription(connection: ModelConnection): string {
     case 'pending': return '正在测试模型是否支持 AI 运维'
     case 'passed': return '测试通过'
     case 'failed': return '测试未通过'
-    default: return '尚未完成测试'
+    default: return '尚未测试'
   }
 }
 

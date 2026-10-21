@@ -27,6 +27,17 @@
   --ui-danger: #B13737;
   --ui-danger-soft: #FAECEC;
 
+  --ui-status-not-started-fg: var(--ui-text-secondary);
+  --ui-status-not-started-bg: var(--ui-surface-muted);
+  --ui-status-in-progress-fg: var(--ui-info);
+  --ui-status-in-progress-bg: var(--ui-info-soft);
+  --ui-status-completed-fg: var(--ui-success);
+  --ui-status-completed-bg: var(--ui-success-soft);
+  --ui-status-incomplete-fg: var(--ui-danger);
+  --ui-status-incomplete-bg: var(--ui-danger-soft);
+  --ui-status-aborted-fg: var(--ui-warning);
+  --ui-status-aborted-bg: var(--ui-warning-soft);
+
   --ui-font-size-base: 0.875rem;
   --ui-font-size-small: 0.75rem;
   --ui-font-size-title: 1.25rem;

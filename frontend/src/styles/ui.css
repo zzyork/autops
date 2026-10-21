@@ -31,3 +31,47 @@
 .ui-field-hint { color: var(--ui-text-secondary); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); overflow-wrap: anywhere; }
 .ui-text-muted { color: var(--ui-text-secondary); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); overflow-wrap: anywhere; }
 .ui-load-retry { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-panel-padding); color: var(--ui-text-secondary); }
+
+.ui-execution-status[data-execution-state="not-started"] {
+  --ui-execution-fg: var(--ui-status-not-started-fg);
+  --ui-execution-bg: var(--ui-status-not-started-bg);
+}
+
+.ui-execution-status[data-execution-state="in-progress"] {
+  --ui-execution-fg: var(--ui-status-in-progress-fg);
+  --ui-execution-bg: var(--ui-status-in-progress-bg);
+}
+
+.ui-execution-status[data-execution-state="completed"] {
+  --ui-execution-fg: var(--ui-status-completed-fg);
+  --ui-execution-bg: var(--ui-status-completed-bg);
+}
+
+.ui-execution-status[data-execution-state="incomplete"] {
+  --ui-execution-fg: var(--ui-status-incomplete-fg);
+  --ui-execution-bg: var(--ui-status-incomplete-bg);
+}
+
+.ui-execution-status[data-execution-state="aborted"] {
+  --ui-execution-fg: var(--ui-status-aborted-fg);
+  --ui-execution-bg: var(--ui-status-aborted-bg);
+}
+
+.ui-execution-status[data-execution-state] {
+  color: var(--ui-execution-fg);
+}
+
+.el-tag.ui-execution-status[data-execution-state] {
+  --el-tag-text-color: var(--ui-execution-fg);
+  --el-tag-bg-color: var(--ui-execution-bg);
+  --el-tag-border-color: var(--ui-execution-fg);
+}
+
+.ui-execution-notice[data-execution-state] {
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-execution-bg);
+  font-size: var(--ui-font-size-small);
+  line-height: var(--ui-line-height-small);
+  overflow-wrap: anywhere;
+}

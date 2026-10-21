@@ -1,1 +1,1 @@
-export type TestStatus = 'untested' | 'pending' | 'passed' | 'failed' | 'warning' | 'unavailable'
+export type TestStatus = 'untested' | 'queued' | 'pending' | 'passed' | 'failed' | 'warning' | 'unavailable'

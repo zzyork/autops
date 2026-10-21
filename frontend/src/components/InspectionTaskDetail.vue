@@ -4,17 +4,17 @@ import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTa
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { checkLabel, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runType, summarizeChecks } from '@/components/inspectionDisplay'
+import { checkLabel, checkState, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import type { CheckStatus, TaskDetail } from '@/types/inspections'
 
 const CHECK_STATUS_MESSAGES: Record<CheckStatus, string> = {
   queued: '检查尚未开始。',
   running: '正在检查，结果尚未确定。',
-  completed: '',
+  completed: '检查已完成',
   failed: '检查未完成',
   skipped: '检查未完成（已跳过）',
-  interrupted: '检查未完成',
+  interrupted: '检查未完成（已中断）',
 }
 
 const props = defineProps<{ task: TaskDetail }>()
@@ -39,6 +39,7 @@ const visibleChecks = computed(() => {
       ...check,
       expandable: check.status === 'completed' || check.payload.findings.length > 0,
       statusMessage,
+      executionState: checkState(check.status),
     }
   })
 })
@@ -112,7 +113,12 @@ async function exportReport() {
   <section class="inspection-detail" aria-label="巡检任务详情">
     <div class="section-header"><h2>{{ task.name }}</h2><ElButton :disabled="isActiveRun(task.status)" :loading="exporting" @click="exportReport">导出报告</ElButton></div>
     <div class="inspection-detail-meta">
-      <span>执行状态 <ElTag :type="runType(task.status)" size="small">{{ runLabel(task.status) }}</ElTag></span>
+      <span>
+        执行状态
+        <ElTag class="ui-execution-status" :data-execution-state="runState(task.status)" size="small">
+          {{ runLabel(task.status) }}
+        </ElTag>
+      </span>
       <span>主机 {{ task.completed_hosts }} / {{ task.host_count }} 已结束</span>
       <span>开始 {{ timeLabel(task.started_at) }}</span><span>结束 {{ timeLabel(task.finished_at) }}</span>
     </div>
@@ -146,15 +152,23 @@ async function exportReport() {
           </ElAlert>
           <ElButton :loading="checkingIdentity" @click="checkIdentity">重新检查服务器身份</ElButton>
         </template>
-        <p v-else-if="selectedHost.failure_code && !selectedHost.checks.length" class="ui-text-muted">该主机未完成巡检，无法判定风险。</p>
-        <p v-else-if="!selectedHost.checks.length" class="ui-text-muted">检查项尚未开始。</p>
+        <p
+          v-else-if="selectedHost.failure_code && !selectedHost.checks.length"
+          class="ui-execution-status ui-execution-notice"
+          :data-execution-state="runState(selectedHost.status)"
+        >该主机未完成巡检，无法判定风险。</p>
+        <p v-else-if="!selectedHost.checks.length" class="ui-execution-status ui-execution-notice" data-execution-state="not-started">
+          检查项尚未开始。
+        </p>
         <ElCollapse v-if="visibleChecks.length" v-model="expandedChecks" expand-icon-position="right" class="inspection-checks ui-collapse">
           <template v-for="check in visibleChecks" :key="`${selectedHost.id}-${check.check_id}`">
             <ElCollapseItem v-if="check.expandable" :name="check.check_id">
               <template #title>
                 <div class="inspection-check-header">
                   <h4>{{ check.title }}</h4>
-                  <span v-if="check.statusMessage" class="ui-text-muted">{{ check.statusMessage }}</span>
+                  <span class="ui-text-muted ui-execution-status" :data-execution-state="check.executionState">
+                    {{ check.statusMessage }}
+                  </span>
                   <span v-if="check.payload.findings.length" class="ui-text-muted">发现 {{ check.payload.findings.length }} 个问题</span>
                 </div>
               </template>
@@ -189,7 +203,9 @@ async function exportReport() {
             </ElCollapseItem>
             <div v-else class="inspection-check-header inspection-check-static">
               <h4>{{ check.title }}</h4>
-              <span v-if="check.statusMessage" class="ui-text-muted">{{ check.statusMessage }}</span>
+              <span class="ui-text-muted ui-execution-status" :data-execution-state="check.executionState">
+                {{ check.statusMessage }}
+              </span>
             </div>
           </template>
         </ElCollapse>
