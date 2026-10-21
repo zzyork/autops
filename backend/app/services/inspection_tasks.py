@@ -48,7 +48,7 @@ class InspectionManager:
             if asset.version != selected.version:
                 raise HTTPException(409, "主机已变更，请刷新后重试")
             plan = resolve_plan(session, self.cipher, "host", selected.id)
-            snapshots.append({"host_id": asset.id, "host_name": asset.name, "address": plan.target.address,
+            snapshots.append({"host_id": asset.id, "host_name": asset.name or asset.address, "address": plan.target.address,
                               "port": asset.port, "username": asset.username,
                               "group_name": repository.get_group_name(session, asset.group_id),
                               "asset_snapshot": plan.snapshot})

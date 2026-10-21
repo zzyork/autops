@@ -12,6 +12,9 @@
 .group-item.active, .group-row.active { background: var(--ui-primary-soft); color: var(--ui-primary); }
 .host-title-row { display: flex; align-items: baseline; gap: var(--ui-space-2); }
 .host-total { color: var(--ui-text-muted); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); }
+.host-form .field-grid.host-connection-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px;
+}
 .group-error { margin: 0 var(--ui-space-2) var(--ui-space-4); }
 .group-error .el-button { margin-top: var(--ui-space-2); }
 .ssh-fingerprint { overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; }

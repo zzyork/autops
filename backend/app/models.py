@@ -65,6 +65,7 @@ class Host(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
+    lan_ip: Mapped[str | None]
     address: Mapped[str]
     group_id: Mapped[int] = mapped_column(ForeignKey("host_groups.id", ondelete="RESTRICT"))
     username: Mapped[str]

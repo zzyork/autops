@@ -90,6 +90,7 @@ export interface Host {
   id: number
   name: string
   address: string
+  lan_ip: string | null
   group_id: number
   username: string
   port: number
@@ -105,7 +106,9 @@ export interface Host {
   version: number
 }
 
-export type HostInput = Omit<Host, 'id' | 'has_password' | 'connection_status' | 'created_at' | 'updated_at' | 'version'> & {
+export type HostInput = Omit<Host, 'id' | 'name' | 'lan_ip' | 'has_password' | 'connection_status' | 'created_at' | 'updated_at' | 'version'> & {
+  name?: string
+  lan_ip?: string | null
   password?: string
 }
 

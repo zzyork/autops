@@ -8,6 +8,7 @@ import FieldError from '@/components/FieldError.vue'
 import { focusFormFeedback } from '@/components/formFeedback'
 import ListPagination from '@/components/ListPagination.vue'
 import { useListPagination } from '@/components/pagination'
+import { hostDisplayName } from '@/components/hostDisplay'
 import type { Host, HostGroup } from '@/types/api'
 import type { CheckId, InspectionCatalog, InspectionInput, TaskDetail } from '@/types/inspections'
 
@@ -156,9 +157,14 @@ async function submit() {
           <ElTable :data="pageItems" row-key="id" size="small" :empty-text="groupId === null ? '暂无主机' : '该分组暂无主机'">
             <ElTableColumn label="选择" width="85">
               <template #header><ElCheckbox :model-value="allVisibleHostsSelected" :indeterminate="hostsIndeterminate" :disabled="visibleHosts.length === 0" aria-label="全选当前筛选的全部主机（含其他页）" @change="toggleAllHosts">全选</ElCheckbox></template>
-              <template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${row.name}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template>
+              <template #default="{ row }"><ElCheckbox :model-value="selectedHosts.includes(row.id)" :aria-label="`选择主机 ${hostDisplayName(row as Host)}`" :disabled="selectedHosts.length >= MAX_HOSTS && !selectedHosts.includes(row.id)" @change="toggleHost(row.id, $event)" /></template>
             </ElTableColumn>
-            <ElTableColumn label="主机" min-width="180"><template #default="{ row }"><strong>{{ row.name }}</strong><div class="ui-item-secondary">{{ row.address }}</div></template></ElTableColumn>
+            <ElTableColumn label="主机" min-width="180">
+              <template #default="{ row }">
+                <strong>{{ hostDisplayName(row as Host) }}</strong>
+                <div v-if="row.name" class="ui-item-secondary">{{ row.address }}</div>
+              </template>
+            </ElTableColumn>
             <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName((row as Host).group_id) }}</template></ElTableColumn>
           </ElTable>
         </div>

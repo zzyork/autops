@@ -30,7 +30,8 @@ class GroupResponse(GroupInput):
 
 class HostInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1, max_length=100)
+    name: str = Field(default="", max_length=100)
+    lan_ip: str | None = Field(default=None, max_length=253)
     address: str = Field(min_length=1, max_length=253)
     group_id: int = Field(gt=0)
     username: str = Field(min_length=1, max_length=100)
@@ -42,7 +43,12 @@ class HostInput(BaseModel):
     jump_host_id: int | None = Field(default=None, gt=0)
     remark: str = Field(default="", max_length=2000)
 
-    @field_validator("name", "address", "username", "vip")
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("lan_ip", "address", "username", "vip")
     @classmethod
     def clean_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -88,6 +94,7 @@ class HostResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
+    lan_ip: str | None
     address: str
     group_id: int
     username: str

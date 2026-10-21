@@ -56,7 +56,8 @@ def get_key(key_id: int, session: Database) -> SSHKeyResponse:
 def get_references(key_id: int, session: Database) -> SSHKeyReferences:
     find_key(session, key_id)
     return SSHKeyReferences(
-        hosts=[SSHKeyReference.model_validate(host) for host in session.scalars(select(Host).where(Host.ssh_key_id == key_id).order_by(Host.id))],
+        hosts=[SSHKeyReference(id=host.id, name=host.name or host.address)
+               for host in session.scalars(select(Host).where(Host.ssh_key_id == key_id).order_by(Host.id))],
         jump_hosts=[SSHKeyReference.model_validate(host) for host in session.scalars(select(JumpHost).where(JumpHost.ssh_key_id == key_id).order_by(JumpHost.id))],
     )
 

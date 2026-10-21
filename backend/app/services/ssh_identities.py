@@ -83,7 +83,7 @@ def check_identity(session: Session, cipher: Fernet, data: IdentityCheckInput) -
         raise HTTPException(409, "资产已变更")
     record = IdentityChallengeRecord(
         id=str(uuid4()), target_type=endpoint.target_type, target_id=endpoint.target_id,
-        target_name=asset.name, address=endpoint.address, port=endpoint.port,
+        target_name=asset.name or asset.address, address=endpoint.address, port=endpoint.port,
         key_type=key_type, public_key=public_key, fingerprint=key_fingerprint,
         previous_fingerprint=known.fingerprint if known else None, previous_state=_previous(known),
         jump_state=_previous(jump_known),

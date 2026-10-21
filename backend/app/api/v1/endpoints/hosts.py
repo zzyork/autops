@@ -40,6 +40,8 @@ def apply_host(data: HostInput, host: Host, request: Request, session: Session) 
     find_group(session, data.group_id)
     if data.jump_host_id is not None and session.get(JumpHost, data.jump_host_id) is None:
         raise HTTPException(404, "跳板机不存在")
+    if host.id is not None and "lan_ip" not in data.model_fields_set:
+        data = data.model_copy(update={"lan_ip": host.lan_ip})
     apply_connection(data, host, request, "请填写 SSH 密码", session)
 
 

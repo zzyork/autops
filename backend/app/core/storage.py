@@ -105,6 +105,9 @@ def initialize_storage(data_dir: Path) -> tuple[Engine, sessionmaker[Session], F
                 table_columns = {column["name"] for column in inspect(connection).get_columns(table)}
                 if "ssh_key_id" not in table_columns:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN ssh_key_id INTEGER REFERENCES ssh_keys(id) ON DELETE RESTRICT"))
+            if "lan_ip" not in columns:
+                connection.execute(text("ALTER TABLE hosts ADD COLUMN lan_ip TEXT"))
+                connection.execute(text("UPDATE hosts SET lan_ip = name"))
             if "jump_host_id" not in columns:
                 connection.execute(text("ALTER TABLE hosts ADD COLUMN jump_host_id INTEGER REFERENCES jump_hosts(id) ON DELETE RESTRICT"))
             if "proxy_address" in columns:

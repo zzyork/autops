@@ -8,6 +8,7 @@ import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities } from '@/api/sshIdentity'
 import { SSH_RESULT_UNAVAILABLE, SSH_RETEST_REQUIRED, sshTestDisplay } from '@/components/sshTestDisplay'
 import TestStatus from '@/components/TestStatus.vue'
+import { hostDisplayName } from '@/components/hostDisplay'
 import type { ConnectionTestResult, Host, JumpHost } from '@/types/api'
 
 const props = defineProps<{ modelValue: boolean; hosts: Host[] }>()
@@ -172,12 +173,17 @@ onUnmounted(reset)
       :data-execution-state="stopped ? 'aborted' : undefined"
     >{{ stopped ? '后续提交已停止' : '身份已确认' }}，请重新开始测试。</p>
     <ElTable :data="rows" max-height="420">
-      <ElTableColumn label="主机" min-width="160"><template #default="{ row }"><span :title="(row as Row).host.name">{{ (row as Row).host.name }}</span><div class="ui-item-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div></template></ElTableColumn>
+      <ElTableColumn label="主机" min-width="160">
+        <template #default="{ row }">
+          <span :title="hostDisplayName((row as Row).host)">{{ hostDisplayName((row as Row).host) }}</span>
+          <div class="ui-item-secondary">{{ (row as Row).host.vip || (row as Row).host.address }}:{{ (row as Row).host.port }}</div>
+        </template>
+      </ElTableColumn>
       <ElTableColumn label="状态" min-width="140">
         <template #default="{ row }">
           <TestStatus
             :status="rowDisplay(row as Row).status"
-            :description="`${(row as Row).host.name}：${rowDisplay(row as Row).description}`"
+            :description="`${hostDisplayName((row as Row).host)}：${rowDisplay(row as Row).description}`"
             :label="rowDisplay(row as Row).label"
           />
         </template>

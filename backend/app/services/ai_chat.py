@@ -185,7 +185,7 @@ class ChatManager:
                     query = query.where(or_(Host.name.contains(needle, autoescape=True),
                                             Host.address.contains(needle, autoescape=True)))
                 query = query.order_by(Host.id).limit(101)
-                hosts = [{"id": id, "name": host_name, "address": address, "version": version,
+                hosts = [{"id": id, "name": host_name or address, "address": address, "version": version,
                           "group": next(group.name for group in groups if group.id == group_id)}
                          for id, host_name, address, version, group_id in session.execute(query)]
                 if len(hosts) > 100:
