@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session, noload, selectinload
 
 from ..inspection_models import InspectionCheckRun, InspectionHostRun, InspectionTask
-from ..models import HostGroup, utc_now
+from ..models import Host, HostGroup, utc_now
 from ..schemas.inspections import CheckPayload, InspectionConfig, InspectionInput
 from ..services.inspection_checks import CHECK_TITLES
 
@@ -19,6 +19,11 @@ def get_task(session: Session, task_id: str) -> InspectionTask | None:
 
 def get_host_run(session: Session, run_id: str) -> InspectionHostRun | None:
     return session.get(InspectionHostRun, run_id)
+
+
+def get_host_lan_ips(session: Session, host_ids: list[int]) -> dict[int, str | None]:
+    rows = session.execute(select(Host.id, Host.lan_ip).where(Host.id.in_(host_ids)))
+    return {host_id: lan_ip for host_id, lan_ip in rows}
 
 
 def get_group_name(session: Session, group_id: int) -> str:

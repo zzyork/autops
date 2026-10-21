@@ -78,7 +78,7 @@ def report_hostname(host: HostRunResponse) -> str:
     return host.host_name
 
 
-def render_report_archive(task: TaskDetail) -> bytes:
+def render_report_archive(task: TaskDetail, lan_ips: dict[int, str | None]) -> bytes:
     if not task.hosts:
         raise ValueError("没有可导出的主机报告")
     month = task.created_at.strftime("%Y%m")
@@ -86,7 +86,10 @@ def render_report_archive(task: TaskDetail) -> bytes:
     buffer = BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
         for host in task.hosts:
-            filename = f"{filename_part(host.address)}_{filename_part(report_hostname(host))}.md"
+            lan_ip = lan_ips.get(host.host_id)
+            if not lan_ip or not lan_ip.strip():
+                raise ValueError("主机未配置局域网 IP，无法导出报告")
+            filename = f"{filename_part(lan_ip)}_{filename_part(report_hostname(host))}.md"
             if len(filename.encode("utf-8")) > 255:
                 raise ValueError("报告文件名过长")
             path = f"{filename_part(host.group_name, directory=True)}/{month}/{filename}"

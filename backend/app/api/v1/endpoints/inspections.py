@@ -80,8 +80,9 @@ def report_archive(task_id: UUID, request: Request, session: Database) -> Respon
     detail = _read_task_detail(task_id, request, session)
     if detail.status in ("queued", "running"):
         raise HTTPException(409, "巡检尚未结束")
+    lan_ips = repository.get_host_lan_ips(session, [host.host_id for host in detail.hosts])
     try:
-        content = render_report_archive(detail)
+        content = render_report_archive(detail, lan_ips)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from None
     return Response(content=content, media_type="application/zip", headers={
