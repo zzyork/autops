@@ -25,7 +25,7 @@ from .inspection_checks import CHECK_TITLES
 
 
 TOOLS = [
-    {"name": "query_assets", "description": "按分组或主机名称查询资产，返回版本和地址；模糊分组匹配有歧义时请追问。",
+    {"name": "query_assets", "description": "按分组或主机名称查询资产，返回主机名、局域网 IP、连接地址及工具所需的 ID 和版本；模糊分组匹配有歧义时请追问。",
      "parameters": {"type": "object", "properties": {"group": {"type": "string"}, "host": {"type": "string"}},
                     "additionalProperties": False}},
     {"name": "prepare_inspection", "description": "根据本会话已查询资产准备待用户确认的巡检计划，不执行。",
@@ -38,7 +38,10 @@ TOOLS = [
                     "required": ["task_id"], "additionalProperties": False}},
 ]
 SYSTEM = ("你是运维助手。只能从工具查询到的资产准备巡检计划；分组查询歧义时先请用户澄清。"
-          "巡检计划必须由用户在独立按钮确认，不能声称已执行。不要索取或展示凭据。")
+          "巡检计划必须由用户在独立按钮确认，不能声称已执行。不要索取或展示凭据。"
+          "回复使用 Markdown。展示资产列表或巡检目标时，表格必须且只能按顺序包含主机名、局域网IP、连接地址三列，"
+          "分别使用 query_assets 返回的 name、lan_ip、address；禁止展示资产 ID、版本或其他内部字段。"
+          "局域网IP为空时注明未填写，禁止从主机名或连接地址猜测；旧查询结果缺少 lan_ip 字段时先重新查询资产。")
 MAX_ROUNDS = 4
 CAPABILITY_TEST_SECONDS = 60
 MAX_CHAT_OPERATIONS = 128
@@ -177,7 +180,7 @@ class ChatManager:
                 if term and len(matches) != 1:
                     return {"error": "分组匹配不唯一或不存在", "groups": [item.name for item in matches[:20]]}
                 ids = [item.id for item in matches]
-                query = select(Host.id, Host.name, Host.address, Host.version, Host.group_id)
+                query = select(Host.id, Host.name, Host.lan_ip, Host.address, Host.version, Host.group_id)
                 if term:
                     query = query.where(Host.group_id.in_(ids))
                 if args.get("host", "").strip():
@@ -185,9 +188,10 @@ class ChatManager:
                     query = query.where(or_(Host.name.contains(needle, autoescape=True),
                                             Host.address.contains(needle, autoescape=True)))
                 query = query.order_by(Host.id).limit(101)
-                hosts = [{"id": id, "name": host_name or address, "address": address, "version": version,
+                hosts = [{"id": id, "name": host_name or address, "lan_ip": lan_ip,
+                          "address": address, "version": version,
                           "group": next(group.name for group in groups if group.id == group_id)}
-                         for id, host_name, address, version, group_id in session.execute(query)]
+                         for id, host_name, lan_ip, address, version, group_id in session.execute(query)]
                 if len(hosts) > 100:
                     return {"error": "查询范围过大，请缩小范围"}
                 ledger.update({item["id"]: item for item in hosts})

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ElTag } from 'element-plus'
+import ChatMarkdownContent from '@/components/ChatMarkdownContent.vue'
 import type { ChatMessage } from '@/types/ai'
 
 defineProps<{
-  message: ChatMessage
-  resultConfirmed: boolean
+  message: Pick<ChatMessage, 'role' | 'content'> & { status?: ChatMessage['status'] }
+  resultConfirmed?: boolean
 }>()
 </script>
 
@@ -13,7 +14,7 @@ defineProps<{
     <span class="ai-message-role">
       {{ message.role === 'user' ? '你' : '助手' }}
       <ElTag
-        v-if="message.status !== 'completed'"
+        v-if="message.status && message.status !== 'completed'"
         type="info"
         size="small"
         class="ui-execution-status"
@@ -24,6 +25,7 @@ defineProps<{
         <template v-else>发送状态待确认</template>
       </ElTag>
     </span>
-    <p>{{ message.content }}</p>
+    <ChatMarkdownContent v-if="message.role === 'assistant'" class="ai-message-content" :content="message.content" />
+    <p v-else class="ai-message-content ai-message-text">{{ message.content }}</p>
   </div>
 </template>

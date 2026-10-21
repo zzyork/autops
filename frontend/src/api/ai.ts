@@ -28,7 +28,8 @@ function isChatSession(value: unknown): value is ChatSession {
       && proposal.hosts.every((host: unknown) => isRecord(host) && typeof host.id === 'number'
         && typeof host.version === 'number' && typeof host.name === 'string' && typeof host.address === 'string')
       && Array.isArray(proposal.checks) && proposal.checks.every((check: unknown) =>
-        check === 'server_info' || check === 'system_resources' || check === 'service_status' || check === 'network_info')
+        check === 'server_info' || check === 'system_resources' || check === 'service_status' || check === 'network_info'
+        || check === 'log_error')
       && (proposal.status === 'pending' || proposal.status === 'confirmed' || proposal.status === 'cancelled')
       && (proposal.task_id === null || typeof proposal.task_id === 'string'))
 }

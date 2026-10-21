@@ -12,10 +12,138 @@
 .ai-session-select:focus-visible { outline: 2px solid var(--ui-primary) !important; outline-offset: -2px !important; }
 .ai-placeholder { padding: var(--ui-space-6) var(--ui-panel-padding); color: var(--ui-text-secondary); }
 .ai-conversation { padding: var(--ui-panel-padding); display: flex; flex-direction: column; align-items: stretch; gap: var(--ui-space-4); }
-.ai-message { max-width: 90%; min-width: 0; overflow-wrap: anywhere; }
-.ai-message p { white-space: pre-wrap; padding: var(--ui-space-3); background: var(--ui-row-hover); border: 1px solid var(--ui-border); }
-.ai-message-user { align-self: flex-end; }
-.ai-message-user p { background: var(--ui-primary-soft); }
+.ai-message {
+  max-width: 90%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-message-content {
+  padding: var(--ui-space-3);
+  background: var(--ui-row-hover);
+  border: 1px solid var(--ui-border);
+}
+
+.ai-message-text {
+  white-space: pre-wrap;
+}
+
+.ai-message-user {
+  align-self: flex-end;
+}
+
+.ai-message-user .ai-message-content {
+  background: var(--ui-primary-soft);
+}
+
+.ai-markdown {
+  min-width: 0;
+  line-height: var(--ui-line-height-base);
+}
+
+.ai-markdown :is(p, ul, ol, blockquote, pre, .ai-markdown-table) {
+  margin: var(--ui-space-2) 0;
+}
+
+.ai-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--ui-space-4) 0 var(--ui-space-2);
+  font-size: var(--ui-font-size-section);
+  line-height: var(--ui-line-height-section);
+  font-weight: 600;
+}
+
+.ai-markdown h1 {
+  font-size: var(--ui-font-size-title);
+  line-height: var(--ui-line-height-title);
+}
+
+.ai-markdown :is(h3, h4, h5, h6) {
+  font-size: var(--ui-font-size-base);
+  line-height: var(--ui-line-height-base);
+}
+
+.ai-markdown :is(ul, ol) {
+  padding-left: var(--ui-space-6);
+}
+
+.ai-markdown li + li {
+  margin-top: var(--ui-space-1);
+}
+
+.ai-markdown blockquote {
+  padding-left: var(--ui-space-3);
+  border-left: var(--ui-space-1) solid var(--ui-border);
+  color: var(--ui-text-secondary);
+}
+
+.ai-markdown code {
+  padding: 0 var(--ui-space-1);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-surface-muted);
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-font-size-code);
+  line-height: var(--ui-line-height-code);
+}
+
+.ai-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-surface-muted);
+  white-space: pre;
+}
+
+.ai-markdown pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ai-markdown a {
+  text-decoration: underline;
+}
+
+.ai-markdown hr {
+  margin: var(--ui-space-4) 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+}
+
+.ai-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.ai-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ui-font-size-base);
+  line-height: var(--ui-line-height-base);
+}
+
+.ai-markdown :is(th, td) {
+  height: var(--ui-table-row-height);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ai-markdown th {
+  background: var(--ui-surface-muted);
+  font-weight: 600;
+}
+
+.ai-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+
 .ai-message-role { display: block; color: var(--ui-text-secondary); margin-bottom: var(--ui-space-1); font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); }
 .ai-composer { flex: none; padding: var(--ui-space-3) var(--ui-panel-padding); border-top: 1px solid var(--ui-border); display: grid; gap: var(--ui-space-2); }
 .ai-composer > label { font-weight: 600; }

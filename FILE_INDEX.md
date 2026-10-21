@@ -251,6 +251,7 @@
 | `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。 |
 | `frontend/src/types/executionStatus.ts` | 五类执行状态的前端展示键类型。 |
 | `frontend/src/components/ChatMessageItem.vue` | 对话消息及已确认结果与待确认状态的纯展示组件。 |
+| `frontend/src/components/ChatMarkdownContent.vue` | AI 回复的安全 Markdown 渲染与表格展示。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检规则配置表单。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 主机巡检详情、检查结果与报告导出展示。 |

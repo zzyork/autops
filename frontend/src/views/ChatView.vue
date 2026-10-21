@@ -262,7 +262,7 @@ async function send() {
   inputInvalid.value = false
   invalidateMessageResult()
   operation.value = selectedId.value ? 'send' : 'create'
-  sendingContent.value = content
+  sendingContent.value = input.value
   streamingText.value = ''
   stopRequested.value = false
   let id = selectedId.value
@@ -290,15 +290,16 @@ async function send() {
     registration = pending
     const operationId = await pending
     if (!active || controller.signal.aborted || stopRequested.value) return
+    input.value = ''
     const session = await sendMessage(id, content, controller.signal, (text) => {
       if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value) streamingText.value += text
     }, operationId)
     if (!active || selectedId.value !== id || controller.signal.aborted) return
     detail.value = session
-    if (!stopRequested.value) input.value = ''
     void loadSessions()
   } catch {
     if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value && !stopPending.value) {
+      input.value = sendingContent.value
       showRequestError()
       if (id && await loadDetail(id, false)) void loadSessions()
     }
@@ -432,8 +433,8 @@ onUnmounted(() => {
             <p v-else-if="selectedId && !detailLoaded" class="ui-load-retry">历史未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
             <template v-else-if="detailLoaded && detail">
               <ChatMessageItem v-for="message in detail.messages" :key="message.id" :message="message" :result-confirmed="messageResultConfirmed" />
-              <div v-if="operation === 'send'" class="ai-message ai-message-user"><span class="ai-message-role">你</span><p>{{ sendingContent }}</p></div>
-              <div v-if="operation === 'send' && streamingText" class="ai-message ai-message-assistant"><span class="ai-message-role">助手</span><p>{{ streamingText }}</p></div>
+              <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
+              <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
               <template v-for="proposal in detail.proposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="interactionBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
               <p v-if="!detail.messages.length && !detail.proposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
             </template>
@@ -445,7 +446,6 @@ onUnmounted(() => {
             </template>
           </div>
           <div ref="composer" class="ai-composer">
-            <label :for="inputId">消息</label>
             <ElInput
               :id="inputId"
               v-model="input"
