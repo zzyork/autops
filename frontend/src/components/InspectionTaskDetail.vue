@@ -4,7 +4,7 @@ import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTa
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { checkLabel, checkState, displayChecks, findingLabel, isActiveRun, metricLabel, runLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
+import { checkLabel, checkState, displayChecks, findingLabel, inspectionFailureReason, isActiveRun, metricLabel, runLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
 import type { CheckStatus, TaskDetail } from '@/types/inspections'
 
@@ -27,7 +27,11 @@ const visibleChecks = computed(() => {
   const host = selectedHost.value
   const checks = displayChecks(host?.checks ?? [])
   return checks.map((check) => {
+    const executionState = checkState(check.status)
     let statusMessage = CHECK_STATUS_MESSAGES[check.status]
+    if (executionState === 'incomplete') {
+      statusMessage += `；原因：${inspectionFailureReason(check.error_code ?? host?.failure_code ?? null)}。`
+    }
     if (check.status !== 'completed' && check.payload.findings.length) {
       statusMessage += ' 仅展示已返回的风险线索。'
     }
@@ -39,7 +43,7 @@ const visibleChecks = computed(() => {
       ...check,
       expandable: check.status === 'completed' || check.payload.findings.length > 0,
       statusMessage,
-      executionState: checkState(check.status),
+      executionState,
     }
   })
 })
@@ -160,7 +164,7 @@ async function exportReport() {
           v-else-if="selectedHost.failure_code && !selectedHost.checks.length"
           class="ui-execution-status ui-execution-notice"
           :data-execution-state="runState(selectedHost.status)"
-        >该主机未完成巡检，无法判定风险。</p>
+        >该主机未完成巡检，无法判定风险。原因：{{ inspectionFailureReason(selectedHost.failure_code) }}。</p>
         <p v-else-if="!selectedHost.checks.length" class="ui-execution-status ui-execution-notice" data-execution-state="not-started">
           检查项尚未开始。
         </p>

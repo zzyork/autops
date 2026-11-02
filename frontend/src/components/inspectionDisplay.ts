@@ -24,6 +24,31 @@ const DISK_CAPACITY_COLUMNS = new Map([
 const BYTES_PER_KIB = 1024
 const CAPACITY_UNIT_BASE = 1000
 const CAPACITY_UNITS = ['KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+const INSPECTION_FAILURE_REASONS = new Map<string, string>([
+  ['tool_missing', '检查依赖的命令未安装或不可用'],
+  ['command_failed', '检查命令返回非零退出码'],
+  ['invalid_output', '检查命令输出未通过格式或内容校验'],
+  ['output_limit', '检查命令输出超过采集上限'],
+  ['unsupported_check', '当前版本不支持该检查项'],
+  ['no_monitored_disks', '未采集到可监控的磁盘'],
+  ['timeout', '检查命令执行或主机巡检超时'],
+  ['connection', 'SSH 连接失败或已断开'],
+  ['internal', '巡检执行发生内部异常'],
+  ['unknown', '命令执行结果无法确认'],
+  ['interrupted', '巡检执行已中断'],
+  ['configuration', 'SSH 连接配置或凭据不可用'],
+  ['authentication', 'SSH 身份认证失败'],
+  ['asset_changed', '巡检期间主机或连接资产信息发生变更'],
+  ['host_key_required', 'SSH 服务器身份尚未确认'],
+  ['not_executed', '巡检流程已结束，该检查未执行'],
+  ['dispatch_failed', '巡检任务未能提交到执行队列'],
+  ['check_failed', '检查执行失败，未记录更具体原因'],
+])
+
+export function inspectionFailureReason(code: string | null): string {
+  if (!code) return '未记录具体原因'
+  return INSPECTION_FAILURE_REASONS.get(code) ?? `未识别的错误码（${code}）`
+}
 
 export function durationLabel(seconds: number): string {
   let remaining = Math.floor(seconds)
@@ -78,9 +103,17 @@ function visibleDisk(row: string[], table: ResultTable): boolean {
   return !INTERNAL_FILESYSTEMS.has(type) && !INTERNAL_MOUNT.test(mount) && !/^\/dev\/loop\d+$/.test(device)
 }
 
+function isMissingLogFileTable(table: ResultTable): boolean {
+  const statusIndex = table.columns.indexOf('状态')
+  const logIndex = table.columns.indexOf('日志')
+  return table.rows.length > 0 && table.rows.every((row) =>
+    row[statusIndex] === '不适用' && row[logIndex] === '日志文件不存在')
+}
+
 export function displayTables(check: CheckResponse): ResultTable[] {
   return check.payload.tables
     .filter((table) => !(check.check_id === 'server_info' && table.columns.includes('网卡')))
+    .filter((table) => !(check.check_id === 'log_error' && isMissingLogFileTable(table)))
     .map((table) => {
       let rows = table.rows
       const isDiskTable = check.check_id === 'system_resources' && table.name === '磁盘'
