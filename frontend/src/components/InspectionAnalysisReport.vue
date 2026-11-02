@@ -26,12 +26,16 @@ let active = true
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const report = computed(() => response.value?.report ?? null)
-const logEvidenceIds = computed(() => new Set(report.value?.evidence.filter((item) => item.kind === 'log').map((item) => item.id) ?? []))
+const logEvidence = computed(() => report.value?.evidence.filter((item) => item.kind === 'log') ?? [])
+const logEvidenceIds = computed(() => new Set(logEvidence.value.map((item) => item.id)))
 const logIssues = computed(() => report.value?.issues.filter((issue) => issue.evidence_ids.some((id) => logEvidenceIds.value.has(id))) ?? [])
+const analyzedLogEvidence = computed(() => {
+  const ids = new Set(logIssues.value.flatMap((issue) => issue.evidence_ids))
+  return logEvidence.value.filter((item) => ids.has(item.id))
+})
 const otherProblems = computed(() => report.value?.evidence.filter((item) => item.kind === 'finding' && item.severity !== 'info') ?? [])
 const { page: logPage, pageSize: logPageSize, total: logTotal, pageItems: visibleLogs, resetPage: resetLogs } = useListPagination(logIssues)
 const { page: problemPage, pageSize: problemPageSize, total: problemTotal, pageItems: visibleProblems, resetPage: resetProblems } = useListPagination(otherProblems)
-const legacyLogs = computed(() => logIssues.value.some((issue) => issue.log_source === null || issue.log_source === undefined))
 
 function issueHost(issue: AnalysisIssue): string {
   const items = report.value?.evidence.filter((evidence) => issue.evidence_ids.includes(evidence.id)) ?? []
@@ -128,18 +132,19 @@ function exportText() {
     '巡检 AI 汇报', `任务：${value.task_name}（${runLabel(value.task_status)}）`,
     `采集开始：${timeLabel(value.inspection_started_at)}；结束：${timeLabel(value.inspection_finished_at)}`,
     `生成时间：${timeLabel(value.generated_at)}`, `模型：${value.model_name} (v${value.model_version})`,
-    `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志，${value.incomplete_count} 项未完成，${value.unassessed_count} 项存在判定范围限制`,
-    '', '非错误日志问题', ...otherProblems.value.map((item) =>
-      `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
-    '', '判定范围限制', ...value.evidence.filter((item) => item.limited).map((item) =>
-      `${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
-    '', '错误日志分析', ...(legacyLogs.value ? ['此汇报为旧版汇总，可重新生成诊断组分析。'] : []),
-    ...issueLines(logIssues.value), '日志证据',
-    ...value.evidence.filter((item) => item.kind === 'log').flatMap((item) => [
-      `[${item.id}] ${severityLabel(item.severity)} / ${kindLabel(item.kind)} / ${item.host_name} (${item.address})`,
-      `${item.check_title} / ${item.source}${item.source_table_index != null ? ` / 来源表 ${item.source_table_index}` : ''}`, item.content,
-      ...(item.original_lines ?? []).map((line, index) => item.original_indices?.[index] != null ? `结果行 ${item.original_indices[index]}：${line}` : line), '',
-    ]),
+    `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志`,
+    ...(otherProblems.value.length ? [
+      '', '非错误日志问题', ...otherProblems.value.map((item) =>
+        `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
+    ] : []),
+    ...(logIssues.value.length ? [
+      '', '错误日志分析', ...issueLines(logIssues.value), '日志证据',
+      ...analyzedLogEvidence.value.flatMap((item) => [
+        `[${item.id}] ${severityLabel(item.severity)} / ${kindLabel(item.kind)} / ${item.host_name} (${item.address})`,
+        `${item.check_title} / ${item.source}${item.source_table_index != null ? ` / 来源表 ${item.source_table_index}` : ''}`, item.content,
+        ...(item.original_lines ?? []).map((line, index) => item.original_indices?.[index] != null ? `结果行 ${item.original_indices[index]}：${line}` : line), '',
+      ]),
+    ] : []),
   ].join('\n')
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a')
@@ -217,36 +222,9 @@ onUnmounted(() => {
             <div><dt>分析主机</dt><dd>{{ report.host_count }} <span>台</span></dd></div>
             <div><dt>巡检发现</dt><dd>{{ report.finding_count }} <span>条</span></dd></div>
             <div><dt>采集日志</dt><dd>{{ report.log_count }} <span>条</span></dd></div>
-            <div>
-              <dt>未完成检查</dt>
-              <dd>
-                <strong class="ui-execution-status" :data-execution-state="report.incomplete_count ? 'incomplete' : undefined">
-                  {{ report.incomplete_count }}
-                </strong>
-                <span>项</span>
-              </dd>
-            </div>
           </dl>
           <div class="inspection-analysis-provenance"><span>报告模型：{{ report.model_name }} (v{{ report.model_version }})</span><span>采集时间：{{ timeLabel(report.inspection_started_at) }} 至 {{ timeLabel(report.inspection_finished_at) }}</span></div>
         </section>
-        <section v-if="report.incomplete_count" class="inspection-analysis-section">
-          <h3>未完成检查</h3>
-          <p class="ui-execution-status ui-execution-notice" data-execution-state="incomplete">
-            本次有 {{ report.incomplete_count }} 项检查未完成，相关风险无法完整判定。
-          </p>
-          <p
-            v-for="item in report.evidence.filter((evidence) => evidence.incomplete && evidence.kind === 'check')"
-            :key="item.id"
-            class="ui-text-muted ui-execution-status"
-            data-execution-state="incomplete"
-          >{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：检查未完成，无法判定。</p>
-        </section>
-        <section v-if="report.unassessed_count" class="inspection-analysis-section">
-          <h3>判定范围限制</h3>
-          <p>本次有 {{ report.unassessed_count }} 项检查存在不适用、结论未知或部分日志时间未判定，不能作为完整健康依据。</p>
-          <p v-for="item in report.evidence.filter((evidence) => evidence.limited)" :key="item.id" class="ui-text-muted">{{ item.id }} · {{ item.host_name }} · {{ item.check_title }}：{{ item.content }}</p>
-        </section>
-        <p v-if="!report.issues.length" class="ui-text-muted">没有可分析的匹配错误日志或巡检风险；正常检查不进行 AI 分析。</p>
         <section v-if="problemTotal" class="inspection-analysis-section">
           <div class="inspection-analysis-section-heading"><h3>非错误日志问题</h3><span class="ui-text-muted">{{ problemTotal }} 项</span></div>
           <div class="ui-table-wrap">
@@ -261,7 +239,6 @@ onUnmounted(() => {
         </section>
         <section v-if="logTotal" class="inspection-analysis-section">
           <div class="inspection-analysis-section-heading"><h3>错误日志分析</h3><span class="ui-text-muted">{{ logTotal }} 项</span></div>
-          <p v-if="legacyLogs" class="ui-text-muted">此汇报为旧版汇总，可重新生成诊断组分析。</p>
           <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="`${report.generated_at}:${(logPage - 1) * logPageSize + index}`" :issue="issue" :host="issueHost(issue)" :evidence="report.evidence" />
           <ListPagination v-model:page="logPage" v-model:page-size="logPageSize" :total="logTotal" />
         </section>

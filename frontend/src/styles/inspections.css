@@ -102,7 +102,7 @@
 .inspection-analysis-saved { display: grid; gap: var(--ui-space-3); padding: var(--ui-panel-padding); border: 1px solid var(--ui-border); border-radius: var(--ui-panel-radius); background: var(--ui-row-hover); }
 .inspection-analysis-saved-heading, .inspection-analysis-section-heading { display: flex; align-items: baseline; gap: var(--ui-space-2) var(--ui-space-4); }
 .inspection-analysis-saved-heading { justify-content: space-between; }
-.inspection-analysis-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.inspection-analysis-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
 .inspection-analysis-stats > div { padding: 0 var(--ui-panel-padding); border-left: 1px solid var(--ui-border); min-width: 0; }
 .inspection-analysis-stats > div:first-child { padding-left: 0; border-left: 0; }
 .inspection-analysis-stats dt { font-size: var(--ui-font-size-small); line-height: var(--ui-line-height-small); color: var(--ui-text-secondary); }
