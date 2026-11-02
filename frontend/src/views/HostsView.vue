@@ -414,7 +414,6 @@ function dateLabel(value: string) {
               <ElTableColumn label="主机" min-width="190">
                 <template #default="{ row }">
                   <div class="ui-item-title">{{ hostDisplayName(row as Host) }}</div>
-                  <div v-if="row.name" class="ui-item-secondary">{{ row.address }}</div>
                 </template>
               </ElTableColumn>
               <ElTableColumn label="分组" min-width="110"><template #default="{ row }">{{ groupName(row.group_id) }}</template></ElTableColumn>
