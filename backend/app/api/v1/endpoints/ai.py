@@ -4,11 +4,12 @@ import logging
 import queue
 import threading
 import time
+from typing import Annotated
 
 import anyio
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Path, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -16,9 +17,9 @@ from starlette.concurrency import run_in_threadpool
 from starlette.background import BackgroundTask
 
 from ...dependencies import Database, commit
-from ....ai_models import AIConnection, AIProposal, AISession
+from ....ai_models import AIConnection, AIMessage, AIProposal, AISession
 from ....repositories import ai as repository
-from ....schemas.ai import (ConnectionInput, ConnectionResponse, DecisionInput, Detail,
+from ....schemas.ai import (BranchInput, ConnectionInput, ConnectionResponse, DecisionInput, Detail,
                              FeatureModels, MessageInput, OperationRegistration, SessionActivity, Summary)
 from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from ....services.ai_feature_models import (config_guard, feature_connection, load_feature_models,
@@ -139,6 +140,41 @@ def create_session(request: Request, session: Database) -> AISession:
 @router.get("/sessions/{session_id}", response_model=Detail)
 def read_session(session_id: UUID, session: Database) -> AISession:
     return require_session(session, session_id)
+
+
+@router.post("/sessions/{session_id}/messages/{message_id}/branches", response_model=Detail, status_code=201)
+def branch_session(session_id: UUID, message_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
+                   data: BranchInput, request: Request, session: Database) -> Detail:
+    ai = request.app.state.ai
+    cancelled = ai.acquire(str(session_id))
+    try:
+        session.rollback()
+        session.execute(text("BEGIN IMMEDIATE"))
+        source = require_session(session, session_id)
+        target = session.get(AIMessage, message_id)
+        if target is None or target.session_id != source.id:
+            raise HTTPException(404, "消息不存在")
+        if target.role not in ("user", "assistant") or (not data.include_message and target.role != "user"):
+            raise HTTPException(409, "该消息角色不支持此分支操作")
+        if session.scalar(select(AIMessage.id).where(
+            AIMessage.session_id == source.id, AIMessage.in_flight.is_(True)).limit(1)) is not None:
+            raise HTTPException(409, "会话存在尚未结束的消息")
+        record = require_connection(session, source.connection_id)
+        if source.connection_version != record.config_version:
+            raise HTTPException(409, "模型连接已修改，请新建会话")
+        if cancelled.is_set():
+            raise HTTPException(409, "请求已取消")
+        branch = repository.branch_session(session, source, message_id, data.include_message)
+        detail = Detail.model_validate(branch)
+        if cancelled.is_set():
+            raise HTTPException(409, "请求已取消")
+        commit(session)
+        return detail
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        ai.release(str(session_id))
 
 
 def session_activity(session_id: UUID, request: Request, session: Database) -> SessionActivity:

@@ -2,6 +2,7 @@
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
+import ChatMessageEditor from '@/components/ChatMessageEditor.vue'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import FieldError from '@/components/FieldError.vue'
@@ -9,10 +10,10 @@ import { focusFormFeedback } from '@/components/formFeedback'
 import ListPagination from '@/components/ListPagination.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { workspaceVisibleKey } from '@/components/workspace'
-import { createSession, decideProposal, deleteSession, getFeatureModels, getSession, getSessionActivity, listConnections, listSessionsPage, registerOperation, sendMessage, stopSession } from '@/api/ai'
+import { createMessageBranch, createSession, decideProposal, deleteSession, getFeatureModels, getSession, getSessionActivity, listConnections, listSessionsPage, registerOperation, sendMessage, stopSession } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/timeDisplay'
-import type { ChatSession, FeatureModelsConfig, ModelConnection, SessionActivity, SessionSummary } from '@/types/ai'
+import type { ChatMessage, ChatSession, FeatureModelsConfig, ModelConnection, SessionActivity, SessionSummary } from '@/types/ai'
 import '@/styles/ai.css'
 
 const connections = ref<ModelConnection[]>([])
@@ -30,7 +31,13 @@ const inputError = ref('')
 const inputInvalid = ref(false)
 const streamingText = ref('')
 const sendingContent = ref('')
-const operation = ref<'create' | 'send' | 'decision' | 'delete' | null>(null)
+const operation = ref<'create' | 'branch' | 'send' | 'decision' | 'delete' | null>(null)
+const editingMessage = ref<ChatMessage | null>(null)
+const editDraft = ref('')
+const branchError = ref('')
+const branchOrigin = ref<{ id: string; sourceId: string; sourceTitle: string } | null>(null)
+// 创建分支时保留原会话未发送的草稿，返回原会话后恢复。
+const preservedDrafts = new Map<string, string>()
 const visible = inject(workspaceVisibleKey, ref(true))
 const pageVisible = ref(!document.hidden)
 const activity = ref<SessionActivity | null>(null)
@@ -40,6 +47,7 @@ const stopPending = ref(false)
 const stopRequested = ref(false)
 const conversation = ref<HTMLElement | null>(null)
 const composer = ref<HTMLElement | null>(null)
+const composerFocusId = ref<string | null>(null)
 const inputId = useId()
 const newChatConnection = computed(() => {
   if (!connectionsLoaded.value || !featureModels.value) return undefined
@@ -50,12 +58,22 @@ const newChatConnection = computed(() => {
 const newChatAvailable = computed(() => !!newChatConnection.value)
 const selectedConnection = computed(() => connections.value.find((item) => item.id === detail.value?.connection_id))
 const interactionBusy = computed(() => !!operation.value || stopPending.value)
+const navigationBusy = computed(() => interactionBusy.value || editingMessage.value !== null)
 const running = computed(() => operation.value === 'send' || operation.value === 'decision' || stopPending.value || activity.value?.running === true)
 const stopping = computed(() => stopPending.value || stopRequested.value || activity.value?.stopping === true)
 const messageResultConfirmed = ref(false)
 const sendDisabled = computed(() => interactionBusy.value || running.value || (selectedId.value
   ? !detailLoaded.value || activity.value === null || activityFailed.value
   : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value))
+const historyActionsDisabled = computed(() => sendDisabled.value || !messageResultConfirmed.value)
+const messageActionsDisabled = computed(() => historyActionsDisabled.value || editingMessage.value !== null)
+const messageRows = computed(() => {
+  let retryMessage: ChatMessage | undefined
+  return (detail.value?.messages ?? []).map((message) => {
+    if (message.role === 'user') retryMessage = message
+    return { message, retryMessage }
+  })
+})
 let active = true
 let connectionSequence = 0
 let detailSequence = 0
@@ -215,16 +233,18 @@ async function loadDetail(id: string, notify = true): Promise<boolean> {
   } finally { if (active && current === detailSequence) detailLoading.value = false }
 }
 function select(id: string) {
-  if (interactionBusy.value || selectedId.value === id) return
+  if (navigationBusy.value || selectedId.value === id) return
   selectedId.value = id
   detail.value = null
-  input.value = ''
+  input.value = preservedDrafts.get(id) ?? ''
+  preservedDrafts.delete(id)
   inputError.value = ''
   inputInvalid.value = false
+  branchError.value = ''
   void loadDetail(id)
 }
 function newChat() {
-  if (interactionBusy.value) return
+  if (navigationBusy.value) return
   selectInitialSession = false
   resetPage()
   void loadSessions()
@@ -236,7 +256,77 @@ function newChat() {
   input.value = ''
   inputError.value = ''
   inputInvalid.value = false
+  branchError.value = ''
   void loadConnections()
+}
+
+function editMessage(message: ChatMessage): void {
+  if (messageActionsDisabled.value || message.role !== 'user') return
+  branchError.value = ''
+  editDraft.value = message.content
+  editingMessage.value = message
+}
+
+function closeEditor(): void {
+  if (interactionBusy.value) return
+  editingMessage.value = null
+  editDraft.value = ''
+}
+
+function activateBranch(session: ChatSession, source: ChatSession): void {
+  preservedDrafts.set(source.id, input.value)
+  detailSequence++
+  selectedId.value = session.id
+  detail.value = session
+  detailLoaded.value = true
+  detailLoading.value = false
+  input.value = ''
+  inputError.value = ''
+  inputInvalid.value = false
+  editingMessage.value = null
+  editDraft.value = ''
+  branchOrigin.value = { id: session.id, sourceId: source.id, sourceTitle: source.title }
+  composerFocusId.value = session.id
+  selectInitialSession = false
+  resetPage()
+  void loadSessions()
+}
+
+async function fork(message: ChatMessage): Promise<void> {
+  const source = detail.value
+  if (!source || messageActionsDisabled.value) return
+  const id = source.id
+  branchError.value = ''
+  invalidateMessageResult()
+  operation.value = 'branch'
+  const controller = new AbortController()
+  streamController = controller
+  try {
+    const session = await createMessageBranch(id, message.id, { include_message: true }, controller.signal)
+    if (!active || selectedId.value !== id || controller.signal.aborted) return
+    activateBranch(session, source)
+  } catch (error) {
+    if (active && selectedId.value === id && !controller.signal.aborted) {
+      branchError.value = '分支创建结果未确认，请刷新会话列表检查后再操作。'
+      showRequestError(error)
+    }
+  } finally {
+    if (streamController === controller) streamController = null
+    if (active) {
+      operation.value = null
+      void loadActivity()
+    }
+  }
+}
+
+async function retry(message: ChatMessage): Promise<void> {
+  if (messageActionsDisabled.value || message.role !== 'user') return
+  await generateReply(message.content, message)
+}
+
+async function submitEdit(content: string): Promise<void> {
+  const message = editingMessage.value
+  if (message) await generateReply(content, message)
 }
 function handleInputKeydown(event: Event) {
   if (!(event instanceof KeyboardEvent)) {
@@ -251,25 +341,44 @@ function handleInputKeydown(event: Event) {
 }
 async function send() {
   const content = input.value.trim()
-  if (sendDisabled.value) return
+  if (sendDisabled.value || editingMessage.value) return
   if (!content || content.length > MAX_MESSAGE_LENGTH) {
     inputError.value = `消息须填写且不超过 ${MAX_MESSAGE_LENGTH} 字符。`
     inputInvalid.value = true
     focusFormFeedback(composer.value)
     return
   }
+  await generateReply(content)
+}
+
+async function generateReply(content: string, sourceMessage?: ChatMessage): Promise<void> {
+  if (sendDisabled.value || sourceMessage && historyActionsDisabled.value) return
+  const source = sourceMessage ? detail.value : null
+  if (sourceMessage && !source) return
   inputError.value = ''
   inputInvalid.value = false
+  branchError.value = ''
   invalidateMessageResult()
-  operation.value = selectedId.value ? 'send' : 'create'
-  sendingContent.value = input.value
+  operation.value = 'send'
+  if (sourceMessage) operation.value = 'branch'
+  else if (!selectedId.value) operation.value = 'create'
+  sendingContent.value = content
   streamingText.value = ''
   stopRequested.value = false
   let id = selectedId.value
+  let targetReady = !sourceMessage
   const controller = new AbortController()
   streamController = controller
   try {
-    if (!id) {
+    if (sourceMessage && source && id) {
+      const branch = await createMessageBranch(id, sourceMessage.id, { include_message: false }, controller.signal)
+      if (!active || selectedId.value !== id || controller.signal.aborted) return
+      activateBranch(branch, source)
+      // 登记期间中止时，尚未提交的编辑内容仍保留为新分支草稿。
+      input.value = content
+      id = branch.id
+      targetReady = true
+    } else if (!id) {
       if (!await loadConnections() || !active || controller.signal.aborted) return
       if (!newChatAvailable.value) {
         inputError.value = featureModels.value?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。'
@@ -297,11 +406,15 @@ async function send() {
     if (!active || selectedId.value !== id || controller.signal.aborted) return
     detail.value = session
     void loadSessions()
-  } catch {
+  } catch (error) {
     if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value && !stopPending.value) {
-      input.value = sendingContent.value
-      showRequestError()
-      if (id && await loadDetail(id, false)) void loadSessions()
+      showRequestError(error)
+      if (targetReady) {
+        input.value = sendingContent.value
+        if (id && await loadDetail(id, false)) void loadSessions()
+      } else {
+        branchError.value = '分支创建结果未确认，请刷新会话列表检查后再操作。'
+      }
     }
   } finally {
     const stopped = stopRequested.value || controller.signal.aborted
@@ -319,7 +432,7 @@ async function send() {
 }
 async function decide(proposalId: string, approve: boolean) {
   const id = selectedId.value
-  if (!id || interactionBusy.value || stopping.value || !detailLoaded.value) return
+  if (!id || navigationBusy.value || stopping.value || !detailLoaded.value) return
   invalidateMessageResult()
   operation.value = 'decision'
   const controller = new AbortController()
@@ -357,7 +470,7 @@ async function decide(proposalId: string, approve: boolean) {
   }
 }
 async function remove(session: SessionSummary) {
-  if (interactionBusy.value) return
+  if (navigationBusy.value) return
   operation.value = 'delete'
   try {
     await ElMessageBox.confirm(`确定删除会话“${session.title}”及其对话历史吗？已创建的巡检任务不会随会话删除。`, '删除会话', {
@@ -368,6 +481,7 @@ async function remove(session: SessionSummary) {
   try {
     await deleteSession(session.id)
     if (!active) return
+    preservedDrafts.delete(session.id)
     if (selectedId.value === session.id) {
       detailSequence++
       selectedId.value = null
@@ -384,6 +498,18 @@ watch([() => detail.value?.messages.length, streamingText, () => detail.value?.p
   await nextTick()
   if (conversation.value) conversation.value.scrollTop = conversation.value.scrollHeight
 })
+watch([historyActionsDisabled, selectedId, visible, composerFocusId], ([disabled, id, isVisible, focusId]) => {
+  if (!focusId) return
+  if (id !== focusId) {
+    composerFocusId.value = null
+    return
+  }
+  if (disabled || !isVisible || editingMessage.value) return
+  const textarea = composer.value?.querySelector('textarea')
+  if (!textarea || textarea.disabled) return
+  textarea.focus()
+  composerFocusId.value = null
+}, { flush: 'post' })
 function refreshActivityOnFocus(): void {
   if (!activityFailed.value) void loadActivity()
 }
@@ -414,28 +540,57 @@ onUnmounted(() => {
     <main class="console-main ai-main">
       <div class="ai-workspace">
         <aside class="ai-sessions" aria-label="会话列表">
-          <div class="ai-pane-heading"><strong>会话</strong><ElButton type="primary" :disabled="interactionBusy" @click="newChat">新建对话</ElButton></div>
+          <div class="ai-pane-heading"><strong>会话</strong><ElButton type="primary" :disabled="navigationBusy" @click="newChat">新建对话</ElButton></div>
           <div class="ai-session-scroll">
             <p v-if="sessionsLoading && !sessionsLoaded" class="ai-placeholder">正在读取会话...</p>
             <p v-else-if="!sessionsLoaded" class="ui-load-retry">会话未加载。<ElButton @click="loadSessions()">重试</ElButton></p>
             <p v-else-if="!sessions.length" class="ai-placeholder">暂无会话</p>
             <div v-for="session in sessionsLoaded ? sessions : []" :key="session.id" class="ai-session-row" :class="{ active: selectedId === session.id }">
-              <button type="button" class="ai-session-select" :disabled="interactionBusy" :title="session.title" @click="select(session.id)"><strong>{{ session.title }}</strong><small>{{ timeLabel(session.updated_at) }}</small></button>
-              <ElButton link type="danger" :disabled="interactionBusy" :aria-label="`删除会话 ${session.title}`" title="删除会话" @click="remove(session)">删除</ElButton>
+              <button type="button" class="ai-session-select" :disabled="navigationBusy" :title="session.title" @click="select(session.id)"><strong>{{ session.title }}</strong><small>{{ timeLabel(session.updated_at) }}</small></button>
+              <ElButton link type="danger" :disabled="navigationBusy" :aria-label="`删除会话 ${session.title}`" title="删除会话" @click="remove(session)">删除</ElButton>
             </div>
           </div>
-          <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="sessionsLoaded && !sessionsLoading" :disabled="sessionsLoading || !sessionsLoaded || interactionBusy" compact />
+          <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="sessionsLoaded && !sessionsLoading" :disabled="sessionsLoading || !sessionsLoaded || navigationBusy" compact />
         </aside>
         <section class="ai-chat" aria-label="对话内容">
           <div class="ai-pane-heading"><strong>{{ detail?.title ?? (selectedId ? '对话' : '新对话') }}</strong><span v-if="detailLoaded && selectedConnection" class="ui-text-muted">{{ selectedConnection.name }}</span></div>
+          <div v-if="branchOrigin && branchOrigin.id === selectedId" class="ai-branch-notice">
+            <span class="ui-text-muted" role="status">已从“{{ branchOrigin.sourceTitle }}”创建分支。原对话的巡检计划与任务保留在原会话中。</span>
+            <ElButton link type="primary" :disabled="navigationBusy" @click="select(branchOrigin.sourceId)">返回原对话</ElButton>
+          </div>
           <div ref="conversation" class="ai-conversation" role="log" aria-live="polite">
-            <p v-if="selectedId && detailLoading" class="ai-placeholder">正在读取历史...</p>
-            <p v-else-if="selectedId && !detailLoaded" class="ui-load-retry">历史未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
-            <template v-else-if="detailLoaded && detail">
-              <ChatMessageItem v-for="message in detail.messages" :key="message.id" :message="message" :result-confirmed="messageResultConfirmed" />
+            <p v-if="selectedId && detailLoading" class="ai-placeholder">正在读取历史…</p>
+            <p v-else-if="selectedId && !detailLoaded" class="ui-load-retry">{{ editingMessage ? '历史刷新失败，当前编辑内容已保留。' : '历史未加载。' }}<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
+            <!-- 历史刷新期间保留原位编辑入口，失败时仍可取消编辑。 -->
+            <template v-if="detail && (detailLoaded || editingMessage)">
+              <ChatMessageItem
+                v-for="row in messageRows"
+                :key="row.message.id"
+                :message="row.message"
+                :result-confirmed="messageResultConfirmed"
+                :actions-disabled="messageActionsDisabled"
+                :retryable="!!row.retryMessage"
+                :editing="editingMessage?.id === row.message.id"
+                @edit="editMessage(row.message)"
+                @retry="row.retryMessage && retry(row.retryMessage)"
+                @branch="fork(row.message)"
+              >
+                <template #editor>
+                  <ChatMessageEditor
+                    v-model="editDraft"
+                    :busy="interactionBusy"
+                    :disabled="historyActionsDisabled"
+                    :request-error="branchError"
+                    :sessions-loading="sessionsLoading"
+                    @submit="submitEdit"
+                    @close="closeEditor"
+                    @refresh-sessions="loadSessions()"
+                  />
+                </template>
+              </ChatMessageItem>
               <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
               <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
-              <template v-for="proposal in detail.proposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="interactionBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
+              <template v-for="proposal in detail.proposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
               <p v-if="!detail.messages.length && !detail.proposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
             </template>
             <template v-else-if="!selectedId">
@@ -455,7 +610,10 @@ onUnmounted(() => {
               show-word-limit
               :aria-invalid="inputInvalid"
               :aria-describedby="inputError ? `${inputId}-error` : undefined"
-              :disabled="sendDisabled"
+              :disabled="sendDisabled || !!editingMessage"
+              name="chat_message"
+              autocomplete="off"
+              aria-label="运维消息"
               placeholder="输入运维问题，Enter 发送"
               @input="
                 inputError = '';
@@ -464,14 +622,18 @@ onUnmounted(() => {
               @keydown="handleInputKeydown"
             />
             <FieldError v-if="inputError" :id="`${inputId}-error`" :message="inputError" />
+            <p v-if="branchError && !editingMessage" class="ui-load-retry ai-message-action-error" role="alert">
+              {{ branchError }}<ElButton :disabled="navigationBusy || sessionsLoading" @click="loadSessions()">刷新会话列表</ElButton>
+            </p>
             <p v-if="selectedId && activityFailed" class="ui-load-retry">
               运行状态未确认。<ElButton :loading="activityLoading" :disabled="stopPending" @click="loadActivity(true)">刷新状态</ElButton>
             </p>
             <div class="ai-composer-actions">
               <span class="ui-text-muted ui-execution-status" role="status"
-                :data-execution-state="operation === 'create' || operation === 'send' || operation === 'decision' ? 'in-progress' : undefined">
+                :data-execution-state="operation === 'create' || operation === 'branch' || operation === 'send' || operation === 'decision' ? 'in-progress' : undefined">
                 <template v-if="stopping">正在中止...</template>
                 <template v-else-if="operation === 'create'">正在创建会话...</template>
+                <template v-else-if="operation === 'branch'">正在创建分支…</template>
                 <template v-else-if="operation === 'send'">正在接收回复...</template>
                 <template v-else-if="operation === 'decision'">正在提交巡检计划...</template>
                 <template v-else-if="activity?.running">后台任务尚未结束...</template>
@@ -479,12 +641,12 @@ onUnmounted(() => {
               <ElButton
                 :type="running ? 'danger' : 'primary'"
                 :circle="running"
-                :loading="operation === 'create'"
+                :loading="operation === 'create' || operation === 'branch'"
                 :class="{ 'ai-composer-stop': running }"
                 :aria-label="running ? (stopping ? '正在中止' : '中止当前会话的回复和后台任务') : '发送'"
                 :title="running ? (stopping ? '正在中止' : '中止当前会话的回复和后台任务') : '发送'"
                 :aria-disabled="running && stopping"
-                :disabled="!running && (sendDisabled || !input.trim())"
+                :disabled="!running && (sendDisabled || !!editingMessage || !input.trim())"
                 @click="running ? stop() : send()"
               >
                 <svg v-if="running" class="ai-stop-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

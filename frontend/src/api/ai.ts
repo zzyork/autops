@@ -1,4 +1,4 @@
-import type { ChatSession, FeatureModelsConfig, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
+import type { ChatSession, FeatureModelsConfig, MessageBranchInput, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
 import { get, HttpError, request, streamRequest } from './http'
 import { assertSSHRequestCurrent, rememberSSHOperation, withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
@@ -57,6 +57,11 @@ export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
 export const getSessionActivity = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/activity`, { signal }))
 export const stopSession = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/stop`, { method: 'POST', signal }))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })
+export async function createMessageBranch(id: string, messageId: string, body: MessageBranchInput, signal: AbortSignal): Promise<ChatSession> {
+  const result = await request<unknown>(`${sessionPath(id)}/messages/${encodeURIComponent(messageId)}/branches`, { method: 'POST', body, signal })
+  if (!isChatSession(result) || result.id === id) throw new HttpError()
+  return result
+}
 export async function registerOperation(id: string, signal?: AbortSignal): Promise<string> {
   const result = await request<unknown>(`${sessionPath(id)}/operations`, { method: 'POST', signal })
   if (!isRecord(result) || typeof result.operation_id !== 'string'

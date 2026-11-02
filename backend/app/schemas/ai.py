@@ -82,6 +82,10 @@ class MessageInput(Input):
         return value.strip()
 
 
+class BranchInput(Input):
+    include_message: bool = Field(default=True, strict=True)
+
+
 class DecisionInput(Input):
     approve: bool
     operation_id: UUID | None = None

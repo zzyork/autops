@@ -1,3 +1,4 @@
+from copy import deepcopy
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -65,6 +66,33 @@ def create_session(session: Session, record: AIConnection) -> AISession:
 
 def get_session(session: Session, session_id: str) -> AISession | None:
     return session.get(AISession, session_id)
+
+
+def branch_session(session: Session, source: AISession, message_id: int, include_message: bool) -> AISession:
+    """Stage the branch in the caller's transaction without copying executable plans."""
+    cutoff = AIMessage.id <= message_id if include_message else AIMessage.id < message_id
+    prior = list(session.scalars(select(AIMessage).where(AIMessage.session_id == source.id, cutoff)
+                                 .order_by(AIMessage.id)))
+    suffix = "（分支）"
+    branch = AISession(id=str(uuid4()), title=source.title[:100 - len(suffix)] + suffix,
+                       connection_id=source.connection_id, connection_version=source.connection_version,
+                       messages=[AIMessage(role=item.role, content=item.content, status=item.status,
+                                           in_flight=False, created_at=item.created_at) for item in prior],
+                       proposals=[])
+    session.add(branch)
+    session.flush()
+    message_ids = {original.id: copied.id for original, copied in zip(prior, branch.messages)}
+    # Tool calls belong to the user message, but occur after it and before its assistant reply.
+    complete_turns = {user.id for user, assistant in zip(prior, prior[1:])
+                      if user.role == "user" and assistant.role == "assistant"
+                      and user.status == assistant.status == "completed"}
+    for entry in history(session, source.id):
+        if entry.message_id in complete_turns:
+            session.add(AIToolHistory(session_id=branch.id, message_id=message_ids[entry.message_id],
+                                      call_id=entry.call_id, round_index=entry.round_index,
+                                      call_index=entry.call_index, assistant_text=entry.assistant_text,
+                                      name=entry.name, arguments=deepcopy(entry.arguments), result=deepcopy(entry.result)))
+    return branch
 
 
 def history(session: Session, session_id: str) -> list[AIToolHistory]:

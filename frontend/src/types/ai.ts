@@ -36,6 +36,9 @@ export interface ChatMessage {
   created_at: string
   status: 'completed' | 'failed' | 'interrupted'
 }
+export interface MessageBranchInput {
+  include_message: boolean
+}
 export interface InspectionProposal {
   id: string
   name: string

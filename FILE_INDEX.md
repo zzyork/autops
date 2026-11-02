@@ -80,7 +80,7 @@
 | `backend/app/ai_models.py` | AI 模型连接、会话与巡检计划数据库模型。 |
 | `backend/app/core/migrations/ai.py` | AI 业务数据库结构迁移。 |
 | `backend/app/schemas/ai.py` | AI 配置、会话与操作接口数据模型。 |
-| `backend/app/repositories/ai.py` | AI 配置、会话与巡检计划持久化。 |
+| `backend/app/repositories/ai.py` | AI 配置、会话、消息分支历史与巡检计划持久化。 |
 | `backend/app/services/ai_provider.py` | OpenAI 兼容与 Anthropic 模型调用协议适配。 |
 | `backend/app/services/ai_chat.py` | AI 对话与运维工具调用编排。 |
 | `backend/app/services/ai_feature_models.py` | AI 对话与巡检汇报的模型配置管理。 |
@@ -172,7 +172,7 @@
 | `frontend/src/components/DisclosurePanel.vue` | 共用可展开详情面板。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增与编辑弹窗。 |
 | `frontend/src/components/FeatureModelsForm.vue` | AI 对话与巡检汇报模型配置表单。 |
-| `frontend/src/views/ChatView.vue` | AI 会话管理与流式对话页面。 |
+| `frontend/src/views/ChatView.vue` | AI 会话管理、消息编辑与重试、分支对话及流式回复页面。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理与能力测试页面。 |
 | `frontend/src/styles/ai.css` | AI 对话与模型配置样式。 |
 | `frontend/src/components/sshConnectionTest.ts` | 单台 SSH 连接测试流程与行内状态管理。 |
@@ -185,7 +185,9 @@
 | `frontend/src/components/sshTestDisplay.ts` | SSH 测试状态与提示文案映射。 |
 | `frontend/src/types/testStatus.ts` | 共用测试展示状态类型。 |
 | `frontend/src/types/executionStatus.ts` | 五类执行状态的前端展示键类型。 |
-| `frontend/src/components/ChatMessageItem.vue` | 对话消息及已确认结果与待确认状态的纯展示组件。 |
+| `frontend/src/components/ChatMessageItem.vue` | 对话消息、结果状态、原位编辑区域及复制、编辑、重试和分支操作入口。 |
+| `frontend/src/components/ChatMessageActionButton.vue` | 消息图标按钮、Tooltip 名称、禁用状态与键盘焦点。 |
+| `frontend/src/components/ChatMessageEditor.vue` | 已发送用户消息的原位编辑、校验与新分支发送表单。 |
 | `frontend/src/components/ChatMarkdownContent.vue` | AI 回复的安全 Markdown 渲染与表格展示。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检规则配置表单。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗。 |
