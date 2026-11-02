@@ -2,7 +2,7 @@
 
 本文件记录目录和文件的用途，路径均相对于仓库根目录。
 
-覆盖已跟踪及未被忽略的项目文件，不收录环境、依赖、缓存和构建产物。
+覆盖已跟踪及未被忽略的项目文件，不收录环境、依赖、缓存和构建产物。忽略".xxxx"格式的隐藏目录。
 
 原项目位置：`E:\Codes\autodeploykit`。迁移已有功能时，从该目录定位并阅读原实现。
 
@@ -10,11 +10,6 @@
 
 | 路径 | 用途 |
 | --- | --- |
-| `./` | 项目根目录。 |
-| `.vscode/` | VS Code 调试与启动配置。 |
-| `.agents/skills/` | 项目适配技能与技术参考。 |
-| `.opencode/commands/` | OpenCode 项目命令入口。 |
-| `.opencode/agents/` | OpenCode 项目审核 Agent。 |
 | `scripts/` | 项目安装与启动脚本。 |
 | `backend/` | FastAPI 后端项目。 |
 | `backend/app/` | 后端应用包。 |
@@ -27,11 +22,7 @@
 | `backend/app/services/` | 业务服务与任务执行。 |
 | `backend/app/services/inspection_checks/` | 主机巡检采集与结果校验。 |
 | `backend/app/schemas/` | 接口数据模型。 |
-| `docs/` | 项目说明与开发规范。 |
-| `docs/templates/` | 工程文档模板。 |
-| `profiles/` | 技术栈与界面专项规范。 |
 | `frontend/` | Vue、TypeScript、Vite 前端项目。 |
-| `docs/plans/` | 执行中的功能设计与实施方案。 |
 | `frontend/src/` | 前端应用源码。 |
 | `frontend/src/api/` | HTTP 请求封装及 API 调用。 |
 | `frontend/src/components/` | 可复用 UI 组件。 |
@@ -48,19 +39,12 @@
 | `.gitattributes` | Git 文件属性与换行符配置。 |
 | `AGENTS.md` | 项目 AI 智能体工作约定。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
-| `项目配置.md` | 项目技术基线、配置选择与接入记录。 |
 | `SECURITY.md` | 安全披露与敏感信息处理约定。 |
 | `opencode.json` | OpenCode 项目配置。 |
 | `main.py` | 兼容根目录 `uvicorn main:app` 启动方式的入口。 |
 | `pyproject.toml` | 配置 pytest 测试目录和 Python 导入路径。 |
 | `requirements.txt` | 根目录运行依赖入口，引用后端运行依赖清单。 |
 | `requirements-dev.txt` | 根目录开发依赖入口，引用后端开发依赖清单。 |
-
-## VS Code 配置
-
-| 路径 | 用途 |
-| --- | --- |
-| `.vscode/launch.json` | VS Code 前后端调试与联合启动配置。 |
 
 ## 脚本文件
 
@@ -69,28 +53,6 @@
 | `scripts/start.bat` | Windows 环境准备与项目启动脚本。 |
 | `scripts/start.sh` | Linux/macOS 环境准备与项目启动脚本。 |
 | `scripts/run_dev.py` | 前后端开发服务的统一启动与进程管理。 |
-
-## 文档文件
-
-| 路径 | 用途 |
-| --- | --- |
-| `docs/AI-奥卡姆剃刀开发规范.md` | 简约设计与必要复杂度约束。 |
-| `docs/AI-前端开发约束规范.md` | 通用前端开发与交互约束。 |
-| `docs/AI-后端开发约束规范.md` | 通用后端开发与资源管理约束。 |
-| `docs/AI-工程治理与需求规范.md` | 需求、工程决策与文档治理约束。 |
-| `docs/AI-接口与安全规范.md` | 接口契约与安全约束。 |
-| `docs/AI-测试与交付规范.md` | 验证、审核与交付约束。 |
-| `docs/AI-规范合并说明.md` | 规范包接入与合并记录。 |
-| `docs/AI-编程接入指南.md` | AI 编程客户端与技能接入指南。 |
-| `docs/AI-项目初始化清单.md` | 项目接入前的核查清单。 |
-| `docs/AI-接入流程.md` | 开发规范包接入流程。 |
-| `docs/AI-编程工程实践参考.md` | AI 编程工程实践与来源参考。 |
-| `docs/templates/需求说明模板.md` | 需求说明模板。 |
-| `docs/templates/开发任务模板.md` | 开发任务模板。 |
-| `docs/templates/架构决策记录模板.md` | 架构决策记录模板。 |
-| `docs/templates/缺陷报告模板.md` | 缺陷报告模板。 |
-| `docs/templates/合并请求模板.md` | 合并请求说明模板。 |
-| `docs/前端样式推荐表.md` | 前端组件样式候选参考。 |
 
 ## 技术栈与界面专项
 
@@ -101,33 +63,6 @@
 | `profiles/Vue3前端技术栈规范.md` | Vue、TypeScript、Vite 与 Element Plus 专项规范。 |
 | `profiles/FastAPI技术栈规范.md` | FastAPI 技术栈专项规范。 |
 | `profiles/UI规范样板.md` | 本项目界面样式、交互与组件组合规范。 |
-
-## AI 编程技能与入口
-
-技能来源与适用范围见 `项目配置.md`，加载与审核要求见 `docs/AI-编程接入指南.md`。
-
-| 路径 | 用途 |
-| --- | --- |
-| `.agents/skills/autops-frontend/SKILL.md` | 项目前端实施与验证流程。 |
-| `.agents/skills/autops-backend/SKILL.md` | 项目后端实施与验证流程。 |
-| `.agents/skills/autops-review/SKILL.md` | 变更、接口、安全与验证审核流程。 |
-| `.agents/skills/vue/SKILL.md` | 固定版本的上游 Vue 技能入口。 |
-| `.agents/skills/vue/GENERATION.md` | 上游 Vue 文档生成来源记录。 |
-| `.agents/skills/vue/LICENSE.md` | 上游 MIT 许可。 |
-| `.agents/skills/vue/references/script-setup-macros.md` | Vue 组件宏与类型参考。 |
-| `.agents/skills/vue/references/core-new-apis.md` | Vue 响应式与生命周期参考。 |
-| `.agents/skills/vue/references/advanced-patterns.md` | Vue 内置组件、指令与进阶模式参考。 |
-| `.agents/skills/fastapi/SKILL.md` | 固定版本的 FastAPI 官方技能入口。 |
-| `.agents/skills/fastapi/LICENSE` | 上游 MIT 许可。 |
-| `.agents/skills/fastapi/references/dependencies.md` | 依赖注入、生命周期和资源清理参考。 |
-| `.agents/skills/fastapi/references/other-tools.md` | FastAPI 相关工具与库参考。 |
-| `.agents/skills/fastapi/references/path-operations.md` | 路由与 HTTP 输入输出参考。 |
-| `.agents/skills/fastapi/references/pydantic.md` | Pydantic 输入校验与类型参考。 |
-| `.agents/skills/fastapi/references/responses.md` | 响应模型与输出过滤参考。 |
-| `.agents/skills/fastapi/references/streaming.md` | SSE、JSON Lines 和字节流参考。 |
-| `.opencode/commands/autops-plan.md` | `/autops-plan` 规划入口。 |
-| `.opencode/commands/autops-review.md` | `/autops-review` 只读审核入口。 |
-| `.opencode/agents/autops-auditor.md` | 项目只读审核 Agent。 |
 
 ## 后端文件
 
