@@ -1,6 +1,6 @@
 """目标主机上的严格时间筛选；先筛选再有界保留原文，不推断缺失年份。"""
 
-TIME_FILTER = r"""
+_TIME_FILTER_BODY = r"""
 function log_time(line, stamp, spec, rest, utc, offset, zone, hours, minutes, value, standard, daylight) {
     fractional = 0
     stamp = line
@@ -35,7 +35,7 @@ function log_time(line, stamp, spec, rest, utc, offset, zone, hours, minutes, va
     if (rest !~ /^\]?[[:space:]]/) {
         return -1
     }
-    value = mktime(spec " -1", utc)
+    value = log_mktime(spec, utc)
     # mktime 会归一化无效日期；回转核对才能拒绝 2 月 30 日等输入。
     if (value < 0 || strftime("%Y %m %d %H %M %S", value, utc) != spec) {
         return -1
@@ -54,9 +54,9 @@ function log_time(line, stamp, spec, rest, utc, offset, zone, hours, minutes, va
 }
 
 BEGIN {
-    # 验证 UTC 参数可用；不支持时不能改用未经时间过滤的输出。
-    if (mktime("2000 01 01 00 00 00", 1) != 946684800 ||
-        strftime("%Y", 946684800, 1) != "2000") {
+    # 验证 UTC 换算及格式化能力；不支持时不能改用未经时间过滤的输出。
+    if (log_mktime("2000 01 01 00 00 00", 1) != 946684800 ||
+        strftime("%Y %m %d %H %M %S", 946684800, 1) != "2000 01 01 00 00 00") {
         invalid_tool = 1
         exit 127
     }
@@ -88,3 +88,35 @@ END {
     }
 }
 """
+
+TIME_FILTER = r"""
+function log_mktime(spec, utc) {
+    return mktime(spec " -1", utc)
+}
+""" + _TIME_FILTER_BODY
+
+# gawk 4.0 不支持 mktime 的 UTC 参数；UTC 按公历换算，本地时间继续使用系统时区。
+# 两条命令共用回转校验、夏令时歧义检查及有界输出逻辑。
+LEGACY_TIME_FILTER = r"""
+function log_mktime(spec, utc, parts, year, month, days, month_days) {
+    if (!utc) {
+        return mktime(spec " -1")
+    }
+    split(spec, parts, " ")
+    year = parts[1] + 0
+    month = parts[2] + 0
+    if (year < 1970 || month < 1 || month > 12) {
+        return -1
+    }
+    # 统计 Unix 纪元后完整年份及月份的天数，闰年遵循 4/100/400 年规则。
+    days = 365 * (year - 1970) + int((year - 1) / 4) - int(1969 / 4) \
+           - int((year - 1) / 100) + int(1969 / 100) \
+           + int((year - 1) / 400) - int(1969 / 400)
+    split("0 31 59 90 120 151 181 212 243 273 304 334", month_days, " ")
+    days += month_days[month] + parts[3] - 1
+    if (month > 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
+        days++
+    }
+    return days * 86400 + parts[4] * 3600 + parts[5] * 60 + parts[6]
+}
+""" + _TIME_FILTER_BODY

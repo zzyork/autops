@@ -10,10 +10,11 @@ from ...schemas.inspections import (
     Metric,
 )
 from . import InspectionCheckError, Runner, query, table
-from .log_window import TIME_FILTER
+from .log_window import LEGACY_TIME_FILTER, TIME_FILTER
 
 KEYWORDS = "error|failed|fatal|panic|crit|critical|异常"
 EXCLUSIONS = "systemd-coredump|ldapdb_canonuser_plug_init"
+UTC_MKTIME_PROBE = 'BEGIN { exit(mktime("2000 01 01 00 00 00", 1) != 946684800) }'
 
 
 def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
@@ -46,8 +47,12 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
                        "case $resolved in /var/log/*) ;; *) exit 4 ;; esac; "
                        "if [ ! -f \"$resolved\" ] || [ ! -r \"$resolved\" ]; then exit 4; fi; "
                        "command -v awk >/dev/null 2>&1 || exit 127; "
+                       # 探测不读取日志，实际读取失败仍直接报错，不触发备用命令重试。
+                       f"if awk {shlex.quote(UTC_MKTIME_PROBE)} </dev/null >/dev/null 2>&1; then "
+                       f"filter={shlex.quote(TIME_FILTER)}; "
+                       f"else filter={shlex.quote(LEGACY_TIME_FILTER)}; fi; "
                        f"awk -v start={start} -v finish={finish} -v limit={lines} "
-                       f"-v keywords={shlex.quote(KEYWORDS)} {shlex.quote(TIME_FILTER)} \"$resolved\""))
+                       f"-v keywords={shlex.quote(KEYWORDS)} \"$filter\" \"$resolved\""))
 
     tables = []
     findings = []
