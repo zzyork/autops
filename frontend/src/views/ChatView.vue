@@ -92,13 +92,12 @@ const messageRows = computed(() => {
 })
 const displayedProposals = computed(() => {
   const session = detail.value
-  if (!session) return []
-  const messageIds = new Set(messageRows.value.filter(({ message }) => message.role === 'user')
-    .map(({ message }) => message.id))
-  return session.proposals.filter((proposal) => {
-    const messageId = session.proposal_message_ids[proposal.id]
-    return messageId !== undefined && messageIds.has(messageId)
-  })
+  if (!session || operation.value === 'send') return []
+  // 底部只展示最新回复的结果，避免历史计划继续占用当前确认入口。
+  const messageId = messageRows.value.filter(({ message }) => message.role === 'assistant')
+    .at(-1)?.retryMessage?.id
+  if (!messageId) return []
+  return session.proposals.filter((proposal) => session.proposal_message_ids[proposal.id] === messageId)
 })
 let active = true
 let connectionSequence = 0
