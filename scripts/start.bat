@@ -48,20 +48,27 @@ call :message "[3/4] \u5b89\u88c5\u524d\u7aef\u4f9d\u8d56..."
 call npm.cmd --prefix frontend install
 if errorlevel 1 goto failed
 call :message "[4/4] \u5728\u5f53\u524d\u7ec8\u7aef\u542f\u52a8\u524d\u540e\u7aef..."
-".venv\Scripts\python.exe" -u scripts\run_dev.py
-if errorlevel 1 goto failed
-popd
-exit /b 0
+set "AUTOPS_START_COMMAND=".venv\Scripts\python.exe" -u scripts\run_dev.py"
+goto launch
 :backend
-".venv\Scripts\python.exe" -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
-if errorlevel 1 goto failed
-popd
-exit /b 0
+set "AUTOPS_START_COMMAND=".venv\Scripts\python.exe" -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000"
+goto launch
 :frontend
-call npm.cmd --prefix frontend run dev
-if errorlevel 1 goto failed
-popd
-exit /b 0
+set "AUTOPS_START_COMMAND=node frontend\node_modules\vite\bin\vite.js frontend"
+:launch
+rem An undefined GOTO ends batch context; this parsed block still runs.
+rem Keep the service command outside batch context to avoid the Ctrl+C prompt.
+goto :_autops_service_handoff_ 2>nul || (
+    %AUTOPS_START_COMMAND%
+    if errorlevel 1 (
+        powershell.exe -NoLogo -NoProfile -NonInteractive -Command "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding; [Console]::WriteLine([regex]::Unescape('[\u9519\u8bef] \u5f53\u524d\u6b65\u9aa4\u5931\u8d25\uff0c\u5df2\u505c\u6b62\u6267\u884c\u3002\u8bf7\u67e5\u770b\u4e0a\u65b9\u9519\u8bef\u4fe1\u606f\u3002'))"
+        popd
+        cmd /d /c exit 1
+    ) else (
+        popd
+        cmd /d /c exit 0
+    )
+)
 :failed
 call :message "[\u9519\u8bef] \u5f53\u524d\u6b65\u9aa4\u5931\u8d25\uff0c\u5df2\u505c\u6b62\u6267\u884c\u3002\u8bf7\u67e5\u770b\u4e0a\u65b9\u9519\u8bef\u4fe1\u606f\u3002"
 popd

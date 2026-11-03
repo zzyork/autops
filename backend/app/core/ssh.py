@@ -188,6 +188,7 @@ def probe_host_key(target: SSHEndpoint, proxy: SSHEndpoint | None = None) -> tup
     try:
         sock = None
         if proxy is not None and proxy.trusted_key is not None:
+            stage, endpoint = "jump_host", proxy
             client = _connect(proxy, deadline, "jump_host")
             transport = client.get_transport()
             if transport is None:
@@ -196,6 +197,7 @@ def probe_host_key(target: SSHEndpoint, proxy: SSHEndpoint | None = None) -> tup
             sock = transport.open_channel("direct-tcpip", (target.address, target.port),
                                           ("127.0.0.1", 0), timeout=min(PHASE_TIMEOUT_SECONDS, remaining))
             deadline.register(sock.close)
+            stage, endpoint = "target", target
         if sock is None:
             sock = open_socket(endpoint.address, endpoint.port, deadline, PHASE_TIMEOUT_SECONDS)
         transport = paramiko.Transport(sock)

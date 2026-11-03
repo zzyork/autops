@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ElButton, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { ElButton, ElTag } from 'element-plus'
 import { generateInspectionAnalysis, getInspectionAnalysis } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { isActiveRun, runLabel } from '@/components/inspectionDisplay'
 import { timeLabel } from '@/components/timeDisplay'
-import ListPagination from '@/components/ListPagination.vue'
-import InspectionAnalysisIssue from '@/components/InspectionAnalysisIssue.vue'
-import { analysisSeverityLabel as severityLabel, analysisSeverityType as severityType, analysisState, analysisStatusLabel as statusLabel, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
-import { useListPagination } from '@/components/pagination'
+import InspectionAnalysisGroup from '@/components/InspectionAnalysisGroup.vue'
+import { analysisSeverityLabel as severityLabel, analysisState, analysisStatusLabel as statusLabel, groupAnalysisProblems, issueDiagnosticGroups } from '@/components/inspectionAnalysisDisplay'
 import type { AnalysisEvidence, AnalysisIssue, AnalysisResponse, RunStatus } from '@/types/inspections'
 
 const props = defineProps<{ taskId: string; taskStatus: RunStatus }>()
@@ -26,21 +24,13 @@ let active = true
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const report = computed(() => response.value?.report ?? null)
-const logEvidence = computed(() => report.value?.evidence.filter((item) => item.kind === 'log') ?? [])
-const logEvidenceIds = computed(() => new Set(logEvidence.value.map((item) => item.id)))
-const logIssues = computed(() => report.value?.issues.filter((issue) => issue.evidence_ids.some((id) => logEvidenceIds.value.has(id))) ?? [])
+const problemGroups = computed(() => report.value ? groupAnalysisProblems(report.value) : [])
 const analyzedLogEvidence = computed(() => {
-  const ids = new Set(logIssues.value.flatMap((issue) => issue.evidence_ids))
-  return logEvidence.value.filter((item) => ids.has(item.id))
+  const value = report.value
+  if (!value) return []
+  const ids = new Set(value.issues.flatMap((issue) => issue.evidence_ids))
+  return value.evidence.filter((item) => item.kind === 'log' && ids.has(item.id))
 })
-const otherProblems = computed(() => report.value?.evidence.filter((item) => item.kind === 'finding' && item.severity !== 'info') ?? [])
-const { page: logPage, pageSize: logPageSize, total: logTotal, pageItems: visibleLogs, resetPage: resetLogs } = useListPagination(logIssues)
-const { page: problemPage, pageSize: problemPageSize, total: problemTotal, pageItems: visibleProblems, resetPage: resetProblems } = useListPagination(otherProblems)
-
-function issueHost(issue: AnalysisIssue): string {
-  const items = report.value?.evidence.filter((evidence) => issue.evidence_ids.includes(evidence.id)) ?? []
-  return [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
-}
 
 function kindLabel(kind: AnalysisEvidence['kind']): string {
   return { host: '主机', check: '检查', finding: '风险发现', log: '日志' }[kind]
@@ -114,8 +104,8 @@ async function generate() {
 function exportText() {
   const value = report.value
   if (!loaded.value || !value) return
-  const issueLines = (issues: AnalysisIssue[]) => issues.flatMap((issue) => [
-    `[${severityLabel(issue.severity)}] ${issue.title} · ${issueHost(issue)}`,
+  const issueLines = (issue: AnalysisIssue, host: string) => [
+    `[${severityLabel(issue.severity)}] ${issue.title} · ${host}`,
     ...(issue.log_source != null ? [`日志文件路径 / 来源：${issue.log_source}`] : []),
     ...(issue.log_message != null ? [`报错内容：${issue.log_message}`] : []),
     ...issueDiagnosticGroups(issue).flatMap((group) => [
@@ -127,18 +117,22 @@ function exportText() {
     `处理手段建议：${issue.recommendation}`,
     `证据：${issue.evidence_ids.join('、') || '无'}`,
     '',
-  ])
+  ]
   const content = [
     '巡检 AI 汇报', `任务：${value.task_name}（${runLabel(value.task_status)}）`,
     `采集开始：${timeLabel(value.inspection_started_at)}；结束：${timeLabel(value.inspection_finished_at)}`,
     `生成时间：${timeLabel(value.generated_at)}`, `模型：${value.model_name} (v${value.model_version})`,
     `范围：${value.host_count} 台主机，${value.finding_count} 条发现，${value.log_count} 条日志`,
-    ...(otherProblems.value.length ? [
-      '', '非错误日志问题', ...otherProblems.value.map((item) =>
-        `[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`),
-    ] : []),
-    ...(logIssues.value.length ? [
-      '', '错误日志分析', ...issueLines(logIssues.value), '日志证据',
+    ...problemGroups.value.flatMap((group) => [
+      '', `${group.title}（${group.problems.length} 项）`,
+      ...group.problems.flatMap((problem) => {
+        if (problem.kind === 'issue') return issueLines(problem.issue, problem.host)
+        const item = problem.finding
+        return [`[${severityLabel(item.severity)}] ${item.host_name} (${item.address}) · ${item.check_title}：${item.content}`]
+      }),
+    ]),
+    ...(analyzedLogEvidence.value.length ? [
+      '', '日志证据',
       ...analyzedLogEvidence.value.flatMap((item) => [
         `[${item.id}] ${severityLabel(item.severity)} / ${kindLabel(item.kind)} / ${item.host_name} (${item.address})`,
         `${item.check_title} / ${item.source}${item.source_table_index != null ? ` / 来源表 ${item.source_table_index}` : ''}`, item.content,
@@ -165,8 +159,6 @@ watch(() => props.taskId, () => {
   loading.value = false
   generating.value = false
   loadFailed.value = false
-  resetLogs()
-  resetProblems()
   terminalPolls = isActiveRun(props.taskStatus) ? 0 : TERMINAL_POLL_COUNT
   void load()
 }, { immediate: true })
@@ -225,23 +217,7 @@ onUnmounted(() => {
           </dl>
           <div class="inspection-analysis-provenance"><span>报告模型：{{ report.model_name }} (v{{ report.model_version }})</span><span>采集时间：{{ timeLabel(report.inspection_started_at) }} 至 {{ timeLabel(report.inspection_finished_at) }}</span></div>
         </section>
-        <section v-if="problemTotal" class="inspection-analysis-section">
-          <div class="inspection-analysis-section-heading"><h3>非错误日志问题</h3><span class="ui-text-muted">{{ problemTotal }} 项</span></div>
-          <div class="ui-table-wrap">
-            <ElTable :data="visibleProblems" row-key="id" class="ui-table">
-              <ElTableColumn label="级别" width="90"><template #default="{ row }"><ElTag :type="severityType(row.severity)" size="small">{{ severityLabel(row.severity) }}</ElTag></template></ElTableColumn>
-              <ElTableColumn label="影响主机" min-width="240"><template #default="{ row }"><div class="ui-item-title">{{ row.host_name }}</div><div class="ui-item-secondary">{{ row.address }}</div></template></ElTableColumn>
-              <ElTableColumn prop="check_title" label="检查项" min-width="150" />
-              <ElTableColumn label="问题描述" min-width="360"><template #default="{ row }"><p>{{ row.content }}</p></template></ElTableColumn>
-            </ElTable>
-          </div>
-          <ListPagination v-model:page="problemPage" v-model:page-size="problemPageSize" :total="problemTotal" />
-        </section>
-        <section v-if="logTotal" class="inspection-analysis-section">
-          <div class="inspection-analysis-section-heading"><h3>错误日志分析</h3><span class="ui-text-muted">{{ logTotal }} 项</span></div>
-          <InspectionAnalysisIssue v-for="(issue, index) in visibleLogs" :key="`${report.generated_at}:${(logPage - 1) * logPageSize + index}`" :issue="issue" :host="issueHost(issue)" :evidence="report.evidence" />
-          <ListPagination v-model:page="logPage" v-model:page-size="logPageSize" :total="logTotal" />
-        </section>
+        <InspectionAnalysisGroup v-for="group in problemGroups" :key="`${report.generated_at}:${group.title}`" :group="group" :evidence="report.evidence" />
       </template>
     </template>
   </section>

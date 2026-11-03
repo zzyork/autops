@@ -166,7 +166,8 @@ def replace_turn(session: Session, conversation: AISession, user: AIMessage, con
         AIToolHistory.session_id == conversation.id, AIToolHistory.message_id >= user.id))
     if proposal_ids:
         session.execute(delete(AIProposal).where(
-            AIProposal.session_id == conversation.id, AIProposal.id.in_(proposal_ids), AIProposal.status == "pending"))
+            AIProposal.session_id == conversation.id, AIProposal.id.in_(proposal_ids),
+            AIProposal.status.in_(("pending", "cancelled")), AIProposal.task_id.is_(None)))
     user.content = content
     assistant = complete(session, user.id, conversation, reply, calls, pending, commit=False)
     # Allocate the new message ID while the old tail still exists, avoiding SQLite ID reuse.

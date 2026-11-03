@@ -1,4 +1,4 @@
-import type { AnalysisEvidence, AnalysisIssue, AnalysisSeverity, AnalysisStatus, DiagnosticGroup } from '@/types/inspections'
+import type { AnalysisEvidence, AnalysisIssue, AnalysisReport, AnalysisSeverity, AnalysisStatus, DiagnosticGroup } from '@/types/inspections'
 import type { ExecutionState } from '@/types/executionStatus'
 import { runState } from '@/components/inspectionDisplay'
 
@@ -11,6 +11,38 @@ export function analysisState(status: AnalysisStatus): ExecutionState | null {
     return null
   }
   return runState(status)
+}
+
+export type AnalysisProblem =
+  | { id: string; kind: 'finding'; finding: AnalysisEvidence }
+  | { id: string; kind: 'issue'; issue: AnalysisIssue; host: string }
+
+export interface AnalysisProblemGroup {
+  title: string
+  problems: AnalysisProblem[]
+}
+
+export function groupAnalysisProblems(report: AnalysisReport): AnalysisProblemGroup[] {
+  const groups = new Map<string, AnalysisProblemGroup>()
+  function add(title: string, problem: AnalysisProblem): void {
+    const group = groups.get(title)
+    if (group) group.problems.push(problem)
+    else groups.set(title, { title, problems: [problem] })
+  }
+
+  for (const item of report.evidence) {
+    if (item.kind !== 'finding' || item.severity === 'info') continue
+    add(`${item.check_title}异常`, { id: item.id, kind: 'finding', finding: item })
+  }
+
+  const logIds = new Set(report.evidence.filter((item) => item.kind === 'log').map((item) => item.id))
+  report.issues.forEach((issue, index) => {
+    if (!issue.evidence_ids.some((id) => logIds.has(id))) return
+    const items = report.evidence.filter((item) => issue.evidence_ids.includes(item.id))
+    const host = [...new Set(items.map((item) => `${item.host_name} (${item.address})`))].join('、')
+    add(issue.title, { id: `issue-${index}`, kind: 'issue', issue, host })
+  })
+  return [...groups.values()]
 }
 
 interface LogDetail {

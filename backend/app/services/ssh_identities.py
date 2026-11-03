@@ -1,3 +1,5 @@
+import logging
+import time
 from dataclasses import replace
 from datetime import timedelta, timezone
 from uuid import uuid4
@@ -10,12 +12,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from ..connection_models import IdentityChallengeRecord, KnownHostKey
-from ..core.ssh import HostKeyRequired, SSHConnectionError, fingerprint, probe_host_key
+from ..core.ssh import HostKeyRequired, SSHConnectionError, failure_message, fingerprint, probe_host_key
 from ..models import Host, utc_now
 from ..repositories.ssh_connections import get_asset, get_trust
 from ..schemas.ssh_identities import IdentityCheckInput, IdentityCheckResponse, IdentityChallenge
 from .ssh_assets import resolve_plan
 
+logger = logging.getLogger(__name__)
 CHALLENGE_TTL = timedelta(minutes=10)
 CHALLENGE_RETENTION = timedelta(days=1)
 
@@ -34,8 +37,20 @@ def _probe(session: Session, cipher: Fernet, target_type: str, target_id: int):
     if proxy is not None and proxy.trusted_key is None:
         proxy = replace(proxy, username="", password=None, private_key=None)
     session.rollback()
+    started = time.monotonic()
     try:
         endpoint, key = probe_host_key(target, proxy)
+    except SSHConnectionError as exc:
+        endpoint = proxy if exc.stage == "jump_host" and proxy is not None else target
+        logger.warning(
+            "SSH 服务器身份探测失败: requested=%s:%s endpoint=%s:%s address=%s:%s "
+            "stage=%s code=%s elapsed=%.2fs cause=%s detail=%r",
+            target_type, target_id, endpoint.target_type, endpoint.target_id, endpoint.address, endpoint.port,
+            exc.stage, exc.code, time.monotonic() - started,
+            type(exc.__cause__).__name__ if exc.__cause__ is not None else type(exc).__name__,
+            failure_message(exc, target, proxy or target),
+        )
+        raise
     except HostKeyRequired as exc:
         endpoint, key = exc.endpoint, exc
         # The exception carries the exact wire key even when a trusted jump changed.

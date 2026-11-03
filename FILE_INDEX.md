@@ -224,6 +224,7 @@
 | `frontend/src/views/InspectionRecordDetailView.vue` | 服务器巡检记录详情页面。 |
 | `frontend/src/components/InspectionRecordSummary.vue` | 巡检记录概览与风险统计。 |
 | `frontend/src/components/InspectionAnalysisReport.vue` | 巡检 AI 分析报告生成、展示与导出。 |
+| `frontend/src/components/InspectionAnalysisGroup.vue` | 巡检分析报告按具体问题类型分组展示与独立分页。 |
 | `frontend/src/components/InspectionAnalysisEvidence.vue` | 巡检分析证据筛选与展示。 |
 | `frontend/src/components/InspectionAnalysisIssue.vue` | 巡检分析问题与建议展示。 |
 | `frontend/src/components/inspectionAnalysisDisplay.ts` | 巡检分析报告与日志证据展示转换。 |
