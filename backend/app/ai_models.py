@@ -46,6 +46,20 @@ class AISession(Base):
     proposals: Mapped[list["AIProposal"]] = relationship(cascade="all, delete-orphan", order_by="AIProposal.id")
     tool_history: Mapped[list["AIToolHistory"]] = relationship(cascade="all, delete-orphan", order_by="AIToolHistory.id")
 
+    @property
+    def proposal_message_ids(self) -> dict[str, str]:
+        """Locate plan cards in surviving turns while retaining confirmed task links."""
+        proposal_ids = {proposal.id for proposal in self.proposals}
+        message_ids: dict[str, str] = {}
+        for entry in self.tool_history:
+            if entry.name != "prepare_inspection":
+                continue
+            proposal = entry.result.get("proposal")
+            if (isinstance(proposal, dict) and isinstance(proposal.get("id"), str)
+                    and proposal["id"] in proposal_ids):
+                message_ids[proposal["id"]] = str(entry.message_id)
+        return message_ids
+
 
 class AIMessage(Base):
     __tablename__ = "ai_messages"

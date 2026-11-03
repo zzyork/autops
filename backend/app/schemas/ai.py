@@ -152,3 +152,4 @@ class Proposal(BaseModel):
 class Detail(Summary):
     messages: list[Message]
     proposals: list[Proposal]
+    proposal_message_ids: dict[str, str]

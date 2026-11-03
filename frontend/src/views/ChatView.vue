@@ -88,6 +88,16 @@ const messageRows = computed(() => {
     return { message, retryMessage }
   })
 })
+const displayedProposals = computed(() => {
+  const session = detail.value
+  if (!session) return []
+  const messageIds = new Set(messageRows.value.filter(({ message }) => message.role === 'user')
+    .map(({ message }) => message.id))
+  return session.proposals.filter((proposal) => {
+    const messageId = session.proposal_message_ids[proposal.id]
+    return messageId !== undefined && messageIds.has(messageId)
+  })
+})
 let active = true
 let connectionSequence = 0
 let detailSequence = 0
@@ -402,7 +412,7 @@ async function generateReply(content: string, sourceMessage?: ChatMessage): Prom
       if (!active || controller.signal.aborted) return
       id = summary.id
       selectedId.value = id
-      detail.value = { ...summary, messages: [], proposals: [] }
+      detail.value = { ...summary, messages: [], proposals: [], proposal_message_ids: {} }
       detailLoaded.value = true
       selectInitialSession = false
       resetPage()
@@ -522,7 +532,7 @@ async function remove(session: SessionSummary) {
   } catch { if (active) showRequestError() }
   finally { if (active) operation.value = null }
 }
-watch([() => detail.value?.messages.length, streamingText, () => detail.value?.proposals.length], async () => {
+watch([() => messageRows.value.length, streamingText, () => displayedProposals.value.length], async () => {
   await nextTick()
   if (conversation.value) conversation.value.scrollTop = conversation.value.scrollHeight
 })
@@ -618,8 +628,8 @@ onUnmounted(() => {
               </ChatMessageItem>
               <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
               <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
-              <template v-for="proposal in detail.proposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
-              <p v-if="!detail.messages.length && !detail.proposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
+              <template v-for="proposal in displayedProposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
+              <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
             </template>
             <template v-else-if="!selectedId">
               <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取功能模型配置与连接...</p>

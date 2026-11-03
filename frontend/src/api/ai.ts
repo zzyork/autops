@@ -18,7 +18,9 @@ function featureModelsConfig(value: unknown): FeatureModelsConfig {
 function isChatSession(value: unknown): value is ChatSession {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string'
     || typeof value.connection_id !== 'number' || typeof value.created_at !== 'string'
-    || typeof value.updated_at !== 'string' || !Array.isArray(value.messages) || !Array.isArray(value.proposals)) return false
+    || typeof value.updated_at !== 'string' || !Array.isArray(value.messages) || !Array.isArray(value.proposals)
+    || !isRecord(value.proposal_message_ids)
+    || !Object.values(value.proposal_message_ids).every((messageId) => typeof messageId === 'string')) return false
   return value.messages.every((message: unknown) => isRecord(message) && typeof message.id === 'string'
     && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string'
     && typeof message.created_at === 'string'
