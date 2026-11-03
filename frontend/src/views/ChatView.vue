@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import ChatMessageEditor from '@/components/ChatMessageEditor.vue'
@@ -27,6 +27,7 @@ const selectedId = ref<string | null>(null)
 const detail = ref<ChatSession | null>(null)
 const detailLoaded = ref(false)
 const detailLoading = ref(false)
+const detailRefreshing = computed(() => detailLoading.value && detail.value !== null)
 const input = ref('')
 const inputError = ref('')
 const inputInvalid = ref(false)
@@ -50,6 +51,9 @@ const activityLoading = ref(false)
 const stopPending = ref(false)
 const stopRequested = ref(false)
 const conversation = ref<HTMLElement | null>(null)
+const conversationContent = ref<HTMLElement | null>(null)
+const scrolledAway = shallowRef(false)
+const conversationId = useId()
 const composer = ref<HTMLElement | null>(null)
 const composerFocusId = ref<string | null>(null)
 const inputId = useId()
@@ -113,7 +117,48 @@ let activitySequence = 0
 let selectInitialSession = true
 const MAX_MESSAGE_LENGTH = 8000
 const ACTIVITY_POLL_MS = 1000
+const SCROLL_BOTTOM_THRESHOLD = 32
 let messageResultSequence = 0
+let conversationResizeObserver: ResizeObserver | undefined
+let conversationScrollTop = 0
+let restoreConversationScroll = false
+
+function updateConversationScroll(): void {
+  const element = conversation.value
+  if (!active || !visible.value || !pageVisible.value || !element?.clientHeight) return
+  if (restoreConversationScroll || (selectedId.value && !detailLoaded.value && !detailRefreshing.value)) return
+  const movedUp = element.scrollTop < conversationScrollTop
+  const awayFromBottom = element.scrollHeight - element.clientHeight - element.scrollTop > SCROLL_BOTTOM_THRESHOLD
+  conversationScrollTop = element.scrollTop
+  // 程序滚动的延迟事件可能遇到新内容增长，只有实际上翻才暂停跟随。
+  scrolledAway.value = awayFromBottom && (scrolledAway.value || movedUp)
+}
+
+function scrollToLatest(): void {
+  restoreConversationScroll = false
+  const element = conversation.value
+  if (!element) return
+  element.scrollTop = element.scrollHeight
+  conversationScrollTop = element.scrollTop
+  scrolledAway.value = false
+}
+
+function syncConversationScroll(): void {
+  const element = conversation.value
+  if (!active || !visible.value || !pageVisible.value || !element?.clientHeight) return
+  if (selectedId.value && !detailLoaded.value && !detailRefreshing.value) return
+  if (restoreConversationScroll) {
+    element.scrollTop = conversationScrollTop
+    restoreConversationScroll = false
+  }
+  if (!scrolledAway.value) scrollToLatest()
+  updateConversationScroll()
+}
+
+function returnToLatest(): void {
+  scrollToLatest()
+  conversation.value?.focus({ preventScroll: true })
+}
 
 function invalidateMessageResult(): void {
   messageResultSequence++
@@ -215,6 +260,8 @@ watch([selectedId, visible, pageVisible], ([id, isVisible, isPageVisible], [prev
   activityController?.abort()
   activityLoading.value = false
   if (id !== previousId) {
+    restoreConversationScroll = false
+    scrolledAway.value = false
     decisionError.value = null
     invalidateMessageResult()
     activity.value = null
@@ -394,6 +441,8 @@ async function generateReply(content: string, sourceMessage?: ChatMessage): Prom
   branchError.value = ''
   regenerationError.value = ''
   regeneratingMessageId.value = sourceMessage?.id ?? null
+  restoreConversationScroll = false
+  scrolledAway.value = false
   invalidateMessageResult()
   operation.value = 'send'
   if (!selectedId.value) operation.value = 'create'
@@ -545,10 +594,12 @@ async function remove(session: SessionSummary) {
   } catch { if (active) showRequestError() }
   finally { if (active) operation.value = null }
 }
-watch([() => messageRows.value.length, streamingText, () => displayedProposals.value.length], async () => {
-  await nextTick()
-  if (conversation.value) conversation.value.scrollTop = conversation.value.scrollHeight
-})
+watch(detailLoaded, (loaded) => {
+  // 隐藏标签无法立即恢复位置，保留到消息区重新可见后再应用。
+  if (loaded && scrolledAway.value) restoreConversationScroll = true
+  syncConversationScroll()
+}, { flush: 'post' })
+watch([selectedId, operation, visible, pageVisible], syncConversationScroll, { flush: 'post' })
 watch([historyActionsDisabled, selectedId, visible, composerFocusId], ([disabled, id, isVisible, focusId]) => {
   if (!focusId) return
   if (id !== focusId) {
@@ -568,12 +619,16 @@ function updatePageVisibility(): void {
   pageVisible.value = !document.hidden
 }
 onMounted(() => {
+  conversationResizeObserver = new ResizeObserver(syncConversationScroll)
+  if (conversation.value) conversationResizeObserver.observe(conversation.value)
+  if (conversationContent.value) conversationResizeObserver.observe(conversationContent.value)
   void loadConnections()
   window.addEventListener('focus', refreshActivityOnFocus)
   document.addEventListener('visibilitychange', updatePageVisibility)
 })
 onUnmounted(() => {
   active = false
+  conversationResizeObserver?.disconnect()
   connectionSequence++
   detailSequence++
   streamController?.abort()
@@ -604,60 +659,72 @@ onUnmounted(() => {
           <ListPagination v-model:page="page" v-model:page-size="pageSize" :total="total" :total-known="sessionsLoaded && !sessionsLoading" :disabled="sessionsLoading || !sessionsLoaded || navigationBusy" compact />
         </aside>
         <section class="ai-chat" aria-label="对话内容">
-          <div class="ai-pane-heading"><strong>{{ detail?.title ?? (selectedId ? '对话' : '新对话') }}</strong><span v-if="detailLoaded && selectedConnection" class="ui-text-muted">{{ selectedConnection.name }}</span></div>
+          <div class="ai-pane-heading">
+            <strong>{{ detail?.title ?? (selectedId ? '对话' : '新对话') }}</strong>
+            <span v-if="detailRefreshing" class="ui-text-muted" role="status">正在刷新对话…</span>
+            <span v-else-if="detailLoaded && selectedConnection" class="ui-text-muted">{{ selectedConnection.name }}</span>
+          </div>
           <div v-if="branchOrigin && branchOrigin.id === selectedId" class="ai-branch-notice">
             <span class="ui-text-muted" role="status">已从“{{ branchOrigin.sourceTitle }}”创建分支。原对话的巡检计划与任务保留在原会话中。</span>
             <ElButton link type="primary" :disabled="navigationBusy" @click="select(branchOrigin.sourceId)">返回原对话</ElButton>
           </div>
-          <div ref="conversation" class="ai-conversation" role="log" aria-live="polite">
-            <p v-if="selectedId && detailLoading" class="ai-placeholder">正在读取历史…</p>
-            <p v-else-if="selectedId && !detailLoaded" class="ui-load-retry">{{ editingMessage ? '历史刷新失败，当前编辑内容已保留。' : '历史未加载。' }}<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
-            <!-- 历史刷新期间保留原位编辑入口，失败时仍可取消编辑。 -->
-            <template v-if="detail && (detailLoaded || editingMessage)">
-              <ChatMessageItem
-                v-for="row in messageRows"
-                :key="row.message.id"
-                :message="row.message"
-                :result-confirmed="messageResultConfirmed"
-                :actions-disabled="messageActionsDisabled"
-                :retryable="!!row.retryMessage"
-                :editing="editingMessage?.id === row.message.id"
-                @edit="editMessage(row.message)"
-                @retry="row.retryMessage && retry(row.retryMessage)"
-                @branch="fork(row.message)"
-              >
-                <template #editor>
-                  <ChatMessageEditor
-                    v-model="editDraft"
-                    :busy="interactionBusy"
-                    :disabled="historyActionsDisabled || editingSourceMissing"
-                    :request-error="editRequestError"
-                    :refreshing="activityLoading || detailLoading"
-                    @submit="submitEdit"
-                    @close="closeEditor"
-                    @refresh="loadActivity(true)"
-                  />
+          <div :id="conversationId" ref="conversation" class="ai-conversation" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="detailLoading" tabindex="0" @scroll.passive="updateConversationScroll">
+            <div ref="conversationContent" class="ai-conversation-content">
+              <p v-if="selectedId && detailLoading && !detail" class="ai-placeholder">正在读取历史…</p>
+              <p v-else-if="selectedId && !detailLoaded && !detailLoading" class="ui-load-retry">{{ editingMessage ? '历史刷新失败，当前编辑内容已保留。' : '历史未加载。' }}<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
+              <!-- 刷新时保留消息和任务卡片，避免滚动区高度坍缩；失败时仍可取消编辑。 -->
+              <template v-if="detail && (detailLoaded || detailRefreshing || editingMessage)">
+                <ChatMessageItem
+                  v-for="row in messageRows"
+                  :key="row.message.id"
+                  :message="row.message"
+                  :result-confirmed="messageResultConfirmed"
+                  :actions-disabled="messageActionsDisabled"
+                  :retryable="!!row.retryMessage"
+                  :editing="editingMessage?.id === row.message.id"
+                  @edit="editMessage(row.message)"
+                  @retry="row.retryMessage && retry(row.retryMessage)"
+                  @branch="fork(row.message)"
+                >
+                  <template #editor>
+                    <ChatMessageEditor
+                      v-model="editDraft"
+                      :busy="interactionBusy"
+                      :disabled="historyActionsDisabled || editingSourceMissing"
+                      :request-error="editRequestError"
+                      :refreshing="activityLoading || detailLoading"
+                      @submit="submitEdit"
+                      @close="closeEditor"
+                      @refresh="loadActivity(true)"
+                    />
+                  </template>
+                </ChatMessageItem>
+                <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
+                <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
+                <template v-for="proposal in displayedProposals" :key="proposal.id">
+                  <ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping || !detailLoaded" @decide="decide" />
+                  <p v-if="decisionError?.proposalId === proposal.id" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete" role="status">
+                    {{ decisionError.message }}
+                  </p>
+                  <ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
                 </template>
-              </ChatMessageItem>
-              <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
-              <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
-              <template v-for="proposal in displayedProposals" :key="proposal.id">
-                <ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" />
-                <p v-if="decisionError?.proposalId === proposal.id" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete" role="status">
-                  {{ decisionError.message }}
-                </p>
-                <ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
+                <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
               </template>
-              <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
-            </template>
-            <template v-else-if="!selectedId">
-              <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取功能模型配置与连接...</p>
-              <p v-else-if="!connectionsLoaded" class="ui-load-retry">功能模型配置或连接未加载。<ElButton @click="loadConnections">重试</ElButton></p>
-              <p v-else-if="!newChatAvailable" class="ai-placeholder">{{ featureModels?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。' }}<RouterLink to="/settings/models">前往模型配置</RouterLink></p>
-              <p v-else class="ai-placeholder">开始对话</p>
-            </template>
+              <template v-else-if="!selectedId">
+                <p v-if="connectionsLoading && !connectionsLoaded" class="ai-placeholder">正在读取功能模型配置与连接...</p>
+                <p v-else-if="!connectionsLoaded" class="ui-load-retry">功能模型配置或连接未加载。<ElButton @click="loadConnections">重试</ElButton></p>
+                <p v-else-if="!newChatAvailable" class="ai-placeholder">{{ featureModels?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。' }}<RouterLink to="/settings/models">前往模型配置</RouterLink></p>
+                <p v-else class="ai-placeholder">开始对话</p>
+              </template>
+            </div>
           </div>
           <div ref="composer" class="ai-composer">
+            <ElButton v-if="scrolledAway && detailLoaded" class="ai-scroll-latest" :aria-controls="conversationId" @click="returnToLatest">
+              <svg class="ai-message-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 4v16m-6-6 6 6 6-6" />
+              </svg>
+              <span>回到最新</span>
+            </ElButton>
             <ElInput
               :id="inputId"
               v-model="input"
