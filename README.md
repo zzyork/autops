@@ -1,0 +1,53 @@
+# autops
+
+AI 辅助的 SSH 资产管理与主机巡检工具，基于 Vue 3、FastAPI 和 SQLite。
+
+## 功能亮点
+
+- 管理主机、分组、跳板机及 SSH 密钥，测试连接并确认服务器身份。
+- 巡检基础信息、资源、服务、网络和日志，查看记录并导出报告。
+- AI 对话生成巡检计划，经用户确认后执行，并支持结果分析。
+
+## 快速开始
+
+安装下述环境后，在仓库根目录运行。脚本创建或复用 `.venv`，安装依赖并启动前后端。
+
+Windows：
+
+```powershell
+.\scripts\start.bat
+```
+
+Linux/macOS：
+
+```bash
+bash scripts/start.sh
+```
+
+打开 <http://127.0.0.1:5173>；按 `Ctrl+C` 停止前后端。
+
+## 安装说明
+
+需 Python 3.13、Node.js（20.x ≥20.19 或 ≥22.12）及 npm。Windows 需 `py` 启动器，Linux/macOS 需 `python3.13`，均须在 PATH 中。
+
+## 使用示例
+
+1. 添加主机与 SSH 凭据，确认服务器身份并测试连接。
+2. 在“巡检任务”选择主机与检查项，查看并导出结果。
+3. 在“模型配置”添加连接、配置功能模型，再通过 AI 对话准备并确认巡检计划。
+
+## 配置选项
+
+按需将配置模板复制为同目录的 `.env`：[后端](backend/.env.example)、[前端](frontend/.env.example)。
+
+- `AUTOPS_DATA_DIR`：默认 `backend/runtime`；数据库与凭据加密密钥需一并备份。
+- `VITE_API_BASE_URL`：请求前缀，默认 `/api/v1`。
+- `API_PROXY_TARGET`：开发代理目标，默认 `http://127.0.0.1:8000`。
+
+## API 文档
+
+启动后访问 <http://127.0.0.1:8000/docs>，接口前缀 `/api/v1`。
+
+## 许可证
+
+仓库未提供许可证文件，授权条款待维护者明确。

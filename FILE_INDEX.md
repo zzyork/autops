@@ -37,6 +37,7 @@
 | --- | --- |
 | `.gitignore` | Git 文件忽略配置。 |
 | `.gitattributes` | Git 文件属性与换行符配置。 |
+| `README.md` | 项目介绍、环境安装、启动、配置与使用说明。 |
 | `AGENTS.md` | 项目 AI 智能体工作约定。 |
 | `FILE_INDEX.md` | 仓库目录与文件用途索引。 |
 | `SECURITY.md` | 安全披露与敏感信息处理约定。 |
