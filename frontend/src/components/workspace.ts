@@ -25,8 +25,12 @@ export function createWorkspace(router: Router) {
     if (savedScroll?.key !== activeKey.value) savedScroll = { key: activeKey.value, top: window.scrollY }
   }
 
-  function modalOpen() {
-    if (!document.body.classList.contains('el-popup-parent--hidden')) return false
+  function modalOpen(): boolean {
+    // 滚动锁可能延迟清理或残留，导航只受当前可见的模态弹窗约束。
+    const dialogs = document.querySelectorAll<HTMLElement>('[aria-modal="true"][role="dialog"], [aria-modal="true"][role="alertdialog"]')
+    const hasVisibleDialog = Array.from(dialogs).some((dialog) =>
+      dialog.getClientRects().length > 0 && window.getComputedStyle(dialog).visibility === 'visible')
+    if (!hasVisibleDialog) return false
     showNavigationBlocked()
     return true
   }
