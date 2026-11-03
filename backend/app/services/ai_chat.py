@@ -40,6 +40,7 @@ TOOLS = [
 ]
 SYSTEM = ("你是运维助手。只能从工具查询到的资产准备巡检计划；分组查询歧义时先请用户澄清。"
           "巡检计划必须由用户在独立按钮确认，不能声称已执行。不要索取或展示凭据。"
+          "读取巡检结果时，依据 failure_code 和 error_code 说明未完成原因；没有具体原因时明确说明未知，禁止猜测。"
           "回复使用 Markdown。展示资产列表或巡检目标时，表格必须且只能按顺序包含主机名、局域网IP、连接地址三列，"
           "分别使用 query_assets 返回的 name、lan_ip、address；禁止展示资产 ID、版本或其他内部字段。"
           "局域网IP为空时注明未填写，禁止从主机名或连接地址猜测；旧查询结果缺少 lan_ip 字段时先重新查询资产。")
@@ -224,13 +225,15 @@ class ChatManager:
                 if task is None:
                     return {"error": "任务不存在"}
                 result = {"id": task.id, "status": task.status, "completed_hosts": task.completed_hosts,
-                        "host_count": task.host_count, "failed_hosts": task.failed_hosts,
-                        "hosts": [{"name": host.host_name, "status": host.status,
-                                   "checks": [{"id": check.check_id, "status": check.status,
-                                               "conclusion": check.conclusion,
-                                               "payload": CheckResponse.model_validate(check).payload.model_dump(mode="json")}
-                                              for check in host.checks]}
-                                  for host in task.hosts]}
+                          "host_count": task.host_count, "failed_hosts": task.failed_hosts,
+                          "hosts": [{"name": host.host_name, "status": host.status,
+                                     "failure_code": host.failure_code,
+                                     "checks": [{"id": check.check_id, "status": check.status,
+                                                 "error_code": check.error_code,
+                                                 "conclusion": check.conclusion,
+                                                 "payload": CheckResponse.model_validate(check).payload.model_dump(mode="json")}
+                                                for check in host.checks]}
+                                    for host in task.hosts]}
                 if len(json.dumps(result, ensure_ascii=False)) > 32_000:
                     return {"error": "结果超出对话限制，请在巡检任务详情查看"}
                 return result

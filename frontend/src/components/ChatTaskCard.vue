@@ -5,7 +5,7 @@ import { ElButton, ElTag } from 'element-plus'
 import { getInspectionAnalysis, getInspectionTask } from '@/api/inspections'
 import { showRequestError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { hostProgressLabel, isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
+import { hostProgressLabel, inspectionFailureReason, isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
 import { analysisState, analysisStatusLabel } from '@/components/inspectionAnalysisDisplay'
 import type { AnalysisResponse, TaskDetail } from '@/types/inspections'
 import '@/styles/inspections.css'
@@ -16,6 +16,8 @@ const router = useRouter()
 const task = ref<TaskDetail | null>(null)
 const loaded = ref(false)
 const loading = ref(false)
+const failedHosts = computed(() => task.value?.hosts.filter((host) => !isActiveRun(host.status)
+  && host.status !== 'completed' && host.failure_code && host.failure_code !== 'host_key_required') ?? [])
 const analysis = ref<AnalysisResponse | null>(null)
 const analysisLoaded = ref(false)
 const analysisLoading = ref(false)
@@ -128,6 +130,11 @@ onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout
       <p class="ui-text-muted ui-execution-status" :data-execution-state="task.failed_hosts ? 'incomplete' : undefined">
         主机巡检：{{ hostProgressLabel(task) }}。
       </p>
+      <div v-if="failedHosts.length" role="status" aria-label="主机巡检未完成原因">
+        <p v-for="host in failedHosts" :key="host.id" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete">
+          {{ host.host_name }}（{{ host.address }}）未完成巡检：{{ inspectionFailureReason(host.failure_code) }}。
+        </p>
+      </div>
       <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="ui-text-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
       <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status">
         <p class="ui-text-muted ui-execution-status ui-execution-notice" :data-execution-state="analysisState(analysis.status)" role="status">

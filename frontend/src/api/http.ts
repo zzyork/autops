@@ -19,6 +19,27 @@ export class RequestCancelledError extends Error {
 export class SSHIdentityRequiredError extends HttpError {
   constructor(readonly target: SSHIdentityTarget) { super(); this.name = 'SSHIdentityRequiredError' }
 }
+
+const SSH_CONNECTION_FAILURE_REASONS = {
+  timeout: '连接超时，请检查网络、SSH 端口和防火墙',
+  dns: '服务器地址解析失败，请检查地址和 DNS 配置',
+  connection_refused: 'SSH 连接被拒绝，请检查端口和 SSH 服务是否启动',
+  network_unreachable: '服务器网络不可达，请检查网络和路由',
+  connection: '无法建立 SSH 连接，请检查网络、地址、端口和 SSH 服务',
+  authentication: 'SSH 身份认证失败，请检查登录凭据',
+  configuration: 'SSH 连接配置或凭据不可用，请检查资产配置',
+}
+type SSHConnectionFailureReason = keyof typeof SSH_CONNECTION_FAILURE_REASONS
+
+export class SSHConnectionFailedError extends HttpError {
+  constructor(readonly target: SSHIdentityTarget, readonly stage: 'target' | 'jump_host', reason: SSHConnectionFailureReason) {
+    super()
+    this.name = 'SSHConnectionFailedError'
+    const stageLabel = stage === 'jump_host' ? '经跳板机建立 SSH 连接失败' : '目标服务器 SSH 连接失败'
+    this.message = `${stageLabel}：${SSH_CONNECTION_FAILURE_REASONS[reason]}。`
+  }
+}
+
 function identityTarget(value: unknown): SSHIdentityTarget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const item = value as Record<string, unknown>
@@ -49,7 +70,7 @@ async function sendRequest(path: string, options: RequestOptions, accept: string
     throw new HttpError()
   }
   if (!response.ok) {
-    if (response.status === 409) {
+    if (response.status === 409 || response.status === 502 || response.status === 504) {
       let payload: unknown
       try { payload = await response.json() } catch { throw new HttpError() }
       if (payload && typeof payload === 'object' && 'detail' in payload) {
@@ -57,6 +78,13 @@ async function sendRequest(path: string, options: RequestOptions, accept: string
         if (detail && typeof detail === 'object' && 'code' in detail && detail.code === 'ssh_identity_required' && 'target' in detail) {
           const target = identityTarget(detail.target)
           if (target) throw new SSHIdentityRequiredError(target)
+        }
+        if (detail && typeof detail === 'object' && 'code' in detail && detail.code === 'ssh_connection_failed'
+          && 'target' in detail && 'stage' in detail && (detail.stage === 'target' || detail.stage === 'jump_host')
+          && 'reason' in detail && typeof detail.reason === 'string'
+          && Object.prototype.hasOwnProperty.call(SSH_CONNECTION_FAILURE_REASONS, detail.reason)) {
+          const target = identityTarget(detail.target)
+          if (target) throw new SSHConnectionFailedError(target, detail.stage, detail.reason as SSHConnectionFailureReason)
         }
       }
     }

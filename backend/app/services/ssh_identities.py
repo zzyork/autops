@@ -1,4 +1,6 @@
+import errno
 import logging
+import socket
 import time
 from dataclasses import replace
 from datetime import timedelta, timezone
@@ -60,9 +62,29 @@ def _probe(session: Session, cipher: Fernet, target_type: str, target_id: int):
     return plan, endpoint, public_key, key_type, key_fingerprint
 
 
-def _network_error(exc: SSHConnectionError) -> HTTPException:
-    return HTTPException(504 if exc.code == "timeout" else 409 if exc.code == "authentication" else 502,
-                         "服务器身份探测失败")
+def _network_error(exc: SSHConnectionError, target_type: str, target_id: int) -> HTTPException:
+    reason = exc.code
+    cause = exc.__cause__
+    if exc.code == "connection":
+        if isinstance(cause, socket.gaierror):
+            reason = "dns"
+        elif isinstance(cause, ConnectionRefusedError):
+            reason = "connection_refused"
+        elif isinstance(cause, OSError) and (
+            cause.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, 10051, 10065)
+            or getattr(cause, "winerror", None) in (10051, 10065)
+        ):
+            reason = "network_unreachable"
+    status = 502
+    if exc.code == "timeout":
+        status = 504
+    elif exc.code == "authentication":
+        status = 409
+    # 只公开受控分类；底层异常可能含凭据、地址或 SSH 服务端返回的内容。
+    return HTTPException(status, {
+        "code": "ssh_connection_failed", "reason": reason, "stage": exc.stage,
+        "target": {"target_type": target_type, "target_id": target_id},
+    })
 
 
 def check_identity(session: Session, cipher: Fernet, data: IdentityCheckInput) -> IdentityCheckResponse:
@@ -76,7 +98,7 @@ def check_identity(session: Session, cipher: Fernet, data: IdentityCheckInput) -
         plan, endpoint, public_key, key_type, key_fingerprint = _probe(
             session, cipher, data.target_type, data.target_id)
     except SSHConnectionError as exc:
-        raise _network_error(exc) from None
+        raise _network_error(exc, data.target_type, data.target_id) from None
     if data.version is not None and data.version != plan.version:
         raise HTTPException(409, "资产已变更，请刷新后重试")
     # Network I/O is complete; serialize the snapshot and trust comparison with writes.
@@ -121,7 +143,7 @@ def trust_identity(session: Session, cipher: Fernet, challenge_id: str) -> None:
     try:
         plan, endpoint, public_key, key_type, _ = _probe(session, cipher, record.requested_type, record.requested_id)
     except SSHConnectionError as exc:
-        raise _network_error(exc) from None
+        raise _network_error(exc, record.requested_type, record.requested_id) from None
     if (plan.snapshot != record.snapshot or (endpoint.target_type, endpoint.target_id, endpoint.address, endpoint.port,
             key_type, public_key) != (record.target_type, record.target_id, record.address, record.port,
                                      record.key_type, record.public_key)):

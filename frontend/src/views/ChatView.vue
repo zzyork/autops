@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import ChatMessageEditor from '@/components/ChatMessageEditor.vue'
@@ -11,6 +11,7 @@ import ListPagination from '@/components/ListPagination.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { workspaceVisibleKey } from '@/components/workspace'
 import { createMessageBranch, createSession, decideProposal, deleteSession, getFeatureModels, getSession, getSessionActivity, listConnections, listSessionsPage, regenerateMessage, registerOperation, sendMessage, stopSession } from '@/api/ai'
+import { SSHConnectionFailedError } from '@/api/http'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/timeDisplay'
 import type { ChatMessage, ChatSession, FeatureModelsConfig, ModelConnection, SessionActivity, SessionSummary } from '@/types/ai'
@@ -37,6 +38,7 @@ const editDraft = ref('')
 const regeneratingMessageId = ref<string | null>(null)
 const regenerationError = ref('')
 const branchError = ref('')
+const decisionError = shallowRef<{ proposalId: string; message: string } | null>(null)
 const branchOrigin = ref<{ id: string; sourceId: string; sourceTitle: string } | null>(null)
 // 创建分支时保留原会话未发送的草稿，返回原会话后恢复。
 const preservedDrafts = new Map<string, string>()
@@ -214,6 +216,7 @@ watch([selectedId, visible, pageVisible], ([id, isVisible, isPageVisible], [prev
   activityController?.abort()
   activityLoading.value = false
   if (id !== previousId) {
+    decisionError.value = null
     invalidateMessageResult()
     activity.value = null
     activityFailed.value = false
@@ -471,6 +474,7 @@ async function generateReply(content: string, sourceMessage?: ChatMessage): Prom
 async function decide(proposalId: string, approve: boolean) {
   const id = selectedId.value
   if (!id || navigationBusy.value || stopping.value || !detailLoaded.value) return
+  decisionError.value = null
   invalidateMessageResult()
   operation.value = 'decision'
   const controller = new AbortController()
@@ -490,6 +494,16 @@ async function decide(proposalId: string, approve: boolean) {
     void loadSessions()
   } catch (error) {
     if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value && !stopPending.value) {
+      if (error instanceof SSHConnectionFailedError) {
+        const proposal = detail.value?.proposals.find((item) => item.id === proposalId)
+        const host = error.target.target_type === 'host'
+          ? proposal?.hosts.find((item) => item.id === error.target.target_id) : undefined
+        const hostLabel = host ? `${host.name}（${host.address}）：` : ''
+        decisionError.value = {
+          proposalId,
+          message: `${hostLabel}${error.message} 本次巡检尚未提交，请检查连接后再次确认计划。`,
+        }
+      }
       showRequestError(error)
       if (await loadDetail(id, false)) void loadSessions()
     }
@@ -628,7 +642,13 @@ onUnmounted(() => {
               </ChatMessageItem>
               <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
               <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
-              <template v-for="proposal in displayedProposals" :key="proposal.id"><ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" /><ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" /></template>
+              <template v-for="proposal in displayedProposals" :key="proposal.id">
+                <ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping" @decide="decide" />
+                <p v-if="decisionError?.proposalId === proposal.id" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete" role="status">
+                  {{ decisionError.message }}
+                </p>
+                <ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
+              </template>
               <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
             </template>
             <template v-else-if="!selectedId">
