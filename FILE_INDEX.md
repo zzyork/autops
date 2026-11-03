@@ -57,8 +57,6 @@
 
 ## 技术栈与界面专项
 
-专项启用范围见 `项目配置.md`。
-
 | 路径 | 用途 |
 | --- | --- |
 | `profiles/Vue3前端技术栈规范.md` | Vue、TypeScript、Vite 与 Element Plus 专项规范。 |
