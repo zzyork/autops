@@ -187,7 +187,7 @@
 | `frontend/src/types/executionStatus.ts` | 五类执行状态的前端展示键类型。 |
 | `frontend/src/components/ChatMessageItem.vue` | 对话消息、结果状态、原位编辑区域及复制、编辑、重试和分支操作入口。 |
 | `frontend/src/components/ChatMessageActionButton.vue` | 消息图标按钮、Tooltip 名称、禁用状态与键盘焦点。 |
-| `frontend/src/components/ChatMessageEditor.vue` | 已发送用户消息的原位编辑、校验与新分支发送表单。 |
+| `frontend/src/components/ChatMessageEditor.vue` | 已发送用户消息的原位编辑、校验与当前会话重新生成表单。 |
 | `frontend/src/components/ChatMarkdownContent.vue` | AI 回复的安全 Markdown 渲染与表格展示。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检规则配置表单。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗。 |

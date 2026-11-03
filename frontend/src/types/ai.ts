@@ -39,6 +39,11 @@ export interface ChatMessage {
 export interface MessageBranchInput {
   include_message: boolean
 }
+export interface MessageRegenerationInput {
+  content: string
+  expected_updated_at: string
+  operation_id?: string
+}
 export interface InspectionProposal {
   id: string
   name: string

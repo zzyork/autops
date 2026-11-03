@@ -4,6 +4,8 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
+from functools import partial
 from typing import Annotated
 
 import anyio
@@ -20,7 +22,7 @@ from ...dependencies import Database, commit
 from ....ai_models import AIConnection, AIMessage, AIProposal, AISession
 from ....repositories import ai as repository
 from ....schemas.ai import (BranchInput, ConnectionInput, ConnectionResponse, DecisionInput, Detail,
-                             FeatureModels, MessageInput, OperationRegistration, SessionActivity, Summary)
+                             FeatureModels, MessageInput, OperationRegistration, RegenerateInput, SessionActivity, Summary)
 from ....schemas.pagination import DEFAULT_PAGE_SIZE, PageNumber, PageResponse, PageSize
 from ....services.ai_feature_models import (config_guard, feature_connection, load_feature_models,
                                            save_feature_models)
@@ -241,9 +243,38 @@ def send_message(session_id: UUID, data: MessageInput, request: Request, session
         if conversation.connection_version != record.config_version:
             raise HTTPException(409, "模型连接已修改，请新建会话")
         session.rollback()
+        return stream_chat(session_id, request, cancelled, partial(ai.send, str(session_id), data.content))
     except Exception:
         ai.release(str(session_id))
         raise
+
+
+@router.post("/sessions/{session_id}/messages/{message_id}/regenerate", response_class=StreamingResponse)
+def regenerate_message(session_id: UUID, message_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
+                       data: RegenerateInput, request: Request, session: Database) -> StreamingResponse:
+    ai = request.app.state.ai
+    cancelled = ai.acquire(str(session_id), data.operation_id.hex if data.operation_id is not None else None)
+    try:
+        session.rollback()
+        ai.regeneration_source(session, str(session_id), message_id, data.expected_updated_at)
+        task_ids = repository.linked_task_ids(session, str(session_id))
+        session.rollback()
+        inspection_running, _ = request.app.state.inspections.activity(task_ids)
+        report_running, _ = request.app.state.inspection_analysis.activity(task_ids)
+        if inspection_running or report_running:
+            raise HTTPException(409, "会话关联的巡检或分析仍在运行")
+        if cancelled.is_set():
+            raise HTTPException(409, "请求已取消")
+        return stream_chat(session_id, request, cancelled, partial(
+            ai.regenerate, str(session_id), message_id, data.content, data.expected_updated_at))
+    except Exception:
+        ai.release(str(session_id))
+        raise
+
+
+def stream_chat(session_id: UUID, request: Request, cancelled: threading.Event,
+                generate: Callable[..., Detail]) -> StreamingResponse:
+    ai = request.app.state.ai
     deadline = time.monotonic() + MAX_TOTAL_SECONDS
     release_guard = threading.Lock()
     released = False
@@ -268,9 +299,8 @@ def send_message(session_id: UUID, data: MessageInput, request: Request, session
 
     def work() -> None:
         try:
-            detail = ai.send(str(session_id), data.content,
-                             on_token=lambda text_value: enqueue("token", text_value), cancel=cancelled,
-                             deadline=deadline)
+            detail = generate(on_token=lambda text_value: enqueue("token", text_value), cancel=cancelled,
+                              deadline=deadline)
             enqueue("done", detail)
         except Exception as exc:
             logger.error("AI session %s failed: %s", session_id, type(exc).__name__)

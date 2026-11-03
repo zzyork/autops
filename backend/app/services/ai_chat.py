@@ -3,6 +3,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import TypedDict
 from uuid import uuid4
 
@@ -10,11 +11,11 @@ import httpx
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from langgraph.graph import END, START, StateGraph
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session, sessionmaker
 from pydantic import ValidationError
 
-from ..ai_models import AIConnection, AIProposal
+from ..ai_models import AIConnection, AIMessage, AIProposal, AISession
 from ..models import Host, HostGroup
 from ..repositories import ai as repository
 from ..repositories import inspections
@@ -235,18 +236,57 @@ class ChatManager:
                 return result
         return {"error": "工具未注册"}
 
+    def regeneration_source(self, session: Session, session_id: str, message_id: int,
+                            expected_updated_at: datetime) -> tuple[AISession, AIMessage, AIConnection]:
+        conversation = repository.get_session(session, session_id)
+        if conversation is None:
+            raise HTTPException(404, "会话不存在")
+        target = session.get(AIMessage, message_id)
+        if target is None or target.session_id != conversation.id:
+            raise HTTPException(404, "消息不存在")
+        if target.role != "user":
+            raise HTTPException(409, "只能重新生成用户消息")
+        updated_at = conversation.updated_at
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        if updated_at.astimezone(timezone.utc) != expected_updated_at.astimezone(timezone.utc):
+            raise HTTPException(409, "会话已变更，请刷新后重试")
+        if session.scalar(select(AIMessage.id).where(
+            AIMessage.session_id == conversation.id, AIMessage.in_flight.is_(True)).limit(1)) is not None:
+            raise HTTPException(409, "会话存在尚未结束的消息")
+        record = repository.connection(session, conversation.connection_id)
+        if record is None or conversation.connection_version != record.config_version:
+            raise HTTPException(409, "模型连接已修改，请新建会话")
+        return conversation, target, record
+
     def send(self, session_id: str, content: str, on_token: Callable[[str], None] | None = None,
              cancel: threading.Event | None = None, deadline: float | None = None) -> Detail:
+        return self._send(session_id, content, on_token, cancel, deadline)
+
+    def regenerate(self, session_id: str, message_id: int, content: str, expected_updated_at: datetime,
+                   on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
+                   deadline: float | None = None) -> Detail:
+        return self._send(session_id, content, on_token, cancel, deadline,
+                          regeneration=(message_id, expected_updated_at))
+
+    def _send(self, session_id: str, content: str, on_token: Callable[[str], None] | None,
+              cancel: threading.Event | None, deadline: float | None,
+              *, regeneration: tuple[int, datetime] | None = None) -> Detail:
         deadline = deadline if deadline is not None else time.monotonic() + MAX_TOTAL_SECONDS
         with self.sessions() as session:
-            conversation = repository.get_session(session, session_id)
-            if conversation is None:
-                raise HTTPException(404, "会话不存在")
-            record = repository.connection(session, conversation.connection_id)
-            if record is None or conversation.connection_version != record.config_version:
-                raise HTTPException(409, "模型连接已修改，请新建会话")
-            prior = repository.messages(session, session_id)
-            history = repository.history(session, session_id)
+            if regeneration is not None:
+                message_id, expected_updated_at = regeneration
+                conversation, user, record = self.regeneration_source(session, session_id, message_id, expected_updated_at)
+            else:
+                conversation = repository.get_session(session, session_id)
+                if conversation is None:
+                    raise HTTPException(404, "会话不存在")
+                record = repository.connection(session, conversation.connection_id)
+                if record is None or conversation.connection_version != record.config_version:
+                    raise HTTPException(409, "模型连接已修改，请新建会话")
+            cutoff = regeneration[0] if regeneration is not None else None
+            prior = repository.messages(session, session_id, before_message_id=cutoff)
+            history = repository.history(session, session_id, before_message_id=cutoff)
             messages = [{"role": "system", "content": SYSTEM}]
             ledger: dict[int, dict] = {}
             intermediate = ""
@@ -273,7 +313,8 @@ class ChatManager:
                                          "content": json.dumps(call.result, ensure_ascii=False)})
                         if call.name == "query_assets":
                             ledger.update({host["id"]: host for host in call.result.get("hosts", [])})
-            user = repository.add_user(session, conversation, content)
+            if regeneration is None:
+                user = repository.add_user(session, conversation, content)
             user_id = user.id
             messages.append({"role": "user", "content": content})
             tool_enabled = record.chat_status == "passed" and record.tool_status == "passed"
@@ -333,6 +374,19 @@ class ChatManager:
             if time.monotonic() >= deadline or (cancel and cancel.is_set()):
                 raise ProviderError("请求已取消或超时")
             with self.sessions() as session:
+                if regeneration is not None:
+                    session.execute(text("BEGIN IMMEDIATE"))
+                    conversation, user, current = self.regeneration_source(
+                        session, session_id, message_id, expected_updated_at)
+                    if current.id != record.id or current.config_version != record.config_version:
+                        raise HTTPException(409, "模型连接已修改，请新建会话")
+                    repository.replace_turn(session, conversation, user, content, result["display"],
+                                            result["calls"], result["pending"])
+                    detail = Detail.model_validate(conversation)
+                    if time.monotonic() >= deadline or (cancel and cancel.is_set()):
+                        raise ProviderError("请求已取消或超时")
+                    session.commit()
+                    return detail
                 conversation = repository.get_session(session, session_id)
                 current = repository.connection(session, conversation.connection_id)
                 if current.config_version != conversation.connection_version:
@@ -341,6 +395,7 @@ class ChatManager:
                                     result["calls"], result["pending"])
                 return Detail.model_validate(conversation)
         except Exception:
-            with self.sessions() as session:
-                repository.finish_failure(session, user_id, "interrupted" if cancel and cancel.is_set() else "failed")
+            if regeneration is None:
+                with self.sessions() as session:
+                    repository.finish_failure(session, user_id, "interrupted" if cancel and cancel.is_set() else "failed")
             raise

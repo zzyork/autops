@@ -3,7 +3,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .inspections import CheckId
 
@@ -80,6 +80,10 @@ class MessageInput(Input):
         if not value.strip():
             raise ValueError("消息不能为空")
         return value.strip()
+
+
+class RegenerateInput(MessageInput):
+    expected_updated_at: AwareDatetime
 
 
 class BranchInput(Input):

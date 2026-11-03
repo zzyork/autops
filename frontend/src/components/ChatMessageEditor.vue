@@ -5,8 +5,8 @@ import ChatMessageActionButton from '@/components/ChatMessageActionButton.vue'
 import FieldError from '@/components/FieldError.vue'
 import { focusFormFeedback } from '@/components/formFeedback'
 
-const props = defineProps<{ busy: boolean; disabled: boolean; requestError: string; sessionsLoading: boolean }>()
-const emit = defineEmits<{ submit: [content: string]; close: []; refreshSessions: [] }>()
+const props = defineProps<{ busy: boolean; disabled: boolean; requestError: string; refreshing: boolean }>()
+const emit = defineEmits<{ submit: [content: string]; close: []; refresh: [] }>()
 const draft = defineModel<string>({ required: true })
 const error = ref('')
 const formRoot = ref<HTMLElement | null>(null)
@@ -68,10 +68,10 @@ function close(): void {
       @input="error = ''"
     />
     <FieldError v-if="error" :id="`${inputId}-error`" :message="error" />
-    <p :id="`${inputId}-hint`" class="ui-field-hint">在新分支发送，原对话会保留。Ctrl / ⌘ + Enter 发送，Esc 取消。</p>
+    <p :id="`${inputId}-hint`" class="ui-field-hint">在当前会话重新生成，成功后替换此消息之后的对话；已创建的巡检任务保留。Ctrl / ⌘ + Enter 发送，Esc 取消。</p>
     <div v-if="requestError" class="ai-message-edit-recovery">
       <p class="ai-message-action-error" role="alert">{{ requestError }}</p>
-      <ChatMessageActionButton label="刷新会话列表" :loading="sessionsLoading" :disabled="busy || sessionsLoading" @click="emit('refreshSessions')">
+      <ChatMessageActionButton label="刷新对话" :loading="refreshing" :disabled="busy || refreshing" @click="emit('refresh')">
         <svg class="ai-message-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9" /></svg>
       </ChatMessageActionButton>
     </div>
@@ -80,7 +80,7 @@ function close(): void {
       <ChatMessageActionButton label="取消编辑" :disabled="busy" @click="close">
         <svg class="ai-message-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
       </ChatMessageActionButton>
-      <ChatMessageActionButton label="在新分支发送" primary native-type="submit" :loading="busy" :disabled="disabled || busy || !draft.trim()">
+      <ChatMessageActionButton label="重新发送" primary native-type="submit" :loading="busy" :disabled="disabled || busy || !draft.trim()">
         <svg class="ai-message-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20V4m-6 6 6-6 6 6" /></svg>
       </ChatMessageActionButton>
     </div>

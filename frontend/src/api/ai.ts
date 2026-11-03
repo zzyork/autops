@@ -1,4 +1,4 @@
-import type { ChatSession, FeatureModelsConfig, MessageBranchInput, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
+import type { ChatSession, FeatureModelsConfig, MessageBranchInput, MessageRegenerationInput, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
 import { get, HttpError, request, streamRequest } from './http'
 import { assertSSHRequestCurrent, rememberSSHOperation, withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
@@ -93,3 +93,7 @@ export async function decideProposal(sessionId: string, proposalId: string, appr
   return result
 }
 export const sendMessage = (id: string, content: string, signal: AbortSignal, onToken: (text: string) => void, operationId?: string) => streamRequest<ChatSession>(`${sessionPath(id)}/messages`, { body: { content, operation_id: operationId }, signal, timeoutMs: 300000, onToken, validateResult: isChatSession })
+export const regenerateMessage = (id: string, messageId: string, body: MessageRegenerationInput, signal: AbortSignal, onToken: (text: string) => void) => streamRequest<ChatSession>(`${sessionPath(id)}/messages/${encodeURIComponent(messageId)}/regenerate`, {
+  body, signal, timeoutMs: 300000, onToken,
+  validateResult: (value): value is ChatSession => isChatSession(value) && value.id === id,
+})

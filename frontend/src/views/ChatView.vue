@@ -10,7 +10,7 @@ import { focusFormFeedback } from '@/components/formFeedback'
 import ListPagination from '@/components/ListPagination.vue'
 import { useServerPagination } from '@/components/serverPagination'
 import { workspaceVisibleKey } from '@/components/workspace'
-import { createMessageBranch, createSession, decideProposal, deleteSession, getFeatureModels, getSession, getSessionActivity, listConnections, listSessionsPage, registerOperation, sendMessage, stopSession } from '@/api/ai'
+import { createMessageBranch, createSession, decideProposal, deleteSession, getFeatureModels, getSession, getSessionActivity, listConnections, listSessionsPage, regenerateMessage, registerOperation, sendMessage, stopSession } from '@/api/ai'
 import { showRequestError } from '@/components/feedback'
 import { timeLabel } from '@/components/timeDisplay'
 import type { ChatMessage, ChatSession, FeatureModelsConfig, ModelConnection, SessionActivity, SessionSummary } from '@/types/ai'
@@ -34,6 +34,8 @@ const sendingContent = ref('')
 const operation = ref<'create' | 'branch' | 'send' | 'decision' | 'delete' | null>(null)
 const editingMessage = ref<ChatMessage | null>(null)
 const editDraft = ref('')
+const regeneratingMessageId = ref<string | null>(null)
+const regenerationError = ref('')
 const branchError = ref('')
 const branchOrigin = ref<{ id: string; sourceId: string; sourceTitle: string } | null>(null)
 // 创建分支时保留原会话未发送的草稿，返回原会话后恢复。
@@ -67,9 +69,21 @@ const sendDisabled = computed(() => interactionBusy.value || running.value || (s
   : !connectionsLoaded.value || connectionsLoading.value || !newChatAvailable.value))
 const historyActionsDisabled = computed(() => sendDisabled.value || !messageResultConfirmed.value)
 const messageActionsDisabled = computed(() => historyActionsDisabled.value || editingMessage.value !== null)
+const editingSourceMissing = computed(() => editingMessage.value !== null && detail.value !== null
+  && !detail.value.messages.some((message) => message.id === editingMessage.value?.id))
+const editRequestError = computed(() => editingSourceMissing.value
+  ? '原消息已被其他操作移除，草稿已保留。请取消编辑后重新选择消息。'
+  : regenerationError.value)
 const messageRows = computed(() => {
+  const messages = detail.value?.messages ?? []
+  const index = messages.findIndex((message) => message.id === regeneratingMessageId.value)
+  let displayed = index < 0 ? messages : messages.slice(0, index)
+  // 另一页面重新生成可能移除编辑目标，仍保留草稿与取消入口。
+  if (editingSourceMissing.value && editingMessage.value && !regeneratingMessageId.value) {
+    displayed = [...displayed, editingMessage.value]
+  }
   let retryMessage: ChatMessage | undefined
-  return (detail.value?.messages ?? []).map((message) => {
+  return displayed.map((message) => {
     if (message.role === 'user') retryMessage = message
     return { message, retryMessage }
   })
@@ -119,7 +133,12 @@ async function loadActivity(reloadDetail = false): Promise<void> {
     if (result.running) {
       activityTimer = setTimeout(() => { void loadActivity() }, ACTIVITY_POLL_MS)
     } else if ((wasRunning || reloadDetail) && operation.value !== 'send') {
-      if (await loadDetail(id) && isCurrent()) void loadSessions()
+      if (await loadDetail(id) && isCurrent()) {
+        if (messageSequence === messageResultSequence && canConfirmMessages && operation.value === null) {
+          regenerationError.value = ''
+        }
+        void loadSessions()
+      }
     }
   } catch (error) {
     if (!isCurrent() || controller.signal.aborted) return
@@ -241,6 +260,7 @@ function select(id: string) {
   inputError.value = ''
   inputInvalid.value = false
   branchError.value = ''
+  regenerationError.value = ''
   void loadDetail(id)
 }
 function newChat() {
@@ -257,18 +277,20 @@ function newChat() {
   inputError.value = ''
   inputInvalid.value = false
   branchError.value = ''
+  regenerationError.value = ''
   void loadConnections()
 }
 
 function editMessage(message: ChatMessage): void {
   if (messageActionsDisabled.value || message.role !== 'user') return
-  branchError.value = ''
+  regenerationError.value = ''
   editDraft.value = message.content
   editingMessage.value = message
 }
 
 function closeEditor(): void {
   if (interactionBusy.value) return
+  if (editingSourceMissing.value) composerFocusId.value = selectedId.value
   editingMessage.value = null
   editDraft.value = ''
 }
@@ -354,31 +376,23 @@ async function send() {
 async function generateReply(content: string, sourceMessage?: ChatMessage): Promise<void> {
   if (sendDisabled.value || sourceMessage && historyActionsDisabled.value) return
   const source = sourceMessage ? detail.value : null
-  if (sourceMessage && !source) return
+  if (sourceMessage && !source?.messages.some((message) => message.id === sourceMessage.id)) return
   inputError.value = ''
   inputInvalid.value = false
   branchError.value = ''
+  regenerationError.value = ''
+  regeneratingMessageId.value = sourceMessage?.id ?? null
   invalidateMessageResult()
   operation.value = 'send'
-  if (sourceMessage) operation.value = 'branch'
-  else if (!selectedId.value) operation.value = 'create'
+  if (!selectedId.value) operation.value = 'create'
   sendingContent.value = content
   streamingText.value = ''
   stopRequested.value = false
   let id = selectedId.value
-  let targetReady = !sourceMessage
   const controller = new AbortController()
   streamController = controller
   try {
-    if (sourceMessage && source && id) {
-      const branch = await createMessageBranch(id, sourceMessage.id, { include_message: false }, controller.signal)
-      if (!active || selectedId.value !== id || controller.signal.aborted) return
-      activateBranch(branch, source)
-      // 登记期间中止时，尚未提交的编辑内容仍保留为新分支草稿。
-      input.value = content
-      id = branch.id
-      targetReady = true
-    } else if (!id) {
+    if (!id) {
       if (!await loadConnections() || !active || controller.signal.aborted) return
       if (!newChatAvailable.value) {
         inputError.value = featureModels.value?.chat_connection_id === null ? '尚未指定主模型。' : '指定的对话模型连接不存在，请重新配置。'
@@ -399,28 +413,42 @@ async function generateReply(content: string, sourceMessage?: ChatMessage): Prom
     registration = pending
     const operationId = await pending
     if (!active || controller.signal.aborted || stopRequested.value) return
-    input.value = ''
-    const session = await sendMessage(id, content, controller.signal, (text) => {
+    if (!sourceMessage) input.value = ''
+    const onToken = (text: string): void => {
       if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value) streamingText.value += text
-    }, operationId)
+    }
+    let session: ChatSession
+    if (sourceMessage && source) {
+      session = await regenerateMessage(id, sourceMessage.id, {
+        content, expected_updated_at: source.updated_at, operation_id: operationId,
+      }, controller.signal, onToken)
+    } else {
+      session = await sendMessage(id, content, controller.signal, onToken, operationId)
+    }
     if (!active || selectedId.value !== id || controller.signal.aborted) return
     detail.value = session
+    if (sourceMessage) {
+      editingMessage.value = null
+      editDraft.value = ''
+      composerFocusId.value = id
+    }
     void loadSessions()
   } catch (error) {
     if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value && !stopPending.value) {
       showRequestError(error)
-      if (targetReady) {
-        input.value = sendingContent.value
-        if (id && await loadDetail(id, false)) void loadSessions()
+      if (sourceMessage) {
+        regenerationError.value = '本次重新生成结果未确认，请刷新对话核对后再操作。'
       } else {
-        branchError.value = '分支创建结果未确认，请刷新会话列表检查后再操作。'
+        input.value = sendingContent.value
       }
+      if (id && await loadDetail(id, false)) void loadSessions()
     }
   } finally {
     const stopped = stopRequested.value || controller.signal.aborted
     if (active) {
       sendingContent.value = ''
       streamingText.value = ''
+      regeneratingMessageId.value = null
       invalidateMessageResult()
       operation.value = null
       stopRequested.value = false
@@ -579,12 +607,12 @@ onUnmounted(() => {
                   <ChatMessageEditor
                     v-model="editDraft"
                     :busy="interactionBusy"
-                    :disabled="historyActionsDisabled"
-                    :request-error="branchError"
-                    :sessions-loading="sessionsLoading"
+                    :disabled="historyActionsDisabled || editingSourceMissing"
+                    :request-error="editRequestError"
+                    :refreshing="activityLoading || detailLoading"
                     @submit="submitEdit"
                     @close="closeEditor"
-                    @refresh-sessions="loadSessions()"
+                    @refresh="loadActivity(true)"
                   />
                 </template>
               </ChatMessageItem>
@@ -625,6 +653,9 @@ onUnmounted(() => {
             <p v-if="branchError && !editingMessage" class="ui-load-retry ai-message-action-error" role="alert">
               {{ branchError }}<ElButton :disabled="navigationBusy || sessionsLoading" @click="loadSessions()">刷新会话列表</ElButton>
             </p>
+            <p v-if="regenerationError && !editingMessage" class="ui-load-retry ai-message-action-error" role="alert">
+              {{ regenerationError }}<ElButton :disabled="interactionBusy || activityLoading || detailLoading" @click="loadActivity(true)">刷新对话</ElButton>
+            </p>
             <p v-if="selectedId && activityFailed" class="ui-load-retry">
               运行状态未确认。<ElButton :loading="activityLoading" :disabled="stopPending" @click="loadActivity(true)">刷新状态</ElButton>
             </p>
@@ -634,6 +665,7 @@ onUnmounted(() => {
                 <template v-if="stopping">正在中止...</template>
                 <template v-else-if="operation === 'create'">正在创建会话...</template>
                 <template v-else-if="operation === 'branch'">正在创建分支…</template>
+                <template v-else-if="operation === 'send' && regeneratingMessageId">正在重新生成回复…</template>
                 <template v-else-if="operation === 'send'">正在接收回复...</template>
                 <template v-else-if="operation === 'decision'">正在提交巡检计划...</template>
                 <template v-else-if="activity?.running">后台任务尚未结束...</template>

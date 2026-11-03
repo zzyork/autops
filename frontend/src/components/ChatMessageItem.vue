@@ -28,6 +28,8 @@ watch(() => props.editing, (editing, wasEditing) => {
   if (!editing && wasEditing) editAction.value?.focus()
 }, { flush: 'post' })
 
+watch(() => props.message.content, () => { copyState.value = 'idle' })
+
 async function copy(): Promise<void> {
   if (copyState.value === 'copying') return
   if (!navigator.clipboard?.writeText) {
@@ -35,11 +37,12 @@ async function copy(): Promise<void> {
     return
   }
   copyState.value = 'copying'
+  const content = props.message.content
   try {
-    await navigator.clipboard.writeText(props.message.content)
-    if (active) copyState.value = 'copied'
+    await navigator.clipboard.writeText(content)
+    if (active && props.message.content === content) copyState.value = 'copied'
   } catch {
-    if (active) copyState.value = 'failed'
+    if (active && props.message.content === content) copyState.value = 'failed'
   }
 }
 </script>

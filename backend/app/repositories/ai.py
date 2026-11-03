@@ -1,7 +1,7 @@
 from copy import deepcopy
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ..ai_models import AIConnection, AIMessage, AIProposal, AISession, AIToolHistory
@@ -95,14 +95,18 @@ def branch_session(session: Session, source: AISession, message_id: int, include
     return branch
 
 
-def history(session: Session, session_id: str) -> list[AIToolHistory]:
-    return list(session.scalars(select(AIToolHistory).where(AIToolHistory.session_id == session_id)
-                                .order_by(AIToolHistory.id)))
+def history(session: Session, session_id: str, *, before_message_id: int | None = None) -> list[AIToolHistory]:
+    query = select(AIToolHistory).where(AIToolHistory.session_id == session_id)
+    if before_message_id is not None:
+        query = query.where(AIToolHistory.message_id < before_message_id)
+    return list(session.scalars(query.order_by(AIToolHistory.id)))
 
 
-def messages(session: Session, session_id: str) -> list[AIMessage]:
-    return list(session.scalars(select(AIMessage).where(AIMessage.session_id == session_id)
-                                .order_by(AIMessage.id)))
+def messages(session: Session, session_id: str, *, before_message_id: int | None = None) -> list[AIMessage]:
+    query = select(AIMessage).where(AIMessage.session_id == session_id)
+    if before_message_id is not None:
+        query = query.where(AIMessage.id < before_message_id)
+    return list(session.scalars(query.order_by(AIMessage.id)))
 
 
 def proposals(session: Session, session_id: str) -> list[AIProposal]:
@@ -134,17 +138,42 @@ def finish_failure(session: Session, user_id: int, status: str) -> None:
 
 
 def complete(session: Session, user_id: int, conversation: AISession, content: str,
-             calls: list[dict], pending: list[dict]) -> None:
+             calls: list[dict], pending: list[dict], *, commit: bool = True) -> AIMessage:
     user = session.get(AIMessage, user_id)
     user.status = "completed"
     user.in_flight = False
-    session.add(AIMessage(session_id=conversation.id, role="assistant", content=content))
+    assistant = AIMessage(session_id=conversation.id, role="assistant", content=content)
+    session.add(assistant)
     for call in calls:
         session.add(AIToolHistory(session_id=conversation.id, message_id=user_id, **call))
     for proposal in pending:
         session.add(AIProposal(session_id=conversation.id, **proposal))
     conversation.updated_at = utc_now()
-    session.commit()
+    if commit:
+        session.commit()
+    return assistant
+
+
+def replace_turn(session: Session, conversation: AISession, user: AIMessage, content: str,
+                 reply: str, calls: list[dict], pending: list[dict]) -> None:
+    """Stage the replacement in the caller's locked transaction; preserve confirmed tasks."""
+    replaced_history = list(session.scalars(select(AIToolHistory).where(
+        AIToolHistory.session_id == conversation.id, AIToolHistory.message_id >= user.id)))
+    proposal_ids = {entry.result["proposal"]["id"] for entry in replaced_history
+                    if entry.name == "prepare_inspection" and isinstance(entry.result.get("proposal"), dict)
+                    and isinstance(entry.result["proposal"].get("id"), str)}
+    session.execute(delete(AIToolHistory).where(
+        AIToolHistory.session_id == conversation.id, AIToolHistory.message_id >= user.id))
+    if proposal_ids:
+        session.execute(delete(AIProposal).where(
+            AIProposal.session_id == conversation.id, AIProposal.id.in_(proposal_ids), AIProposal.status == "pending"))
+    user.content = content
+    assistant = complete(session, user.id, conversation, reply, calls, pending, commit=False)
+    # Allocate the new message ID while the old tail still exists, avoiding SQLite ID reuse.
+    session.flush()
+    session.execute(delete(AIMessage).where(
+        AIMessage.session_id == conversation.id, AIMessage.id > user.id, AIMessage.id != assistant.id))
+    session.expire(conversation, ["messages", "proposals", "tool_history"])
 
 
 def interrupt_unfinished(session: Session) -> None:
