@@ -42,7 +42,7 @@ const INSPECTION_FAILURE_REASONS = new Map<string, string>([
   ['host_key_required', 'SSH 服务器身份尚未确认'],
   ['not_executed', '巡检流程已结束，该检查未执行'],
   ['dispatch_failed', '巡检任务未能提交到执行队列'],
-  ['check_failed', '检查执行失败，未记录更具体原因'],
+  ['check_failed', '检查执行失败'],
 ])
 
 export function inspectionFailureReason(code: string | null): string {
