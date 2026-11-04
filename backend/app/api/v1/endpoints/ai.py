@@ -140,7 +140,8 @@ def create_session(request: Request, session: Database) -> AISession:
 
 
 @router.get("/sessions/{session_id}", response_model=Detail)
-def read_session(session_id: UUID, session: Database) -> AISession:
+def read_session(session_id: UUID, request: Request, session: Database) -> AISession:
+    request.app.state.ai_operations.ensure_available()
     return require_session(session, session_id)
 
 
@@ -183,12 +184,13 @@ def session_activity(session_id: UUID, request: Request, session: Database) -> S
     session.rollback()
     # 先观察决策执行器，再读取关联，避免决策刚提交任务并释放锁时漏报活动。
     chat_running, chat_stopping = request.app.state.ai.activity(str(session_id))
+    operation_running, operation_stopping = request.app.state.ai_operations.activity(str(session_id))
     task_ids = repository.linked_task_ids(session, str(session_id))
     session.rollback()
     inspection_running, inspection_stopping = request.app.state.inspections.activity(task_ids)
     report_running, report_stopping = request.app.state.inspection_analysis.activity(task_ids)
-    return SessionActivity(running=chat_running or inspection_running or report_running,
-                           stopping=chat_stopping or inspection_stopping or report_stopping)
+    return SessionActivity(running=chat_running or operation_running or inspection_running or report_running,
+                           stopping=chat_stopping or operation_stopping or inspection_stopping or report_stopping)
 
 
 @router.get("/sessions/{session_id}/activity", response_model=SessionActivity)
@@ -201,6 +203,7 @@ def read_session_activity(session_id: UUID, request: Request, session: Database)
 def stop_session(session_id: UUID, request: Request, session: Database) -> SessionActivity:
     require_session(session, session_id)
     request.app.state.ai.cancel(str(session_id))
+    request.app.state.ai_operations.cancel(str(session_id))
     task_ids = repository.linked_task_ids(session, str(session_id))
     session.rollback()
     for task_id in task_ids:
@@ -221,6 +224,7 @@ def delete_session(session_id: UUID, request: Request, session: Database) -> Res
     ai = request.app.state.ai
     ai.acquire(str(session_id))
     try:
+        request.app.state.ai_operations.ensure_idle(str(session_id))
         conversation = require_session(session, session_id)
         session.delete(conversation)
         commit(session)
@@ -238,6 +242,7 @@ def send_message(session_id: UUID, data: MessageInput, request: Request, session
     ai = request.app.state.ai
     cancelled = ai.acquire(str(session_id), data.operation_id.hex if data.operation_id is not None else None)
     try:
+        request.app.state.ai_operations.ensure_idle(str(session_id))
         conversation = require_session(session, session_id)
         record = require_connection(session, conversation.connection_id)
         if conversation.connection_version != record.config_version:
@@ -261,6 +266,7 @@ def regenerate_message(session_id: UUID, message_id: Annotated[int, Path(gt=0, l
         session.rollback()
         inspection_running, _ = request.app.state.inspections.activity(task_ids)
         report_running, _ = request.app.state.inspection_analysis.activity(task_ids)
+        request.app.state.ai_operations.ensure_idle(str(session_id))
         if inspection_running or report_running:
             raise HTTPException(409, "会话关联的巡检或分析仍在运行")
         if cancelled.is_set():
@@ -344,6 +350,7 @@ def stream_chat(session_id: UUID, request: Request, cancelled: threading.Event,
 
 @router.post("/sessions/{session_id}/proposals/{proposal_id}/decision", response_model=Detail)
 def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Request, session: Database) -> AISession:
+    request.app.state.ai_operations.ensure_available()
     ai = request.app.state.ai
     cancelled = ai.acquire(str(session_id), data.operation_id.hex if data.operation_id is not None else None)
     try:
@@ -352,11 +359,11 @@ def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Re
         conversation = require_session(session, session_id)
         proposal = session.get(AIProposal, str(proposal_id))
         if proposal is None or proposal.session_id != conversation.id:
-            raise HTTPException(404, "巡检计划不存在")
+            raise HTTPException(404, "计划不存在")
         if proposal.status == ("confirmed" if data.approve else "cancelled"):
             return conversation
         if proposal.status != "pending":
-            raise HTTPException(409, "巡检计划已处理")
+            raise HTTPException(409, "计划已处理")
         if cancelled.is_set():
             raise HTTPException(409, "请求已取消")
         if not data.approve:
@@ -368,6 +375,14 @@ def decide(session_id: UUID, proposal_id: UUID, data: DecisionInput, request: Re
             raise HTTPException(409, "模型连接已修改，请新建会话")
         if record.chat_status != "passed" or record.tool_status != "passed":
             raise HTTPException(409, "模型测试未通过，不能执行 AI 运维计划")
+        request.app.state.ai_operations.ensure_idle(str(session_id))
+        if proposal.kind == "operation":
+            request.app.state.ai_operations.start(session, proposal, cancelled)
+            if cancelled.is_set():
+                request.app.state.ai_operations.cancel(str(session_id))
+                raise HTTPException(409, "请求已取消，已提交命令的结果请在会话中核对")
+            session.expire_all()
+            return conversation
         selected = InspectionInput(name=proposal.name,
                                    hosts=[{"id": item["id"], "version": item["version"]} for item in proposal.hosts],
                                    checks=proposal.checks)

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -139,14 +139,69 @@ class HostSnapshot(BaseModel):
     address: str
 
 
+class OperationCommand(Input):
+    name: str = Field(min_length=1, max_length=100)
+    command: str = Field(min_length=1, max_length=8192)
+    timeout_seconds: int = Field(default=30, gt=0, le=600, strict=True)
+
+    @field_validator("name", "command")
+    @classmethod
+    def valid_text(cls, value: str) -> str:
+        if not value.strip() or any(not char.isprintable() and char not in "\n\t" for char in value):
+            raise ValueError("名称和命令须填写且不能含控制字符")
+        return value
+
+
+class OperationInput(Input):
+    name: str = Field(min_length=1, max_length=100)
+    host_ids: list[Annotated[int, Field(gt=0, strict=True)]] = Field(min_length=1, max_length=8)
+    commands: list[OperationCommand] = Field(min_length=1, max_length=10)
+
+    @model_validator(mode="after")
+    def valid_plan(self) -> "OperationInput":
+        if not self.name.strip() or len(set(self.host_ids)) != len(self.host_ids):
+            raise ValueError("计划名称须填写且主机不能重复")
+        return self
+
+
+OperationResultStatus = Literal["queued", "running", "succeeded", "failed", "unknown", "skipped"]
+
+
+class OperationStepResult(BaseModel):
+    name: str
+    status: OperationResultStatus = "queued"
+    exit_status: int | None = None
+    error_code: str | None = None
+    stdout: str = ""
+    stderr: str = ""
+
+
+class OperationHostResult(BaseModel):
+    id: int
+    name: str
+    address: str
+    status: OperationResultStatus = "queued"
+    error_code: str | None = None
+    steps: list[OperationStepResult]
+
+
+class OperationExecution(BaseModel):
+    status: Literal["queued", "running", "succeeded", "failed", "unknown", "interrupted"] = "queued"
+    error_code: str | None = None
+    hosts: list[OperationHostResult]
+
+
 class Proposal(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    kind: Literal["inspection", "operation"]
     name: str
     hosts: list[HostSnapshot]
     checks: list[CheckId]
     status: Literal["pending", "confirmed", "cancelled"]
     task_id: str | None
+    commands: list[OperationCommand]
+    execution: OperationExecution | None
 
 
 class Detail(Summary):

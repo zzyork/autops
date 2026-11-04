@@ -7,6 +7,22 @@ import type { PageResponse } from '@/types/api'
 const connectionPath = (id: number) => `/ai/connections/${encodeURIComponent(id)}`
 const sessionPath = (id: string) => `/ai/sessions/${encodeURIComponent(id)}`
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+const isErrorCode = (value: unknown): boolean => value === null || typeof value === 'string'
+const isResultStatus = (value: unknown): boolean => value === 'queued' || value === 'running'
+  || value === 'succeeded' || value === 'failed' || value === 'unknown' || value === 'skipped'
+
+function isOperationExecution(value: unknown): boolean {
+  if (value === null) return true
+  return isRecord(value) && (value.status === 'interrupted' || value.status !== 'skipped' && isResultStatus(value.status))
+    && isErrorCode(value.error_code) && Array.isArray(value.hosts)
+    && value.hosts.every((host: unknown) => isRecord(host) && typeof host.id === 'number'
+      && typeof host.name === 'string' && typeof host.address === 'string' && isResultStatus(host.status)
+      && isErrorCode(host.error_code) && Array.isArray(host.steps)
+      && host.steps.every((step: unknown) => isRecord(step) && typeof step.name === 'string'
+        && isResultStatus(step.status) && isErrorCode(step.error_code)
+        && (step.exit_status === null || typeof step.exit_status === 'number' && Number.isInteger(step.exit_status))
+        && typeof step.stdout === 'string' && typeof step.stderr === 'string'))
+}
 
 function featureModelsConfig(value: unknown): FeatureModelsConfig {
   if (!isRecord(value) || !('chat_connection_id' in value) || !('inspection_report_connection_id' in value)
@@ -33,7 +49,18 @@ function isChatSession(value: unknown): value is ChatSession {
         check === 'server_info' || check === 'system_resources' || check === 'service_status' || check === 'network_info'
         || check === 'log_error')
       && (proposal.status === 'pending' || proposal.status === 'confirmed' || proposal.status === 'cancelled')
-      && (proposal.task_id === null || typeof proposal.task_id === 'string'))
+      && (proposal.task_id === null || typeof proposal.task_id === 'string')
+      && Array.isArray(proposal.commands) && proposal.commands.every((command: unknown) => isRecord(command)
+        && typeof command.name === 'string' && typeof command.command === 'string'
+        && typeof command.timeout_seconds === 'number' && Number.isFinite(command.timeout_seconds) && command.timeout_seconds > 0)
+      && isOperationExecution(proposal.execution)
+      && (proposal.kind === 'inspection' && proposal.commands.length === 0 && proposal.execution === null
+        || proposal.kind === 'operation' && proposal.checks.length === 0 && proposal.task_id === null))
+}
+
+function chatSession(value: unknown): ChatSession {
+  if (!isChatSession(value)) throw new HttpError()
+  return value
 }
 
 function sessionActivity(value: unknown): SessionActivity {
@@ -55,7 +82,7 @@ export const testConnection = (id: number) => request<ModelConnection>(`${connec
 export const listSessions = () => get<SessionSummary[]>('/ai/sessions')
 export const listSessionsPage = (page: number, pageSize: number) => get<PageResponse<SessionSummary>>(`/ai/sessions?page=${page}&page_size=${pageSize}`)
 export const createSession = () => request<SessionSummary>('/ai/sessions', { method: 'POST' })
-export const getSession = (id: string) => get<ChatSession>(sessionPath(id))
+export const getSession = async (id: string, signal?: AbortSignal) => chatSession(await request<unknown>(sessionPath(id), { signal }))
 export const getSessionActivity = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/activity`, { signal }))
 export const stopSession = async (id: string, signal: AbortSignal) => sessionActivity(await request<unknown>(`${sessionPath(id)}/stop`, { method: 'POST', signal }))
 export const deleteSession = (id: string) => request<void>(sessionPath(id), { method: 'DELETE' })
@@ -81,12 +108,12 @@ export async function decideProposal(sessionId: string, proposalId: string, appr
     options.onRegister?.(pending)
     const operationId = await pending
     assertSSHRequestCurrent(options)
-    return request<ChatSession>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, {
+    return chatSession(await request<unknown>(`${sessionPath(sessionId)}/proposals/${encodeURIComponent(proposalId)}/decision`, {
       method: 'POST', body: { approve, operation_id: operationId }, timeoutMs: 120000, signal: options.signal,
-    })
+    }))
   }
   if (!approve) return execute()
-  const session = await request<ChatSession>(sessionPath(sessionId), { signal: options.signal })
+  const session = await getSession(sessionId, options.signal)
   const proposal = session.proposals.find((item) => item.id === proposalId)
   if (!proposal) throw new HttpError()
   const result = await withSSHIdentities(proposal.hosts.map((host) => ({ target_type: 'host', target_id: host.id, version: host.version })), execute, options)

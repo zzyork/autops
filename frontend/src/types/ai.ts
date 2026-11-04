@@ -44,13 +44,37 @@ export interface MessageRegenerationInput {
   expected_updated_at: string
   operation_id?: string
 }
+export type OperationStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'interrupted'
+export type OperationResultStatus = Exclude<OperationStatus, 'interrupted'> | 'skipped'
+export interface OperationExecution {
+  status: OperationStatus
+  error_code: string | null
+  hosts: {
+    id: number
+    name: string
+    address: string
+    status: OperationResultStatus
+    error_code: string | null
+    steps: {
+      name: string
+      status: OperationResultStatus
+      exit_status: number | null
+      error_code: string | null
+      stdout: string
+      stderr: string
+    }[]
+  }[]
+}
 export interface InspectionProposal {
   id: string
+  kind: 'inspection' | 'operation'
   name: string
   hosts: { id: number; version: number; name: string; address: string }[]
   checks: CheckId[]
   status: 'pending' | 'confirmed' | 'cancelled'
   task_id: string | null
+  commands: { name: string; command: string; timeout_seconds: number }[]
+  execution: OperationExecution | null
 }
 export interface ChatSession extends SessionSummary {
   messages: ChatMessage[]

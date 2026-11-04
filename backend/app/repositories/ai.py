@@ -160,7 +160,7 @@ def replace_turn(session: Session, conversation: AISession, user: AIMessage, con
     replaced_history = list(session.scalars(select(AIToolHistory).where(
         AIToolHistory.session_id == conversation.id, AIToolHistory.message_id >= user.id)))
     proposal_ids = {entry.result["proposal"]["id"] for entry in replaced_history
-                    if entry.name == "prepare_inspection" and isinstance(entry.result.get("proposal"), dict)
+                    if entry.name in ("prepare_inspection", "prepare_operation") and isinstance(entry.result.get("proposal"), dict)
                     and isinstance(entry.result["proposal"].get("id"), str)}
     session.execute(delete(AIToolHistory).where(
         AIToolHistory.session_id == conversation.id, AIToolHistory.message_id >= user.id))
@@ -180,4 +180,42 @@ def replace_turn(session: Session, conversation: AISession, user: AIMessage, con
 def interrupt_unfinished(session: Session) -> None:
     session.execute(update(AIMessage).where(AIMessage.role == "user", AIMessage.in_flight.is_(True))
                     .values(status="interrupted", in_flight=False))
+    session.commit()
+
+
+def save_operation_execution(session: Session, proposal_id: str, execution: dict) -> None:
+    proposal = session.get(AIProposal, proposal_id)
+    if proposal is None or proposal.kind != "operation" or proposal.status != "confirmed":
+        raise ValueError("运维执行记录不存在")
+    # JSON 列通过整体替换记录深层变化，避免原地更新未落库。
+    proposal.execution = deepcopy(execution)
+    session.commit()
+
+
+def interrupt_operations(session: Session) -> None:
+    for proposal in session.scalars(select(AIProposal).where(
+            AIProposal.kind == "operation", AIProposal.status == "confirmed")):
+        if not proposal.execution or proposal.execution["status"] not in ("queued", "running"):
+            continue
+        execution = deepcopy(proposal.execution)
+        uncertain = False
+        for host in execution["hosts"]:
+            for step in host["steps"]:
+                if step["status"] == "running":
+                    step["status"], step["error_code"] = "unknown", "server_restarted"
+                elif step["status"] == "queued":
+                    step["status"], step["error_code"] = "skipped", "not_executed"
+            if any(step["status"] == "unknown" for step in host["steps"]):
+                host["status"], host["error_code"] = "unknown", "server_restarted"
+                uncertain = True
+            elif host["steps"] and all(step["status"] == "succeeded" for step in host["steps"]):
+                host["status"], host["error_code"] = "succeeded", None
+            elif host["status"] in ("queued", "running"):
+                host["status"], host["error_code"] = "skipped", "server_restarted"
+        if execution["hosts"] and all(host["status"] == "succeeded" for host in execution["hosts"]):
+            execution["status"], execution["error_code"] = "succeeded", None
+        else:
+            execution["status"] = "unknown" if uncertain else "interrupted"
+            execution["error_code"] = "server_restarted"
+        proposal.execution = execution
     session.commit()

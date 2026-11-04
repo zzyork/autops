@@ -4,6 +4,7 @@ import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import ChatMessageEditor from '@/components/ChatMessageEditor.vue'
 import ChatProposalCard from '@/components/ChatProposalCard.vue'
+import ChatOperationCard from '@/components/ChatOperationCard.vue'
 import ChatTaskCard from '@/components/ChatTaskCard.vue'
 import FieldError from '@/components/FieldError.vue'
 import { focusFormFeedback } from '@/components/formFeedback'
@@ -40,6 +41,11 @@ const regeneratingMessageId = ref<string | null>(null)
 const regenerationError = ref('')
 const branchError = ref('')
 const decisionError = shallowRef<{ proposalId: string; message: string } | null>(null)
+const decidingKind = shallowRef<'inspection' | 'operation' | null>(null)
+const operationDialogId = shallowRef<string | null>(null)
+const operationDialogClosing = shallowRef(false)
+const operationRefreshFailed = shallowRef(false)
+const autoOpenedOperations = new Set<string>()
 const branchOrigin = ref<{ id: string; sourceId: string; sourceTitle: string } | null>(null)
 // 创建分支时保留原会话未发送的草稿，返回原会话后恢复。
 const preservedDrafts = new Map<string, string>()
@@ -103,6 +109,12 @@ const displayedProposals = computed(() => {
   if (!messageId) return []
   return session.proposals.filter((proposal) => session.proposal_message_ids[proposal.id] === messageId)
 })
+const autoOpenOperation = computed(() => displayedProposals.value
+  .filter((proposal) => proposal.kind === 'operation' && proposal.status === 'pending').at(-1))
+const hasRunningOperation = computed(() => detail.value?.proposals.some((proposal) => proposal.kind === 'operation'
+  && proposal.status === 'confirmed' && (proposal.execution?.status === 'queued' || proposal.execution?.status === 'running')) === true)
+const proposalBusy = computed(() => navigationBusy.value || running.value || hasRunningOperation.value || stopping.value || !detailLoaded.value
+  || activity.value === null || activityFailed.value || operationRefreshFailed.value)
 let active = true
 let connectionSequence = 0
 let detailSequence = 0
@@ -165,6 +177,45 @@ function invalidateMessageResult(): void {
   messageResultConfirmed.value = false
 }
 
+function openOperationPlan(proposalId: string): void {
+  if (!visible.value || !pageVisible.value || proposalBusy.value || operationDialogId.value || operationDialogClosing.value) return
+  autoOpenedOperations.add(proposalId)
+  operationDialogId.value = proposalId
+}
+
+function closeOperationPlan(): void {
+  if (operationDialogId.value) operationDialogClosing.value = true
+  operationDialogId.value = null
+}
+
+watch([autoOpenOperation, visible, pageVisible, proposalBusy, operationDialogId, operationDialogClosing], ([proposal, isVisible, isPageVisible, busy, openId, closing]) => {
+  if (proposal && isVisible && isPageVisible && !busy && !openId && !closing && !autoOpenedOperations.has(proposal.id)) {
+    for (const item of displayedProposals.value) {
+      if (item.kind === 'operation' && item.status === 'pending') autoOpenedOperations.add(item.id)
+    }
+    openOperationPlan(proposal.id)
+  }
+}, { flush: 'post' })
+
+async function refreshOperationDetail(id: string, signal: AbortSignal, isCurrent: () => boolean): Promise<void> {
+  const currentDetail = detailSequence
+  const canApply = () => isCurrent() && currentDetail === detailSequence && operation.value === null && !detailLoading.value
+  try {
+    const session = await getSession(id, signal)
+    if (!canApply()) return
+    detail.value = session
+  } catch (error) {
+    if (!canApply() || signal.aborted) return
+    operationRefreshFailed.value = true
+    showRequestError(error)
+  }
+}
+
+function refreshOperationResults(): void {
+  operationRefreshFailed.value = false
+  void loadActivity(true)
+}
+
 async function loadActivity(reloadDetail = false): Promise<void> {
   clearTimeout(activityTimer)
   const id = selectedId.value
@@ -187,8 +238,12 @@ async function loadActivity(reloadDetail = false): Promise<void> {
     messageResultConfirmed.value = messageSequence === messageResultSequence
       && canConfirmMessages && operation.value === null && !result.running
     if (result.running) {
-      activityTimer = setTimeout(() => { void loadActivity() }, ACTIVITY_POLL_MS)
-    } else if ((wasRunning || reloadDetail) && operation.value !== 'send') {
+      if (operation.value === null && !detailLoading.value && !operationRefreshFailed.value && (hasRunningOperation.value || reloadDetail)) {
+        await refreshOperationDetail(id, controller.signal, isCurrent)
+      }
+      if (isCurrent()) activityTimer = setTimeout(() => { void loadActivity() }, ACTIVITY_POLL_MS)
+    } else if ((wasRunning || reloadDetail || hasRunningOperation.value) && operation.value !== 'send') {
+      if (operationRefreshFailed.value && !reloadDetail) return
       if (await loadDetail(id) && isCurrent()) {
         if (messageSequence === messageResultSequence && canConfirmMessages && operation.value === null) {
           regenerationError.value = ''
@@ -263,6 +318,9 @@ watch([selectedId, visible, pageVisible], ([id, isVisible, isPageVisible], [prev
     restoreConversationScroll = false
     scrolledAway.value = false
     decisionError.value = null
+    operationDialogId.value = null
+    operationDialogClosing.value = false
+    operationRefreshFailed.value = false
     invalidateMessageResult()
     activity.value = null
     activityFailed.value = false
@@ -304,6 +362,7 @@ async function loadDetail(id: string, notify = true): Promise<boolean> {
     if (!active || current !== detailSequence || selectedId.value !== id) return false
     detail.value = session
     detailLoaded.value = true
+    operationRefreshFailed.value = false
     return true
   } catch {
     if (active && current === detailSequence && selectedId.value === id && notify) showRequestError()
@@ -521,8 +580,15 @@ async function generateReply(content: string, sourceMessage?: ChatMessage): Prom
 }
 async function decide(proposalId: string, approve: boolean) {
   const id = selectedId.value
-  if (!id || navigationBusy.value || stopping.value || !detailLoaded.value) return
+  const proposal = detail.value?.proposals.find((item) => item.id === proposalId)
+  if (!id || !proposal || proposal.status !== 'pending' || proposalBusy.value || !visible.value || !pageVisible.value) return
   decisionError.value = null
+  decidingKind.value = proposal.kind
+  detailSequence++
+  clearTimeout(activityTimer)
+  activitySequence++
+  activityController?.abort()
+  activityLoading.value = false
   invalidateMessageResult()
   operation.value = 'decision'
   const controller = new AbortController()
@@ -531,7 +597,7 @@ async function decide(proposalId: string, approve: boolean) {
   try {
     const session = await decideProposal(id, proposalId, approve, {
       signal: controller.signal,
-      isCurrent: () => active && selectedId.value === id && !stopRequested.value,
+      isCurrent: () => active && selectedId.value === id && visible.value && pageVisible.value && !stopRequested.value,
       onRegister: (pending) => {
         decisionSubmitted = true
         registration = pending
@@ -543,14 +609,15 @@ async function decide(proposalId: string, approve: boolean) {
   } catch (error) {
     if (active && selectedId.value === id && !controller.signal.aborted && !stopRequested.value && !stopPending.value) {
       if (error instanceof SSHConnectionFailedError) {
-        const proposal = detail.value?.proposals.find((item) => item.id === proposalId)
         const host = error.target.target_type === 'host'
-          ? proposal?.hosts.find((item) => item.id === error.target.target_id) : undefined
+          ? proposal.hosts.find((item) => item.id === error.target.target_id) : undefined
         const hostLabel = host ? `${host.name}（${host.address}）：` : ''
         decisionError.value = {
           proposalId,
-          message: `${hostLabel}${error.message} 本次巡检尚未提交，请检查连接后再次确认计划。`,
+          message: `${hostLabel}${error.message} 本次${proposal.kind === 'operation' ? '运维任务' : '巡检'}尚未提交，请检查连接后再次确认计划。`,
         }
+      } else if (proposal.kind === 'operation') {
+        decisionError.value = { proposalId, message: '运维计划的提交结果尚未确认，远端可能已执行，不会自动重试。请刷新核对任务和远端状态。' }
       }
       showRequestError(error)
       if (await loadDetail(id, false)) void loadSessions()
@@ -561,6 +628,7 @@ async function decide(proposalId: string, approve: boolean) {
     if (active) {
       invalidateMessageResult()
       operation.value = null
+      decidingKind.value = null
       stopRequested.value = false
       if (!activityFailed.value) void loadActivity(stopped)
     }
@@ -573,7 +641,7 @@ async function remove(session: SessionSummary) {
   if (navigationBusy.value) return
   operation.value = 'delete'
   try {
-    await ElMessageBox.confirm(`确定删除会话“${session.title}”及其对话历史吗？已创建的巡检任务不会随会话删除。`, '删除会话', {
+    await ElMessageBox.confirm(`确定删除会话“${session.title}”及其对话历史、运维计划和命令执行结果吗？已创建的巡检任务不会随会话删除，正在执行运维命令的会话无法删除。`, '删除会话', {
       confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'delete-confirm-button',
     })
   } catch { operation.value = null; return }
@@ -665,7 +733,7 @@ onUnmounted(() => {
             <span v-else-if="detailLoaded && selectedConnection" class="ui-text-muted">{{ selectedConnection.name }}</span>
           </div>
           <div v-if="branchOrigin && branchOrigin.id === selectedId" class="ai-branch-notice">
-            <span class="ui-text-muted" role="status">已从“{{ branchOrigin.sourceTitle }}”创建分支。原对话的巡检计划与任务保留在原会话中。</span>
+            <span class="ui-text-muted" role="status">已从“{{ branchOrigin.sourceTitle }}”创建分支。原对话的计划与任务保留在原会话中。</span>
             <ElButton link type="primary" :disabled="navigationBusy" @click="select(branchOrigin.sourceId)">返回原对话</ElButton>
           </div>
           <div :id="conversationId" ref="conversation" class="ai-conversation" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="detailLoading" tabindex="0" @scroll.passive="updateConversationScroll">
@@ -702,11 +770,15 @@ onUnmounted(() => {
                 <ChatMessageItem v-if="operation === 'send'" :message="{ role: 'user', content: sendingContent.trim() }" />
                 <ChatMessageItem v-if="operation === 'send' && streamingText" :message="{ role: 'assistant', content: streamingText }" />
                 <template v-for="proposal in displayedProposals" :key="proposal.id">
-                  <ChatProposalCard :proposal="proposal" :busy="navigationBusy || stopping || !detailLoaded" @decide="decide" />
+                  <ChatOperationCard v-if="proposal.kind === 'operation'" :proposal="proposal" :busy="proposalBusy"
+                    :open="operationDialogId === proposal.id" :visible="visible && pageVisible"
+                    @open="openOperationPlan(proposal.id)" @close="operationDialogId === proposal.id && closeOperationPlan()" @closed="operationDialogClosing = false" @decide="decide" />
+                  <ChatProposalCard v-else :proposal="proposal" :busy="proposalBusy" @decide="decide" />
                   <p v-if="decisionError?.proposalId === proposal.id" class="ui-execution-status ui-execution-notice" data-execution-state="incomplete" role="status">
                     {{ decisionError.message }}
+                    <ElButton v-if="proposal.kind === 'operation'" :disabled="interactionBusy" :loading="activityLoading || detailLoading" @click="refreshOperationResults">刷新执行结果</ElButton>
                   </p>
-                  <ChatTaskCard v-if="proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
+                  <ChatTaskCard v-if="proposal.kind === 'inspection' && proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
                 </template>
                 <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
               </template>
@@ -755,6 +827,10 @@ onUnmounted(() => {
             <p v-if="selectedId && activityFailed" class="ui-load-retry">
               运行状态未确认。<ElButton :loading="activityLoading" :disabled="stopPending" @click="loadActivity(true)">刷新状态</ElButton>
             </p>
+            <p v-if="selectedId && operationRefreshFailed" class="ui-load-retry" role="status">
+              运维执行结果刷新失败，已停止自动刷新结果。当前显示的是上次取得的结果，请核对最新状态。
+              <ElButton :loading="activityLoading || detailLoading" :disabled="interactionBusy" @click="refreshOperationResults">刷新执行结果</ElButton>
+            </p>
             <div class="ai-composer-actions">
               <span class="ui-text-muted ui-execution-status" role="status"
                 :data-execution-state="operation === 'create' || operation === 'branch' || operation === 'send' || operation === 'decision' ? 'in-progress' : undefined">
@@ -763,7 +839,7 @@ onUnmounted(() => {
                 <template v-else-if="operation === 'branch'">正在创建分支…</template>
                 <template v-else-if="operation === 'send' && regeneratingMessageId">正在重新生成回复…</template>
                 <template v-else-if="operation === 'send'">正在接收回复...</template>
-                <template v-else-if="operation === 'decision'">正在提交巡检计划...</template>
+                <template v-else-if="operation === 'decision'">{{ decidingKind === 'operation' ? '正在提交运维计划…' : '正在提交巡检计划…' }}</template>
                 <template v-else-if="activity?.running">后台任务尚未结束...</template>
               </span>
               <ElButton

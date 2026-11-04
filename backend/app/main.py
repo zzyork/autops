@@ -14,6 +14,7 @@ from .schemas.health import HealthResponse
 from .services.ssh_connections import ConnectionTestManager
 from .services.inspection_tasks import InspectionManager
 from .services.ai_chat import ChatManager
+from .services.ai_operations import AIOperationManager
 from .services.inspection_analysis import InspectionAnalysisManager
 from .services.host_basic_info import HostBasicInfoManager
 
@@ -29,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         manager = None
         inspections = None
         ai = None
+        operations = None
         analysis = None
         host_basic_info = None
         try:
@@ -40,6 +42,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application.state.inspection_analysis = analysis
             inspections = await run_in_threadpool(InspectionManager, sessions, cipher, analysis.automatic)
             application.state.inspections = inspections
+            operations = await run_in_threadpool(AIOperationManager, sessions, cipher)
+            application.state.ai_operations = operations
             ai = await run_in_threadpool(ChatManager, sessions, cipher)
             application.state.ai = ai
             yield
@@ -49,8 +53,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 try:
                     try:
-                        if ai is not None:
-                            await run_in_threadpool(ai.close)
+                        try:
+                            if operations is not None:
+                                await run_in_threadpool(operations.close)
+                        finally:
+                            if ai is not None:
+                                await run_in_threadpool(ai.close)
                     finally:
                         try:
                             if inspections is not None:

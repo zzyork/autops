@@ -52,7 +52,7 @@ class AISession(Base):
         proposal_ids = {proposal.id for proposal in self.proposals}
         message_ids: dict[str, str] = {}
         for entry in self.tool_history:
-            if entry.name != "prepare_inspection":
+            if entry.name not in ("prepare_inspection", "prepare_operation"):
                 continue
             proposal = entry.result.get("proposal")
             if (isinstance(proposal, dict) and isinstance(proposal.get("id"), str)
@@ -78,11 +78,14 @@ class AIProposal(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     session_id: Mapped[str] = mapped_column(ForeignKey("ai_sessions.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20), default="inspection", server_default="inspection")
     name: Mapped[str] = mapped_column(String(100))
     hosts: Mapped[list] = mapped_column(JSON)
     checks: Mapped[list] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(default="pending")
     task_id: Mapped[str | None] = mapped_column(ForeignKey("inspection_tasks.id", ondelete="SET NULL"))
+    commands: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    execution: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
 
 
 class AIToolHistory(Base):

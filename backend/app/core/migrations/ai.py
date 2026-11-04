@@ -36,6 +36,13 @@ def migrate_ai(engine: Engine) -> None:
         message_columns = {item["name"] for item in inspect(connection).get_columns("ai_messages")}
         if "in_flight" not in message_columns:
             connection.execute(text("ALTER TABLE ai_messages ADD COLUMN in_flight BOOLEAN NOT NULL DEFAULT 0"))
+        proposal_columns = {item["name"] for item in inspect(connection).get_columns("ai_proposals")}
+        if "kind" not in proposal_columns:
+            connection.execute(text("ALTER TABLE ai_proposals ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'inspection'"))
+        if "commands" not in proposal_columns:
+            connection.execute(text("ALTER TABLE ai_proposals ADD COLUMN commands JSON NOT NULL DEFAULT '[]'"))
+        if "execution" not in proposal_columns:
+            connection.execute(text("ALTER TABLE ai_proposals ADD COLUMN execution JSON"))
         columns = {item["name"] for item in inspect(connection).get_columns("ai_tool_history")}
         if "round_index" not in columns:
             connection.execute(text("ALTER TABLE ai_tool_history ADD COLUMN round_index INTEGER NOT NULL DEFAULT 0"))
