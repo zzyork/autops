@@ -5,6 +5,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ..ai_models import AIConnection, AIMessage, AIProposal, AISession, AIToolHistory
+from ..inspection_models import InspectionTask
 from ..models import utc_now
 from ..schemas.ai import ConnectionInput
 from ..schemas.pagination import DEFAULT_PAGE_SIZE
@@ -112,6 +113,33 @@ def messages(session: Session, session_id: str, *, before_message_id: int | None
 def proposals(session: Session, session_id: str) -> list[AIProposal]:
     return list(session.scalars(select(AIProposal).where(AIProposal.session_id == session_id)
                                 .order_by(AIProposal.id)))
+
+
+def proposal_states(session: Session, session_id: str) -> list[dict]:
+    """Read current confirmation and execution states without loading command output or check payloads."""
+    query = select(
+        AIProposal.id, AIProposal.kind, AIProposal.name, AIProposal.status, AIProposal.task_id,
+        AIProposal.execution["status"].as_string().label("execution_status"),
+        AIProposal.execution["error_code"].as_string().label("execution_error_code"),
+        InspectionTask.status.label("task_status"), InspectionTask.host_count,
+        InspectionTask.completed_hosts, InspectionTask.failed_hosts,
+    ).outerjoin(InspectionTask, AIProposal.task_id == InspectionTask.id).where(
+        AIProposal.session_id == session_id).order_by(AIProposal.id)
+    result = []
+    for row in session.execute(query):
+        state = {"id": row.id, "kind": row.kind, "name": row.name, "status": row.status,
+                 "task_id": row.task_id}
+        if row.kind == "inspection":
+            state["task"] = None
+            if row.task_status is not None:
+                state["task"] = {"id": row.task_id, "status": row.task_status, "host_count": row.host_count,
+                                 "completed_hosts": row.completed_hosts, "failed_hosts": row.failed_hosts}
+        else:
+            state["execution"] = None
+            if row.execution_status is not None:
+                state["execution"] = {"status": row.execution_status, "error_code": row.execution_error_code}
+        result.append(state)
+    return result
 
 
 def linked_task_ids(session: Session, session_id: str) -> list[str]:
