@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from ..schemas.ai import DEFAULT_CHAT_MAX_TOKENS, MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS
+
 
 MAX_RESPONSE = 256_000
 MAX_TEXT = 16_000
@@ -14,7 +16,6 @@ MAX_TEXT_BUDGET = 262_144
 MAX_CALLS = 4
 MAX_CONTEXT = 128_000
 MAX_CONTEXT_BUDGET = 1_000_000
-MAX_OUTPUT_TOKENS = 32_768
 MAX_TOTAL_SECONDS = 300
 DEFAULT_READ_TIMEOUT_SECONDS = 20
 MAX_READ_TIMEOUT_SECONDS = 60
@@ -33,11 +34,11 @@ class Reply:
 def request(client: httpx.Client, protocol: str, base_url: str, model: str,
             api_key: str | None, messages: list[dict], tools: list[dict],
             on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
-             deadline: float | None = None, max_tokens: int = 1024,
+             deadline: float | None = None, max_tokens: int = DEFAULT_CHAT_MAX_TOKENS,
               max_text: int = MAX_TEXT, max_response: int = MAX_RESPONSE,
                read_timeout_seconds: int = DEFAULT_READ_TIMEOUT_SECONDS,
                max_context: int = MAX_CONTEXT) -> Reply:
-    if type(max_tokens) is not int or not 1 <= max_tokens <= MAX_OUTPUT_TOKENS:
+    if type(max_tokens) is not int or not MIN_OUTPUT_TOKENS <= max_tokens <= MAX_OUTPUT_TOKENS:
         raise ProviderError("模型输出限额无效")
     if (type(max_text) is not int or not 1 <= max_text <= MAX_TEXT_BUDGET
             or type(max_response) is not int or not 1 <= max_response <= MAX_RESPONSE_BUDGET):

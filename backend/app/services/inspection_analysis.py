@@ -15,7 +15,7 @@ from ..schemas.inspection_analysis import AnalysisProgress, AnalysisResponse
 from .ai_provider import ProviderError
 from .inspection_analysis_engine import ModelSnapshot, analyze
 from .inspection_analysis_input import build_input
-from .ai_feature_models import feature_connection
+from .ai_feature_models import feature_connection, load_feature_models
 
 logger = logging.getLogger(__name__)
 MAX_ANALYSIS_WORKERS = 2
@@ -94,10 +94,13 @@ class InspectionAnalysisManager:
             with self.sessions() as session:
                 # 在同一写事务内验证模型资格与认领，已接受批次随后固定使用此快照。
                 repository.begin_claim(session)
-                connection = feature_connection(session, self.data_dir, "inspection_report")
-                snapshot = ModelSnapshot(connection.protocol, connection.base_url, connection.model,
-                                         connection.api_key_encrypted, f"{connection.name} / {connection.model}",
-                                         connection.config_version) if connection is not None and connection.chat_status == "passed" else None
+                config = load_feature_models(self.data_dir)
+                connection = feature_connection(session, self.data_dir, "inspection_report", config=config)
+                snapshot = None
+                if connection is not None and connection.chat_status == "passed":
+                    snapshot = ModelSnapshot(connection.protocol, connection.base_url, connection.model,
+                                             connection.api_key_encrypted, f"{connection.name} / {connection.model}",
+                                             connection.config_version, max_tokens=config.inspection_report_max_tokens)
                 status = "queued" if snapshot is not None else "unavailable"
                 full = self.pending >= MAX_PENDING_ANALYSES
                 if full and snapshot is not None:

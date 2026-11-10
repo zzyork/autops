@@ -4,6 +4,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TypedDict
 from uuid import uuid4
 
@@ -19,8 +20,9 @@ from ..ai_models import AIConnection, AIMessage, AIProposal, AISession
 from ..models import Host, HostGroup
 from ..repositories import ai as repository
 from ..repositories import inspections
-from ..schemas.ai import Detail, OperationCommand, OperationInput
+from ..schemas.ai import DEFAULT_CHAT_MAX_TOKENS, Detail, OperationCommand, OperationInput
 from ..schemas.inspections import CheckResponse, InspectionInput
+from .ai_feature_models import load_feature_models
 from .ai_provider import MAX_TOTAL_SECONDS, ProviderError, Reply, request as model_request
 from .inspection_checks import CHECK_TITLES
 
@@ -91,8 +93,9 @@ class GraphState(TypedDict):
 
 
 class ChatManager:
-    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet):
+    def __init__(self, sessions: sessionmaker[Session], cipher: Fernet, data_dir: Path):
         self.sessions, self.cipher = sessions, cipher
+        self.data_dir = data_dir
         self.client = httpx.Client(timeout=httpx.Timeout(20, connect=5), follow_redirects=False,
                                    limits=httpx.Limits(max_connections=8), trust_env=False)
         self.guard = threading.Lock()
@@ -165,10 +168,10 @@ class ChatManager:
 
     def provider(self, record: AIConnection, messages: list[dict], tools: list[dict],
                  on_token: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
-                 deadline: float | None = None) -> Reply:
+                 deadline: float | None = None, max_tokens: int = DEFAULT_CHAT_MAX_TOKENS) -> Reply:
         key = self.cipher.decrypt(record.api_key_encrypted.encode()).decode() if record.api_key_encrypted else None
         return model_request(self.client, record.protocol, record.base_url, record.model, key, messages, tools,
-                             on_token=on_token, cancel=cancel, deadline=deadline)
+                             on_token=on_token, cancel=cancel, deadline=deadline, max_tokens=max_tokens)
 
     def test(self, record: AIConnection) -> tuple[str, str]:
         chat = tool = "failed"
@@ -324,6 +327,7 @@ class ChatManager:
               cancel: threading.Event | None, deadline: float | None,
               *, regeneration: tuple[int, datetime] | None = None) -> Detail:
         deadline = deadline if deadline is not None else time.monotonic() + MAX_TOTAL_SECONDS
+        max_tokens = load_feature_models(self.data_dir).chat_max_tokens
         with self.sessions() as session:
             if regeneration is not None:
                 message_id, expected_updated_at = regeneration
@@ -390,7 +394,7 @@ class ChatManager:
             if cancel and cancel.is_set():
                 raise ProviderError("请求已取消")
             reply = self.provider(record, state["messages"], TOOLS if tool_enabled else [],
-                                  on_token=on_token, cancel=cancel, deadline=deadline)
+                                  on_token=on_token, cancel=cancel, deadline=deadline, max_tokens=max_tokens)
             if reply.calls and not tool_enabled:
                 raise ProviderError("未授权工具调用")
             state["reply"] = reply

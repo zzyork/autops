@@ -8,6 +8,12 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 from .inspections import CheckId
 
 
+MIN_OUTPUT_TOKENS = 1024
+MAX_OUTPUT_TOKENS = 65_535
+DEFAULT_CHAT_MAX_TOKENS = 1024
+DEFAULT_INSPECTION_REPORT_MAX_TOKENS = 32_768
+
+
 class Input(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -15,6 +21,9 @@ class Input(BaseModel):
 class FeatureModels(Input):
     chat_connection_id: int | None = Field(gt=0, strict=True)
     inspection_report_connection_id: int | None = Field(gt=0, strict=True)
+    chat_max_tokens: int = Field(default=DEFAULT_CHAT_MAX_TOKENS, ge=MIN_OUTPUT_TOKENS, le=MAX_OUTPUT_TOKENS, strict=True)
+    inspection_report_max_tokens: int = Field(default=DEFAULT_INSPECTION_REPORT_MAX_TOKENS,
+                                            ge=MIN_OUTPUT_TOKENS, le=MAX_OUTPUT_TOKENS, strict=True)
 
 
 class ConnectionInput(Input):

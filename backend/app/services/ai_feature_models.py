@@ -49,8 +49,9 @@ def save_feature_models(data_dir: Path, config: FeatureModels, session: Session)
         return config
 
 
-def feature_connection(session: Session, data_dir: Path, feature: Feature) -> AIConnection | None:
-    config = load_feature_models(data_dir)
+def feature_connection(session: Session, data_dir: Path, feature: Feature,
+                       *, config: FeatureModels | None = None) -> AIConnection | None:
+    config = config if config is not None else load_feature_models(data_dir)
     connection_id = getattr(config, f"{feature}_connection_id")
     # 只有用户明确选择沿用主模型时才读取主模型；指定连接失效不得切换。
     return ai.primary_connection(session) if connection_id is None else ai.connection(session, connection_id)

@@ -1,4 +1,5 @@
 import type { ChatSession, FeatureModelsConfig, MessageBranchInput, MessageRegenerationInput, ModelConnection, ModelConnectionInput, SessionActivity, SessionSummary } from '@/types/ai'
+import { MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS } from '@/types/ai'
 import { get, HttpError, request, streamRequest } from './http'
 import { assertSSHRequestCurrent, rememberSSHOperation, withSSHIdentities } from './sshIdentity'
 import type { SSHIdentityOptions } from '@/types/sshIdentity'
@@ -27,7 +28,9 @@ function isOperationExecution(value: unknown): boolean {
 function featureModelsConfig(value: unknown): FeatureModelsConfig {
   if (!isRecord(value) || !('chat_connection_id' in value) || !('inspection_report_connection_id' in value)
     || ![value.chat_connection_id, value.inspection_report_connection_id].every((id) =>
-      id === null || typeof id === 'number' && Number.isSafeInteger(id) && id > 0)) throw new HttpError()
+      id === null || typeof id === 'number' && Number.isSafeInteger(id) && id > 0)
+    || ![value.chat_max_tokens, value.inspection_report_max_tokens].every((limit) =>
+      typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= MIN_OUTPUT_TOKENS && limit <= MAX_OUTPUT_TOKENS)) throw new HttpError()
   return value as unknown as FeatureModelsConfig
 }
 

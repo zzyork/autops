@@ -8,17 +8,18 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ..models import utc_now
+from ..schemas.ai import DEFAULT_INSPECTION_REPORT_MAX_TOKENS
 from ..schemas.inspection_analysis import AnalysisIssue, AnalysisProgress, AnalysisReport, Severity
 from .ai_provider import (
-    MAX_CONTEXT_BUDGET, MAX_OUTPUT_TOKENS, MAX_RESPONSE_BUDGET, MAX_TEXT_BUDGET,
+    MAX_CONTEXT_BUDGET, MAX_RESPONSE_BUDGET, MAX_TEXT_BUDGET,
     MAX_TOTAL_SECONDS, ProviderError, request,
 )
 from .inspection_analysis_input import AnalysisInput, serialize
 from .inspection_analysis_groups import diagnostic_records
 
 logger = logging.getLogger(__name__)
-# 组数无法估计中文 JSON 与模型推理开销，单次全量分析沿用 provider 的有界输出上限。
-REPORT_OUTPUT_TOKENS = MAX_OUTPUT_TOKENS
+# 未配置时保留全量分析的原输出额度，实际请求使用任务接受时的配置快照。
+REPORT_OUTPUT_TOKENS = DEFAULT_INSPECTION_REPORT_MAX_TOKENS
 REPORT_MAX_TEXT = MAX_TEXT_BUDGET
 # 流式事件包装和模型附加字段也占传输字节，独立于最终 JSON 正文限额。
 REPORT_MAX_RESPONSE = MAX_RESPONSE_BUDGET
@@ -74,6 +75,7 @@ class ModelSnapshot:
     encrypted_key: str | None
     name: str
     version: int
+    max_tokens: int = REPORT_OUTPUT_TOKENS
 
 
 class LogReply(BaseModel):
@@ -126,12 +128,12 @@ def analyze(client: httpx.Client, snapshot: ModelSnapshot, api_key: str | None,
         content = [item.model_input() for item in records]
         input_text = serialize(content)
         logger.info("Inspection AI log input: evidence_fragments=%s diagnostic_groups=%s input_characters=%s max_output_tokens=%s",
-                    len(logs), len(records), len(input_text), REPORT_OUTPUT_TOKENS)
+                    len(logs), len(records), len(input_text), snapshot.max_tokens)
         try:
             reply = request(client, snapshot.protocol, snapshot.base_url, snapshot.model, api_key,
                              [{"role": "system", "content": SYSTEM + OUTPUT_PROMPT},
                               {"role": "user", "content": input_text}], [], cancel=cancel,
-                            deadline=deadline, max_tokens=REPORT_OUTPUT_TOKENS,
+                            deadline=deadline, max_tokens=snapshot.max_tokens,
                             max_text=REPORT_MAX_TEXT, max_response=REPORT_MAX_RESPONSE,
                             read_timeout_seconds=REPORT_READ_TIMEOUT_SECONDS, max_context=REPORT_MAX_CONTEXT)
             if reply.calls:

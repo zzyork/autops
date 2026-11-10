@@ -83,7 +83,7 @@
 | `backend/app/services/ai_provider.py` | OpenAI 兼容与 Anthropic 模型调用协议适配。 |
 | `backend/app/services/ai_chat.py` | AI 对话与运维工具调用编排。 |
 | `backend/app/services/ai_operations.py` | 已确认非巡检命令计划的 SSH 执行、结果持久化、取消与重启恢复。 |
-| `backend/app/services/ai_feature_models.py` | AI 对话与巡检汇报的模型配置管理。 |
+| `backend/app/services/ai_feature_models.py` | AI 对话与巡检汇报的模型选择、响应 token 额度配置管理。 |
 | `backend/app/api/v1/endpoints/ai.py` | AI 模型配置、会话与操作管理接口。 |
 | `backend/app/api/__init__.py` | 声明 HTTP 接口包。 |
 | `backend/app/api/dependencies.py` | 接口共用数据库依赖与查询辅助。 |
@@ -172,7 +172,7 @@
 | `frontend/src/components/ChatTaskCard.vue` | 对话关联巡检任务的状态与报告入口卡片。 |
 | `frontend/src/components/DisclosurePanel.vue` | 共用可展开详情面板。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增与编辑弹窗。 |
-| `frontend/src/components/FeatureModelsForm.vue` | AI 对话与巡检汇报模型配置表单。 |
+| `frontend/src/components/FeatureModelsForm.vue` | AI 对话与巡检汇报模型选择、最大响应 token 配置表单。 |
 | `frontend/src/views/ChatView.vue` | AI 会话管理、消息编辑与重试、分支对话及流式回复页面。 |
 | `frontend/src/views/ModelConnectionsView.vue` | 模型连接管理与能力测试页面。 |
 | `frontend/src/styles/ai.css` | AI 对话与模型配置样式。 |

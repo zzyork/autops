@@ -44,7 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application.state.inspections = inspections
             operations = await run_in_threadpool(AIOperationManager, sessions, cipher)
             application.state.ai_operations = operations
-            ai = await run_in_threadpool(ChatManager, sessions, cipher)
+            ai = await run_in_threadpool(ChatManager, sessions, cipher, settings.data_dir)
             application.state.ai = ai
             yield
         finally:

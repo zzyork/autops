@@ -3,6 +3,9 @@ import type { CheckId } from './inspections'
 export type CapabilityStatus = 'untested' | 'passed' | 'failed'
 export type ModelProtocol = 'openai_compatible' | 'anthropic'
 
+export const MIN_OUTPUT_TOKENS = 1024
+export const MAX_OUTPUT_TOKENS = 65_535
+
 export interface ModelConnectionInput {
   name: string
   protocol: ModelProtocol
@@ -21,6 +24,8 @@ export interface ModelConnection extends Omit<ModelConnectionInput, 'api_key'> {
 export interface FeatureModelsConfig {
   chat_connection_id: number | null
   inspection_report_connection_id: number | null
+  chat_max_tokens: number
+  inspection_report_max_tokens: number
 }
 export interface SessionSummary {
   id: string
