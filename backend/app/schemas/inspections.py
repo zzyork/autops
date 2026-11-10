@@ -247,6 +247,17 @@ class CheckResponse(TimestampResponse):
 
     @model_validator(mode="after")
     def display_payload(self) -> "CheckResponse":
+        if self.check_id == "log_error":
+            # 旧快照将时间未判定说明重复保存为警告；保留表格和计数，仅排除对应的风险发现。
+            time_notices = {
+                f"{table.name}：{row[1]}"
+                for table in self.payload.tables for row in table.rows
+                if len(row) >= 2 and row[0] == "时间未判定"
+            }
+            findings = [finding for finding in self.payload.findings
+                        if finding.severity != "warning" or finding.message not in time_notices]
+            self.payload = self.payload.model_copy(update={"findings": findings})
+            return self
         if self.check_id not in ("service_status", "network_info"):
             return self
         tables: list[ResultTable] = []

@@ -87,7 +87,6 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
             if unknown:
                 message = f"{unknown} 行关键词匹配日志的时间或年份无法确认，未纳入最近 {days} 天的错误日志，不能据此判定无错误"
                 rows.append(["时间未判定", message])
-                findings.append(Finding(severity="warning", message=f"{name}：{message}"))
             if not rows:
                 rows = [["未匹配", f"最近 {days} 天内无符合条件的日志"]]
         # 日志保留原文，长度沿用 SSH 总输出上限，不套用普通指标单元格的 500 字符限制。
