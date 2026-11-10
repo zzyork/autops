@@ -212,8 +212,8 @@ onUnmounted(() => {
           <div class="inspection-analysis-saved-heading"><strong>{{ response.status === 'completed' ? '已保存汇报' : '上次成功汇报' }}</strong><span class="ui-text-muted">生成于 {{ timeLabel(report.generated_at) }}</span></div>
           <dl class="inspection-analysis-stats">
             <div><dt>分析主机</dt><dd>{{ report.host_count }} <span>台</span></dd></div>
-            <div><dt>巡检发现</dt><dd>{{ report.finding_count }} <span>条</span></dd></div>
-            <div><dt>采集日志</dt><dd>{{ report.log_count }} <span>条</span></dd></div>
+            <div><dt>异常发现</dt><dd>{{ report.finding_count }} <span>条</span></dd></div>
+            <div><dt>错误日志</dt><dd>{{ report.log_count }} <span>条</span></dd></div>
           </dl>
           <div class="inspection-analysis-provenance"><span>报告模型：{{ report.model_name }} (v{{ report.model_version }})</span><span>采集时间：{{ timeLabel(report.inspection_started_at) }} 至 {{ timeLabel(report.inspection_finished_at) }}</span></div>
         </section>
