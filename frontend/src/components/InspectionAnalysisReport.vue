@@ -10,6 +10,7 @@ import { analysisSeverityLabel as severityLabel, analysisState, analysisStatusLa
 import type { AnalysisEvidence, AnalysisIssue, AnalysisResponse, RunStatus } from '@/types/inspections'
 
 const props = defineProps<{ taskId: string; taskStatus: RunStatus }>()
+const emit = defineEmits<{ activity: [] }>()
 const POLL_INTERVAL_MS = 2000
 const TERMINAL_POLL_COUNT = 5
 const response = ref<AnalysisResponse | null>(null)
@@ -167,6 +168,9 @@ watch(() => props.taskStatus, (status, previous) => {
     terminalPolls = TERMINAL_POLL_COUNT
     void load()
   }
+})
+watch(() => response.value?.status, (status) => {
+  if (status === 'queued' || status === 'running') emit('activity')
 })
 onUnmounted(() => {
   active = false

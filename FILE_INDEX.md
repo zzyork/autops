@@ -169,7 +169,7 @@
 | `frontend/src/types/ai.ts` | AI 模型、会话与操作类型定义。 |
 | `frontend/src/components/ChatProposalCard.vue` | AI 巡检计划展示与确认卡片。 |
 | `frontend/src/components/ChatOperationCard.vue` | AI 非巡检计划确认弹窗、完整命令及逐主机执行结果展示。 |
-| `frontend/src/components/ChatTaskCard.vue` | 对话关联巡检任务的状态与报告入口卡片。 |
+| `frontend/src/components/ChatTaskCard.vue` | 对话关联巡检任务的状态、AI 报告原位展开与巡检记录入口卡片。 |
 | `frontend/src/components/DisclosurePanel.vue` | 共用可展开详情面板。 |
 | `frontend/src/components/ModelConnectionDialog.vue` | 模型连接新增与编辑弹窗。 |
 | `frontend/src/components/FeatureModelsForm.vue` | AI 对话与巡检汇报模型选择、最大响应 token 配置表单。 |

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElButton, ElTag } from 'element-plus'
 import { getInspectionAnalysis, getInspectionTask } from '@/api/inspections'
@@ -7,11 +7,15 @@ import { showRequestError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
 import { hostProgressLabel, inspectionFailureReason, isActiveRun, runLabel, runState } from '@/components/inspectionDisplay'
 import { analysisState, analysisStatusLabel } from '@/components/inspectionAnalysisDisplay'
+import InspectionAnalysisReport from '@/components/InspectionAnalysisReport.vue'
 import type { AnalysisResponse, TaskDetail } from '@/types/inspections'
 import '@/styles/inspections.css'
 
 const props = defineProps<{ taskId: string }>()
-const emit = defineEmits<{ activity: [] }>()
+const emit = defineEmits<{
+  activity: []
+  reportToggle: [expanded: boolean]
+}>()
 const router = useRouter()
 const task = ref<TaskDetail | null>(null)
 const loaded = ref(false)
@@ -21,6 +25,8 @@ const failedHosts = computed(() => task.value?.hosts.filter((host) => !isActiveR
 const analysis = ref<AnalysisResponse | null>(null)
 const analysisLoaded = ref(false)
 const analysisLoading = ref(false)
+const reportExpanded = shallowRef(false)
+const reportContentId = `chat-report-${useId()}`
 const reportAvailable = computed(() => {
   if (!analysisLoaded.value || !analysis.value || !task.value) return false
   return analysis.value.report !== null || (!isActiveRun(task.value.status) && analysis.value.status !== 'queued' && analysis.value.status !== 'running')
@@ -38,6 +44,7 @@ const ANALYSIS_POLL_MS = 2000
 const TERMINAL_POLL_COUNT = 5
 
 async function loadAnalysis() {
+  if (reportExpanded.value) return
   clearTimeout(analysisTimer)
   const current = ++analysisSequence
   analysisLoading.value = true
@@ -58,6 +65,16 @@ async function loadAnalysis() {
   } finally {
     if (active && current === analysisSequence) analysisLoading.value = false
   }
+}
+
+function toggleReport(): void {
+  if (!reportExpanded.value && !reportAvailable.value) return
+  reportExpanded.value = !reportExpanded.value
+  emit('reportToggle', reportExpanded.value)
+  analysisSequence++
+  clearTimeout(analysisTimer)
+  analysisLoading.value = false
+  if (!reportExpanded.value) void loadAnalysis()
 }
 
 async function load() {
@@ -105,6 +122,8 @@ watch(() => props.taskId, () => {
   loaded.value = false
   analysis.value = null
   analysisLoaded.value = false
+  reportExpanded.value = false
+  emit('reportToggle', false)
   observedRunning = false
   promptedHosts.clear()
   void load()
@@ -115,7 +134,14 @@ watch([() => task.value?.status, () => analysis.value?.status], ([taskStatus, re
   }
 })
 onMounted(() => { void load() })
-onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout(timer); clearTimeout(analysisTimer) })
+onUnmounted(() => {
+  active = false
+  sequence++
+  analysisSequence++
+  clearTimeout(timer)
+  clearTimeout(analysisTimer)
+  emit('reportToggle', false)
+})
 </script>
 
 <template>
@@ -136,17 +162,28 @@ onUnmounted(() => { active = false; sequence++; analysisSequence++; clearTimeout
         </p>
       </div>
       <p v-if="task.hosts.some((host) => host.failure_code === 'host_key_required')" class="ui-text-muted">有主机需要确认 SSH 身份；确认后本次巡检不会自动重试，请重新发起巡检。</p>
-      <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status">
-        <p class="ui-text-muted ui-execution-status ui-execution-notice" :data-execution-state="analysisState(analysis.status)" role="status">
-          AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。
-        </p>
-        <ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton>
-      </div>
-      <p v-else-if="analysisLoading" class="ui-text-muted">正在读取 AI 报告状态...</p>
-      <p v-else class="ui-load-retry">AI 报告状态未加载。<ElButton @click="loadAnalysis">重试</ElButton></p>
+      <template v-if="!reportExpanded">
+        <div v-if="analysisLoaded && analysis" class="ai-task-analysis-status">
+          <p class="ui-text-muted ui-execution-status ui-execution-notice" :data-execution-state="analysisState(analysis.status)" role="status">
+            AI 报告：{{ analysisStatusLabel(analysis.status) }}<template v-if="analysis.report && analysis.status !== 'completed'">，可查看上次成功生成的报告</template>。
+          </p>
+          <ElButton link type="primary" :loading="analysisLoading" @click="loadAnalysis">刷新报告状态</ElButton>
+        </div>
+        <p v-else-if="analysisLoading" class="ui-text-muted">正在读取 AI 报告状态...</p>
+        <p v-else class="ui-load-retry">AI 报告状态未加载。<ElButton @click="loadAnalysis">重试</ElButton></p>
+      </template>
       <div class="ai-task-actions">
-        <ElButton type="primary" :disabled="!reportAvailable" @click="router.push({ name: 'inspection-records', query: { task: task.id } })">查看 AI 报告</ElButton>
+        <ElButton
+          type="primary"
+          :disabled="!reportExpanded && !reportAvailable"
+          :aria-expanded="reportExpanded"
+          :aria-controls="reportContentId"
+          @click="toggleReport"
+        >{{ reportExpanded ? '收起 AI 报告' : '查看 AI 报告' }}</ElButton>
         <ElButton @click="router.push({ name: 'inspection-record-detail', params: { taskId: task.id } })">查看巡检记录</ElButton>
+      </div>
+      <div v-show="reportExpanded" :id="reportContentId" class="inspection-detail">
+        <InspectionAnalysisReport v-if="reportExpanded" :task-id="task.id" :task-status="task.status" @activity="emit('activity')" />
       </div>
     </template>
     <p v-else-if="loading" class="ui-text-muted">正在读取任务...</p>

@@ -59,6 +59,7 @@ const stopRequested = ref(false)
 const conversation = ref<HTMLElement | null>(null)
 const conversationContent = ref<HTMLElement | null>(null)
 const scrolledAway = shallowRef(false)
+const expandedReportIds = new Set<string>()
 const conversationId = useId()
 const composer = ref<HTMLElement | null>(null)
 const composerFocusId = ref<string | null>(null)
@@ -155,6 +156,15 @@ function scrollToLatest(): void {
   scrolledAway.value = false
 }
 
+function updateReportExpansion(id: string, expanded: boolean): void {
+  if (expanded) {
+    expandedReportIds.add(id)
+    scrolledAway.value = true
+  } else {
+    expandedReportIds.delete(id)
+  }
+}
+
 function syncConversationScroll(): void {
   const element = conversation.value
   if (!active || !visible.value || !pageVisible.value || !element?.clientHeight) return
@@ -163,6 +173,8 @@ function syncConversationScroll(): void {
     element.scrollTop = conversationScrollTop
     restoreConversationScroll = false
   }
+  // 展开报告后保留阅读位置，避免异步内容加载将视口推到报告末尾。
+  if (expandedReportIds.size) scrolledAway.value = true
   if (!scrolledAway.value) scrollToLatest()
   updateConversationScroll()
 }
@@ -778,7 +790,12 @@ onUnmounted(() => {
                     {{ decisionError.message }}
                     <ElButton v-if="proposal.kind === 'operation'" :disabled="interactionBusy" :loading="activityLoading || detailLoading" @click="refreshOperationResults">刷新执行结果</ElButton>
                   </p>
-                  <ChatTaskCard v-if="proposal.kind === 'inspection' && proposal.task_id" :task-id="proposal.task_id" @activity="refreshActivityOnFocus" />
+                  <ChatTaskCard
+                    v-if="proposal.kind === 'inspection' && proposal.task_id"
+                    :task-id="proposal.task_id"
+                    @activity="refreshActivityOnFocus"
+                    @report-toggle="updateReportExpansion(proposal.id, $event)"
+                  />
                 </template>
                 <p v-if="!detail.messages.length && !displayedProposals.length && operation !== 'send'" class="ai-placeholder">开始对话</p>
               </template>
