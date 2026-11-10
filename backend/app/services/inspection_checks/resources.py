@@ -84,7 +84,8 @@ def processes(output: str) -> list[list[str]]:
         raise InspectionCheckError("invalid_output")
     rows = []
     for line in lines[1:]:
-        fields = line.split()
+        # comm 字段允许包含空格，仅拆分前四列以保留完整进程名。
+        fields = line.split(None, 4)
         if len(fields) != 5 or not fields[4] or integer(fields[1]) <= 0:
             raise InspectionCheckError("invalid_output")
         number(fields[2])  # ps 的多核 CPU 百分比可超过 100。
