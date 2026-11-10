@@ -4,8 +4,8 @@ import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElOption, ElSelect, ElTa
 import { getInspectionReportArchive } from '@/api/inspections'
 import { showSystemError } from '@/components/feedback'
 import { ensureSSHIdentities, wasSSHOperationStarted } from '@/api/sshIdentity'
-import { checkLabel, checkState, displayChecks, findingLabel, inspectionFailureReason, isActiveRun, metricLabel, runLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
-import { timeLabel } from '@/components/timeDisplay'
+import InspectionTaskHeader from '@/components/InspectionTaskHeader.vue'
+import { checkLabel, checkState, displayChecks, findingLabel, inspectionFailureReason, isActiveRun, metricLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
 import type { CheckStatus, TaskDetail } from '@/types/inspections'
 
 const CHECK_STATUS_MESSAGES: Record<CheckStatus, string> = {
@@ -115,17 +115,9 @@ async function exportReport() {
 
 <template>
   <section class="inspection-detail" aria-label="巡检任务详情">
-    <div class="section-header"><h2>{{ task.name }}</h2><ElButton :disabled="isActiveRun(task.status)" :loading="exporting" @click="exportReport">导出报告</ElButton></div>
-    <div class="inspection-detail-meta">
-      <span>
-        执行状态
-        <ElTag class="ui-execution-status" :data-execution-state="runState(task.status)" size="small">
-          {{ runLabel(task.status) }}
-        </ElTag>
-      </span>
-      <span>主机 {{ task.completed_hosts }} / {{ task.host_count }} 已结束</span>
-      <span>开始 {{ timeLabel(task.started_at) }}</span><span>结束 {{ timeLabel(task.finished_at) }}</span>
-    </div>
+    <InspectionTaskHeader :task="task">
+      <ElButton :disabled="isActiveRun(task.status)" :loading="exporting" @click="exportReport">导出报告</ElButton>
+    </InspectionTaskHeader>
     <template v-if="task.hosts.length">
       <div class="inspection-host-choice">
         <span>查看主机</span>
@@ -135,10 +127,10 @@ async function exportReport() {
       </div>
       <template v-if="selectedHost">
         <div class="inspection-host-meta">
-          <h3 class="inspection-host-title">
+          <h2 class="inspection-host-title">
             {{ selectedHost.address }}
             <span v-if="selectedHost.host_name !== selectedHost.address" class="inspection-host-name">{{ selectedHost.host_name }}</span>
-          </h3>
+          </h2>
           <span class="inspection-host-connection">{{ selectedHost.group_name }}</span>
         </div>
         <div class="inspection-host-summary" aria-label="主机检查概览">
@@ -173,7 +165,7 @@ async function exportReport() {
             <ElCollapseItem v-if="check.expandable" :name="check.check_id">
               <template #title>
                 <div class="inspection-check-header">
-                  <h4>{{ check.title }}</h4>
+                  <h3>{{ check.title }}</h3>
                   <span class="ui-text-muted ui-execution-status" :data-execution-state="check.executionState">
                     {{ check.statusMessage }}
                   </span>
@@ -198,7 +190,7 @@ async function exportReport() {
                     </div>
                   </dl>
                   <div v-for="(table, index) in check.payload.tables" :key="index" class="inspection-result-table">
-                    <h5>{{ table.name }}</h5>
+                    <h4>{{ table.name }}</h4>
                     <div class="ui-table-wrap">
                       <ElTable :data="table.rows" class="ui-table" :empty-text="'无数据'">
                         <ElTableColumn v-for="(column, columnIndex) in table.columns" :key="columnIndex" :label="column" min-width="140">
@@ -212,7 +204,7 @@ async function exportReport() {
               </section>
             </ElCollapseItem>
             <div v-else class="inspection-check-header inspection-check-static">
-              <h4>{{ check.title }}</h4>
+              <h3>{{ check.title }}</h3>
               <span class="ui-text-muted ui-execution-status" :data-execution-state="check.executionState">
                 {{ check.statusMessage }}
               </span>

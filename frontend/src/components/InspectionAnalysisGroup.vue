@@ -16,7 +16,10 @@ const issues = computed(() => pageItems.value.flatMap((problem) => problem.kind 
 
 <template>
   <section class="inspection-analysis-section" :aria-label="group.title">
-    <div class="inspection-analysis-section-heading"><h3>{{ group.title }}</h3><span class="ui-text-muted">{{ total }} 项</span></div>
+    <header class="inspection-analysis-section-heading">
+      <h3>{{ group.title }}</h3>
+      <span class="ui-text-muted inspection-analysis-section-count">{{ total }} 项</span>
+    </header>
     <div v-if="findings.length" class="ui-table-wrap">
       <ElTable :data="findings" row-key="id" class="ui-table">
         <ElTableColumn label="级别" width="90"><template #default="{ row }"><ElTag :type="analysisSeverityType(row.severity)" size="small">{{ analysisSeverityLabel(row.severity) }}</ElTag></template></ElTableColumn>

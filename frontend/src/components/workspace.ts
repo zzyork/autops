@@ -52,10 +52,14 @@ export function createWorkspace(router: Router) {
     const previous = tabs.value.find((tab) => tab.key === activeKey.value)
     if (previous) previous.scrollTop = savedScroll?.key === previous.key ? savedScroll.top : window.scrollY
     savedScroll = null
-    const key = location.path
-    const title = String(location.meta.title)
-    const taskId = location.params.taskId
-    const label = location.name === 'inspection-record-detail' ? `${title} · ${String(taskId)}` : title
+    // 报告与记录列表共用路径，按任务区分标签以保留列表状态。
+    const reportId = location.name === 'inspection-records' && typeof location.query.task === 'string'
+      ? location.query.task
+      : ''
+    const key = reportId ? `${location.path}?task=${encodeURIComponent(reportId)}` : location.path
+    let label = String(location.meta.title)
+    if (reportId) label = `巡检报告 · ${reportId}`
+    else if (location.name === 'inspection-record-detail') label += ` · ${String(location.params.taskId)}`
     const existing = tabs.value.find((tab) => tab.key === key)
     tabs.value = existing
       ? tabs.value.map((tab) => tab.key === key ? { ...tab, location, title: label } : tab)

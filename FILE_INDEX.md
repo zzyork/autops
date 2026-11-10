@@ -192,6 +192,7 @@
 | `frontend/src/components/ChatMarkdownContent.vue` | AI 回复的安全 Markdown 渲染与表格展示。 |
 | `frontend/src/components/InspectionConfigForm.vue` | 巡检规则配置表单。 |
 | `frontend/src/components/InspectionCreateDialog.vue` | 巡检任务创建弹窗。 |
+| `frontend/src/components/InspectionTaskHeader.vue` | 巡检报告与详情共用的任务标题、状态、进度与风险摘要。 |
 | `frontend/src/components/InspectionTaskDetail.vue` | 主机巡检详情、检查结果与报告导出展示。 |
 | `frontend/src/components/inspectionDisplay.ts` | 巡检状态、结论与结果展示映射。 |
 | `frontend/src/components/timeDisplay.ts` | 共用日期时间展示工具。 |

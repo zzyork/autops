@@ -1,54 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElButton, ElTag } from 'element-plus'
-import { hostProgressLabel, runLabel, runState, summarizeChecks } from '@/components/inspectionDisplay'
-import { timeLabel } from '@/components/timeDisplay'
+import { ElButton } from 'element-plus'
 import InspectionAnalysisReport from '@/components/InspectionAnalysisReport.vue'
+import InspectionTaskHeader from '@/components/InspectionTaskHeader.vue'
 import type { TaskDetail } from '@/types/inspections'
 
-const props = defineProps<{ task: TaskDetail }>()
+defineProps<{ task: TaskDetail }>()
 const router = useRouter()
-const summary = computed(() => summarizeChecks(props.task.hosts.flatMap((host) => host.checks)))
 </script>
 
 <template>
   <section class="inspection-detail" aria-label="巡检记录概览">
-    <div class="section-header inspection-record-heading">
-      <div class="inspection-record-title">
-        <h2>{{ task.name }}</h2>
-        <ElTag class="ui-execution-status" :data-execution-state="runState(task.status)" size="small">
-          {{ runLabel(task.status) }}
-        </ElTag>
-      </div>
+    <InspectionTaskHeader :task="task">
       <ElButton @click="router.push({ name: 'inspection-record-detail', params: { taskId: task.id } })">巡检记录详情</ElButton>
-    </div>
-    <dl class="inspection-record-overview" aria-label="本次巡检概览">
-      <div>
-        <dt>主机进度</dt>
-        <dd class="ui-execution-status" :data-execution-state="task.failed_hosts ? 'incomplete' : undefined">
-          {{ hostProgressLabel(task) }}
-        </dd>
-      </div>
-      <div v-if="summary.critical > 0 || summary.warning > 0">
-        <dt>风险统计</dt>
-        <dd class="inspection-record-risks">
-          <ElTag v-if="summary.critical > 0" type="danger" size="small">
-            紧急 {{ summary.critical }}
-          </ElTag>
-          <ElTag v-if="summary.warning > 0" class="inspection-risk-tag" type="warning" size="small">
-            警告 {{ summary.warning }}
-          </ElTag>
-        </dd>
-      </div>
-      <div><dt>巡检开始</dt><dd>{{ timeLabel(task.started_at) }}</dd></div>
-      <div><dt>巡检结束</dt><dd>{{ timeLabel(task.finished_at) }}</dd></div>
-    </dl>
-    <p
-      v-if="summary.incomplete"
-      class="ui-execution-status ui-execution-notice"
-      :data-execution-state="summary.incompleteState"
-    >{{ summary.incomplete }} 项检查尚未完成，风险无法完整判定</p>
+    </InspectionTaskHeader>
     <InspectionAnalysisReport :task-id="task.id" :task-status="task.status" />
   </section>
 </template>

@@ -55,10 +55,10 @@ onUnmounted(() => {
 
 <template>
     <main class="console-main">
-      <div class="console-page-heading inspection-section-heading">
-        <ElButton @click="router.push({ path: '/inspections/records', query: { task: route.params.taskId } })">返回</ElButton>
-      </div>
       <section v-loading="loading" class="ui-panel inspection-record-detail" aria-label="服务器巡检记录">
+        <div class="section-header">
+          <ElButton @click="router.push({ path: '/inspections/records', query: { task: route.params.taskId } })">返回</ElButton>
+        </div>
         <InspectionTaskDetail v-if="loaded && task" :task="task" />
         <p v-else-if="!loading" class="ui-load-retry">详情未加载。<ElButton @click="load()">重试</ElButton></p>
       </section>

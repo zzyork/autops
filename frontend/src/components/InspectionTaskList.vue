@@ -271,7 +271,9 @@ onUnmounted(() => {
 
 <template>
       <section v-if="records && selectedId" v-loading="detailLoading" class="ui-panel inspection-record-detail" aria-label="巡检记录概览">
-        <div class="section-header"><ElButton @click="router.push({ path: '/inspections/records' })">返回</ElButton></div>
+        <div class="section-header">
+          <ElButton @click="router.push({ path: '/inspections/records' })">返回</ElButton>
+        </div>
         <InspectionRecordSummary v-if="detailLoaded && detail" :task="detail" />
         <p v-else-if="!detailLoading" class="ui-load-retry">详情未加载。<ElButton @click="loadDetail(selectedId!)">重试</ElButton></p>
       </section>
