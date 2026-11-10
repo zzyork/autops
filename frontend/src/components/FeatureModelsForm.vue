@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useId } from 'vue'
-import { ElButton, ElInputNumber, ElOption, ElSelect } from 'element-plus'
+import { ElButton, ElInputNumber, ElMessage, ElOption, ElSelect } from 'element-plus'
 import { getFeatureModels, updateFeatureModels } from '@/api/ai'
 import FieldError from '@/components/FieldError.vue'
 import { showRequestError } from '@/components/feedback'
@@ -94,6 +94,7 @@ async function save() {
     if (!active || current !== sequence) return
     draft.value = { ...config }
     emit('configured', config)
+    ElMessage({ message: '保存成功', type: 'success', placement: 'top', offset: 16, duration: 3000, grouping: true })
   } catch {
     if (active && current === sequence) showRequestError()
   } finally {
