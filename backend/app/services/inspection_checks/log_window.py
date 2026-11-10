@@ -1,6 +1,45 @@
-"""目标主机上的严格时间筛选；先筛选再有界保留原文，不推断缺失年份。"""
+"""严格时间与已知非报错记录筛选；先筛选再有界保留原文，不推断缺失年份。"""
 
-_TIME_FILTER_BODY = r"""
+_KNOWN_NON_ERROR_FILTER = r"""
+function known_non_error_log(line, message, pid, event, suffix, command, audit_time) {
+    message = line
+    if (!sub(/^\[?[0-9]{4}[-\/][0-9]{2}[-\/][0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}([.,][0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})?\]?[[:space:]]+/, "", message)) {
+        return 0
+    }
+    # 此条内核 err 仅建议端点使用不同奇偶性，配置仍写入；不排除其他内核或端口错误。
+    if (match(message, /^[^[:space:]]+[[:space:]]+kernel:[[:space:]]+/)) {
+        return substr(message, RLENGTH + 1) == "ip_local_port_range: prefer different parity for start/end values."
+    }
+    if (!match(message, /^[^[:space:]]+[[:space:]]+umount\[[0-9]+\]:[[:space:]]+/)) {
+        return 0
+    }
+    pid = substr(message, 1, RLENGTH)
+    message = substr(message, RLENGTH + 1)
+    sub(/^[^[:space:]]+[[:space:]]+umount\[/, "", pid)
+    sub(/\]:[[:space:]]+$/, "", pid)
+
+    # 只识别已知审计模板，日志头与正文 PID 必须一致；不按进程名或 ret=0 泛化排除。
+    if (message ~ /^util_linux umount start /) {
+        event = "^util_linux umount start pid=" pid ", parent pid=[0-9]+ cmd="
+        suffix = ",start_time="
+    } else if (message ~ /^util_linux umount finish /) {
+        event = "^util_linux umount finish pid=" pid ", parent pid=[0-9]+ ret=0, cmd="
+        suffix = ", finish_time="
+    } else {
+        return 0
+    }
+    command = "\"[ ]?/usr/bin/umount [^\"[:cntrl:]]+\""
+    audit_time = "(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+    audit_time = audit_time " +[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}"
+    return message ~ (event command suffix audit_time "$")
+}
+"""
+
+JOURNAL_FILTER = _KNOWN_NON_ERROR_FILTER + r"""
+!known_non_error_log($0) { print }
+"""
+
+_TIME_FILTER_BODY = _KNOWN_NON_ERROR_FILTER + r"""
 function log_time(line, stamp, spec, rest, utc, offset, zone, hours, minutes, value, standard, daylight) {
     fractional = 0
     stamp = line
@@ -69,6 +108,10 @@ BEGIN {
     recorded = log_time($0)
     if (recorded < 0) {
         unknown++
+        next
+    }
+    # 时间无法判定的记录仍计入 unknown，不能因已知非报错模板而推断其属于本次窗口。
+    if (known_non_error_log($0)) {
         next
     }
     # 窗口按整数秒定义，避免把边界外的小数秒浮点舍入到窗口内。

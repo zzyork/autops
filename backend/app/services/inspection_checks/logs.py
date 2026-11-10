@@ -10,7 +10,7 @@ from ...schemas.inspections import (
     Metric,
 )
 from . import InspectionCheckError, Runner, query, table
-from .log_window import LEGACY_TIME_FILTER, TIME_FILTER
+from .log_window import JOURNAL_FILTER, LEGACY_TIME_FILTER, TIME_FILTER
 
 KEYWORDS = "error|failed|fatal|panic|crit|critical|异常"
 EXCLUSIONS = "systemd-coredump|ldapdb_canonuser_plug_init"
@@ -26,9 +26,12 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
     finish = int(clock)
     start = finish - days * 24 * 60 * 60
     sources = [("systemd journal", "command -v journalctl >/dev/null 2>&1 || exit 3; "
+                "command -v awk >/dev/null 2>&1 || exit 127; "
                 "set -o pipefail; "
                 f"journalctl --since @{start} --until @{finish} --output=short-iso -p err..alert --no-pager --quiet "
                 f"| {{ grep -viE {shlex.quote(EXCLUSIONS)} || [ \"$?\" -eq 1 ]; }} "
+                # 先排除已知非报错记录，再截取；警告、计数和报告统一使用有效候选。
+                f"| awk {shlex.quote(JOURNAL_FILTER)} "
                 f"| {{ printf '%s\\n' 'AUTOPS_LOG_WINDOW 0'; tail -n {lines}; }}; "
                 "status=$?; if [ \"$status\" -eq 3 ]; then exit 4; fi; exit \"$status\"")]
     for path in config.logs.paths:

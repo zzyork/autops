@@ -134,7 +134,7 @@
 | `backend/app/services/inspection_checks/services.py` | systemd 服务状态采集与判定。 |
 | `backend/app/services/inspection_checks/network.py` | 主机网络地址与监听信息采集。 |
 | `backend/app/services/inspection_checks/logs.py` | 主机错误日志采集与过滤。 |
-| `backend/app/services/inspection_checks/log_window.py` | 巡检日志时间窗口过滤及旧版 awk 兼容。 |
+| `backend/app/services/inspection_checks/log_window.py` | 巡检日志时间窗口、已知非报错记录过滤及旧版 awk 兼容。 |
 | `backend/app/core/ssh_keys.py` | SSH 密钥校验与指纹生成。 |
 | `backend/app/schemas/__init__.py` | 声明接口数据模型包。 |
 | `backend/app/schemas/pagination.py` | 共用分页参数与响应数据模型。 |
