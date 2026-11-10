@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { ElConfigProvider, ElOption, ElPagination, ElSelect } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { PAGE_SIZES } from '@/components/pagination'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '@/components/pagination'
 
 const props = withDefaults(defineProps<{ total: number; disabled?: boolean; compact?: boolean; totalKnown?: boolean }>(), { totalKnown: true })
 const layout = computed(() => `${props.totalKnown ? 'total, ' : ''}slot, prev, ${props.compact ? '' : 'pager, '}next`)
@@ -25,7 +25,7 @@ function changeSize(next: number) {
 </script>
 
 <template>
-  <div class="list-pagination" :class="{ 'is-compact': compact }" aria-label="列表分页">
+  <div v-if="!totalKnown || total >= DEFAULT_PAGE_SIZE" class="list-pagination" :class="{ 'is-compact': compact }" aria-label="列表分页">
     <ElConfigProvider :locale="paginationLocale">
       <ElPagination :current-page="page" :page-size="pageSize" :total="total" :disabled="disabled" :layout="layout" @update:current-page="changePage">
         <div class="page-size-control">
