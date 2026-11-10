@@ -193,16 +193,37 @@ class CheckPayload(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
 
 
+def parse_listener_host(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    # ss 会为 IPv4、IPv6 和通配地址附加 %网卡，IPv6 的后缀也可能位于括号外。
+    bracketed = host.startswith("[")
+    if bracketed:
+        host, closing, suffix = host[1:].partition("]")
+        if not closing or (suffix and not suffix.startswith("%")):
+            raise ValueError
+        host += suffix
+    address, separator, interface = host.partition("%")
+    if separator and re.fullmatch(r"[^\s%:/\[\]\x00-\x1f\x7f]+", interface) is None:
+        raise ValueError
+    if address == "*" and not bracketed:
+        return None
+    parsed = ipaddress.ip_address(address)
+    if bracketed and parsed.version != 6:
+        raise ValueError
+    return parsed
+
+
 def is_loopback_listener(endpoint: str) -> bool:
     host, separator, _port = endpoint.rpartition(":")
     if not separator:
         return False
     try:
-        address = ipaddress.ip_address(host[1:-1] if host.startswith("[") and host.endswith("]") else host)
+        address = parse_listener_host(host)
     except ValueError:
         return False
-    return address.is_loopback or (address.version == 6 and address.ipv4_mapped is not None
-                                   and address.ipv4_mapped.is_loopback)
+    return address is not None and (
+        address.is_loopback or (address.version == 6 and address.ipv4_mapped is not None
+                                and address.ipv4_mapped.is_loopback)
+    )
 
 
 class TimestampResponse(BaseModel):

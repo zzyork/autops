@@ -24,9 +24,9 @@ def query(runner: Runner, command: str) -> str:
     return result.stdout
 
 
-def table(name: str, columns: list[str], rows: list[list[str]]) -> ResultTable:
+def table(name: str, columns: list[str], rows: list[list[str]], *, max_cell_length: int = MAX_CELL) -> ResultTable:
     if len(rows) > MAX_ROWS or any(
-        len(row) != len(columns) or any(len(cell) > MAX_CELL for cell in row) for row in rows
+        len(row) != len(columns) or any(len(cell) > max_cell_length for cell in row) for row in rows
     ):
         raise InspectionCheckError("output_limit")
     return ResultTable(name=name, columns=columns, rows=rows)

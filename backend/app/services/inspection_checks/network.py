@@ -1,6 +1,4 @@
-import ipaddress
-
-from ...schemas.inspections import CheckPayload, InspectionConfig, Metric, is_loopback_listener
+from ...schemas.inspections import CheckPayload, InspectionConfig, Metric, is_loopback_listener, parse_listener_host
 from . import InspectionCheckError, Runner, query, table
 from .basic import addresses
 
@@ -29,10 +27,7 @@ def collect(runner: Runner, config: InspectionConfig) -> CheckPayload:
             host, port = endpoint.rsplit(":", 1)
             if not host or not port.isdecimal() or not 0 <= int(port) <= 65535:
                 raise ValueError
-            if host != "*":
-                if host.startswith("[") != host.endswith("]"):
-                    raise ValueError
-                ipaddress.ip_address(host[1:-1] if host.startswith("[") else host)
+            parse_listener_host(host)
         except ValueError:
             raise InspectionCheckError("invalid_output") from None
         if not is_loopback_listener(endpoint):
