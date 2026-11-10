@@ -10,8 +10,17 @@ import type { AnalysisEvidence } from '@/types/inspections'
 const props = defineProps<{ group: AnalysisProblemGroup; evidence: AnalysisEvidence[] }>()
 const problems = computed(() => props.group.problems)
 const { page, pageSize, total, pageItems } = useListPagination(problems)
-const findings = computed(() => pageItems.value.flatMap((problem) => problem.kind === 'finding' ? [problem.finding] : []))
+const findings = computed(() => pageItems.value.flatMap((problem) => {
+  if (problem.kind !== 'finding') return []
+  return [{ ...problem.finding, content: findingDescription(problem.finding) }]
+}))
 const issues = computed(() => pageItems.value.flatMap((problem) => problem.kind === 'issue' ? [problem] : []))
+
+function findingDescription(finding: AnalysisEvidence): string {
+  if (finding.check_title !== '系统资源') return finding.content
+  return finding.content.replace(/(使用率\s+)(\d+(?:\.\d+)?)%/g,
+    (_, label: string, value: string) => `${label}${Number(value).toFixed(2)}%`)
+}
 </script>
 
 <template>
